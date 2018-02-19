@@ -55,3 +55,7 @@ body { overflow-x: hidden; }
     width:429px ;
     margin-left: 0;
 }
+
+.hidden { visibility: hidden;
+    display: none;
+    position: absolute;}
