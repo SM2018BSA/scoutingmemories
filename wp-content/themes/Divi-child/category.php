@@ -47,7 +47,7 @@ get_header(); ?>
 
 								$category = get_category( get_query_var( 'cat' ) );
 								$cat_id = $category->cat_ID;
-								$category_link = get_category_link( $category_id );
+								$category_link = get_category_link( $cat_id );
 
 								echo '<a href="' .  $category_link . '" target="_self" >';
 									single_cat_title();
