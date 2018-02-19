@@ -14,14 +14,14 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 body { overflow-x: hidden; }
 
 /* Header */
-#main-header { position: fixed;  top: 0; width:100%;  }
+#main-header { top: 0; width:100%;  }
 #et-top-navigation > span:after,
 #et-top-navigation > span:before { color: #FFF; }
 
 #logo { max-height: 140%; }
 
 #main-footer {
-    position: fixed;
+    
     bottom: 0;
     width: 100%;
     z-index: 100;
@@ -30,7 +30,7 @@ body { overflow-x: hidden; }
 .single-post #main-footer {
     position: relative;}
 
-#et-main-area { padding-top:8%; }
+
 
 .post-meta { margin-bottom: 0em; }
 .entry > p { margin-bottom: 1em; }
