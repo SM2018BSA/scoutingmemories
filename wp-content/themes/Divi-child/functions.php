@@ -286,5 +286,12 @@ function add_council( $entry_id, $form_id ) {
 } //end of add_council
 
 
+// Add media button to front end forms
+add_filter('frm_rte_options', 'frm_rte_options', 10, 2);
+function frm_rte_options($opts, $field){
+	$opts['media_buttons'] = true;
+	return $opts;
+}
 
-
+// hide the admin bar on the front end when NOT logged in!
+add_filter('show_admin_bar', '__return_false');
