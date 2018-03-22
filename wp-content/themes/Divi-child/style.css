@@ -11,7 +11,14 @@ License: GNU General Public License v2
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
 
-body { overflow-x: hidden; }
+body { overflow-x: hidden; color: #777 !important; }
+
+body .frm_style_divi.with_frm_style .frm_form_field.frm_html_container,
+body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
+    color: #777 !important;
+}
+
+
 
 /* Header */
 #main-header { top: 0; width:100%;  }
@@ -51,7 +58,7 @@ body { overflow-x: hidden; }
     position: relative;}
 
 .et_pb_image_0 {
-    height: 550px; max-width:100%!important;
+    max-width:100%!important;
     width:429px ;
     margin-left: 0;
 }
@@ -61,3 +68,10 @@ body { overflow-x: hidden; }
     position: absolute;}
 
 .myBuddyPress .container:before { right: auto; border: none !important;  }
+
+.no-height.no-display { height:0; margin: 0 !important; padding: 0; }
+
+.page-id-84 #main-footer {
+    position: fixed;
+    bottom:0;
+}

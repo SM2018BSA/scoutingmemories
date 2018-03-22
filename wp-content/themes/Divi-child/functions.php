@@ -12,8 +12,11 @@ function enqueue_parent_styles() {
 	wp_enqueue_style( 'parent-style', get_template_directory_uri() . '/style.css' );
 }
 
-add_action( 'frm_after_create_entry', 'add_council', 30, 2 );
-function add_council( $entry_id, $form_id ) {
+add_action( 'frm_after_create_entry', 'add_group', 30, 2 );
+function add_group( $entry_id, $form_id ) {
+
+
+
 
 	global $wpdb;
 
@@ -65,6 +68,8 @@ function add_council( $entry_id, $form_id ) {
 		if ( $wpdb->last_error ) {
 			echo "It's! not my fault! " . $wpdb->last_error;
 		}
+
+
 
 
 	}
@@ -295,3 +300,73 @@ function frm_rte_options($opts, $field){
 
 // hide the admin bar on the front end when NOT logged in!
 add_filter('show_admin_bar', '__return_false');
+
+
+
+
+
+
+
+
+
+// array of filters (field key => field name)
+$GLOBALS['my_query_filters'] = array(
+	'field_1'	=> 'council',
+	'field_2'	=> 'lodge',
+	'field_3'	=> 'camp'
+);
+
+
+// action
+add_action('pre_get_posts', 'my_pre_get_posts', 10, 1);
+
+function my_pre_get_posts( $query ) {
+
+	//ignore my filter for the info page!
+	if ($query->get_queried_object_id() == 84) return;
+
+
+	// bail early if is in admin
+	if( is_admin() ) return;
+
+
+
+	// bail early if not main query
+	// - allows custom code / plugins to continue working
+	if( !$query->is_main_query() ) return;
+
+
+	// get meta query
+	$meta_query = $query->get('meta_query');
+
+
+	// loop over filters
+	foreach( $GLOBALS['my_query_filters'] as $key => $name ) {
+
+		// continue if not found in url
+		if( empty($_GET[ $name ]) ) {
+
+			continue;
+
+		}
+
+
+		// get the value for this filter
+		// eg: http://www.website.com/events?city=melbourne,sydney
+		$value = explode(',', $_GET[ $name ]);
+
+
+		// append meta query
+		$meta_query[] = array(
+			'key'		=> $name,
+			'value'		=> $value,
+			'compare'	=> 'IN',
+		);
+
+	}
+
+
+	// update meta query
+	$query->set('meta_query', $meta_query);
+
+}
