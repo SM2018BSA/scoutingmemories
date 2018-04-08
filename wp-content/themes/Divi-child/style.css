@@ -9,6 +9,7 @@ Author URI: http://www.elegantthemes.com
 Tags: responsive-layout, one-column, two-columns, three-columns, four-columns, left-sidebar, right-sidebar, custom-background, custom-colors, featured-images, full-width-template, post-formats, rtl-language-support, theme-options, threaded-comments, translation-ready
 License: GNU General Public License v2
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
+
 */
 
 body { overflow-x: hidden; color: #777 !important; }
@@ -25,6 +26,11 @@ body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
 #et-top-navigation > span:after,
 #et-top-navigation > span:before { color: #FFF; }
 
+
+.frm_style_divi.with_frm_style .frm_form_fields > fieldset { border-radius: 5px; }
+
+
+
 #logo { max-height: 140%; }
 
 #main-footer {
@@ -32,7 +38,12 @@ body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
     bottom: 0;
     width: 100%;
     z-index: 100;
+
 }
+
+.page-id-229 #main-footer,
+.home-page #main-footer {
+    position: fixed;}
 
 .single-post #main-footer {
     position: relative;}
