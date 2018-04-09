@@ -169,7 +169,6 @@ get_footer();
 <script>
 $j = jQuery.noConflict();
 $j(window).load(function () {
-    console.log('hi');
 
     $j('.frm_button_submit').on('click', function(){
 
