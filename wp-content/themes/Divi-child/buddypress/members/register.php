@@ -580,7 +580,7 @@ do_action( 'bp_after_register_page' ); ?>
     $j = jQuery.noConflict();
     $j(window).load(function () {
 
-        $j('.submit button').on('click', function(){
+        $j('.submit input').on('click', function(){
 
             $j('#signup_form').submit();
         });
