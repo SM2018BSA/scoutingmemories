@@ -21,9 +21,6 @@
 
 	<link rel="pingback" href="<?php bloginfo('pingback_url'); ?>" />
 
-    <link rel='stylesheet' id='formidable-css'  href='/scouting-memories/wp-content/plugins/formidable/css/formidableforms1.css' type='text/css' media='all' />
-    
-
 	<?php $template_directory_uri = get_template_directory_uri(); ?>
 	<!--[if lt IE 9]>
 	<script src="<?php echo esc_url( $template_directory_uri . '/js/html5.js"' ); ?>" type="text/javascript"></script>

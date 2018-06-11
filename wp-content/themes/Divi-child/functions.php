@@ -6,6 +6,13 @@
  * Time: 4:44 PM
  */
 
+
+
+
+
+
+
+
 add_action( 'wp_enqueue_scripts', 'enqueue_parent_styles' );
 
 function enqueue_parent_styles() {
@@ -311,14 +318,24 @@ add_filter('show_admin_bar', '__return_false');
 
 // array of filters (field key => field name)
 $GLOBALS['my_query_filters'] = array(
+    'field_0'   => 'state',
 	'field_1'	=> 'council',
 	'field_2'	=> 'lodge',
-	'field_3'	=> 'camp'
+	'field_3'	=> 'camp',
+    'field_4'   => 'start_date',
+    'field_5'   => 'end_date'
 );
 
 
+
+
+
+
+
+
+
 // action
-add_action('pre_get_posts', 'my_pre_get_posts', 10, 1);
+add_action('pre_get_posts', 'my_pre_get_posts');
 
 function my_pre_get_posts( $query ) {
 
@@ -338,17 +355,16 @@ function my_pre_get_posts( $query ) {
 
 	// get meta query
 	$meta_query = $query->get('meta_query');
+	$meta_query_dates = $query->get('meta_query');
 
 
 	// loop over filters
 	foreach( $GLOBALS['my_query_filters'] as $key => $name ) {
 
+
+
 		// continue if not found in url
-		if( empty($_GET[ $name ]) ) {
-
-			continue;
-
-		}
+		if( empty($_GET[ $name ]) ) continue;
 
 
 		// get the value for this filter
@@ -356,17 +372,113 @@ function my_pre_get_posts( $query ) {
 		$value = explode(',', $_GET[ $name ]);
 
 
-		// append meta query
+
+
+
+        if( $name == 'start_date') :
+            $start_date = $value[0];
+            continue;
+        endif;
+        if( $name == 'end_date') :
+            $end_date = $value[0];
+            continue;
+        endif;
+
+        if ($name == 'state') :
+            $state_code = $value[0];
+            $meta_query[] = array(
+                'key'		=> $name,
+                'value'		=> $state_code,
+                'compare'	=> 'LIKE',
+            );
+
+            continue;
+        endif;
+
+        // append meta query
 		$meta_query[] = array(
 			'key'		=> $name,
 			'value'		=> $value,
 			'compare'	=> 'IN',
 		);
 
-	}
+	}//end of foreach loop
 
 
-	// update meta query
-	$query->set('meta_query', $meta_query);
+
+
+
+    if(isset($start_date) && isset($end_date)) :
+
+
+        $meta_query_dates[] = array(
+            'key'		=> 'start_date',
+            'value'		=> array($start_date, $end_date),
+            'compare'	=> 'BETWEEN',
+            'type'      => 'NUMERIC'
+        );
+
+        $meta_query_dates[] = array(
+            'key'		=> 'end_date',
+            'value'		=> array($start_date, $end_date),
+            'compare'	=> 'BETWEEN',
+            'type'      => 'NUMERIC'
+        );
+
+
+
+        $query->set('meta_query',
+            array( 'relation' => 'AND',
+                array(
+                    'relation' => 'OR',
+                    $meta_query[0],
+                    (isset($meta_query[1]) ? $meta_query[1] : null),
+                    (isset($meta_query[2]) ? $meta_query[2] : null),
+                    (isset($meta_query[3]) ? $meta_query[3] : null)
+                ),
+                array(
+                    'relation' => 'OR',
+                    $meta_query_dates[0],
+                    $meta_query_dates[1]
+                )
+            )
+
+        );
+
+
+
+        return $query;
+    endif;
+
+
+
+//
+//echo ('<pre> yoo');
+//print_r($meta_query);
+//echo ('</pre>');
+//
+//
+//    if( count($meta_query) > 1 ) {
+//
+//	    $num = count($meta_query);
+//
+//
+//        $query->set('meta_query', array(
+//            'relation' => 'OR',
+//            $meta_query[0],
+//            (isset($meta_query[1]) ? $meta_query[1] : null),
+//            (isset($meta_query[2]) ? $meta_query[2] : null),
+//            (isset($meta_query[3]) ? $meta_query[3] : null)
+//        ));
+//
+//    } else {
+//
+//        $query->set('meta_query', array(['relation' => 'OR'], $meta_query));
+//
+//    }
+
+
+
+
 
 }

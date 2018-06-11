@@ -5,7 +5,11 @@
 
 get_header(); ?>
 
-	<section id="primary" class="site-content category" >
+
+
+
+
+	<section id="primary77" class="site-content category" >
 
 		<div class="et_pb_section  et_pb_section_1 et_section_regular">
 
@@ -59,8 +63,19 @@ get_header(); ?>
 						<hr />
 						<?php
 
-// The Loop
+
+
+
+
+                        // The Loop
 						while ( have_posts() ) : the_post(); ?>
+
+
+
+
+
+
+
 							<h2><a href="<?php the_permalink() ?>" rel="bookmark" title="Permanent Link to <?php the_title_attribute(); ?>"><?php the_title(); ?></a></h2>
 							<p class="post-meta"> by <span class="author vcard"><?php the_author_posts_link() ?> | <span class="published"><?php the_time('F jS, Y') ?></span>
 
@@ -76,7 +91,27 @@ get_header(); ?>
 							</div>
 							<hr style="border:none" />
 
+
+
+
+
+
 						<?php endwhile; // End Loop
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 					else: ?>
 						<p>Sorry, no posts matched your criteria.</p>

@@ -11,6 +11,9 @@ License: GNU General Public License v2
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
 
+@import url('https://fonts.googleapis.com/css?family=Kanit');
+
+
 body { overflow-x: hidden; color: #777 !important; }
 
 body .frm_style_divi.with_frm_style .frm_form_field.frm_html_container,
@@ -18,16 +21,26 @@ body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
     color: #777 !important;
 }
 
-.error { color:red; }
+
+#field_xyhjh_chosen > a, #field_45vcu_chosen > a,
+#field_inun1_chosen > a, #field_2urqa_chosen > a {
+    padding: 1.5rem .5rem !important;
+    border: solid thin; }
+
+
+.search-choice { padding: .5rem 1.5rem .5rem .35rem !important; }
+
+.chosen-drop .chosen-results li {background: none !important;}
+.chosen-drop .chosen-results li:hover {  background-color: #DDD !important; }
+
+
+.chosen-container.chosen-container-multi { color: #FFF !important; }
+
 
 /* Header */
 #main-header { top: 0; width:100%;  }
 #et-top-navigation > span:after,
 #et-top-navigation > span:before { color: #FFF; }
-
-
-.frm_style_divi.with_frm_style .frm_form_fields > fieldset { border-radius: 5px; }
-
 
 #logo { max-height: 140%; }
 
@@ -38,10 +51,19 @@ body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
     z-index: 100;
 }
 
+.home.page footer {
+    position: fixed;bottom: 0; }
+
+
+
 .single-post #main-footer {
     position: relative;}
 
-
+@media only screen and (min-width: 1350px) {
+    .home.page .et_pb_section {
+        padding: 0% 0;
+    }
+}
 
 .post-meta { margin-bottom: 0em; }
 .entry > p { margin-bottom: 1em; }
@@ -78,4 +100,10 @@ body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
 .page-id-84 #main-footer {
     position: fixed;
     bottom:0;
+}
+
+@media only screen and (min-width: 1350px) {
+    .category .et_pb_section {
+        min-height: 71.6vh;
+    }
 }

@@ -98,12 +98,26 @@ get_footer();
         var url_args = '?';
 
         // check if we have a state, and if we do show it,
-		<?php if (isset( $_GET['state'] ) && strlen( $_GET['state'] ) > 1 ) : ?>
+		<?php if (isset( $_GET['state'] ) && strlen( $_GET['state'] ) > 1 ) :
+
+        $value_key = $_GET['state'];
+        $field = get_field_object( 'field_5b1dbfe7017ab' );
+
+        //print_r($field);
+
+
+        $value_label = $field['choices'][$value_key] ; ?>
+
+
         //echo "alert('we have a state')";
 
-        var state = "<?=$_GET['state']?>";
+
+        var state = "<?=$value_label?>";
+        var state_slug = "<?=$value_key?>";
         //console.log(state);
         $j('#which_state').html(state);
+
+        url_args += 'state=' + state_slug + '&';
 
         //url_args += 'state='  to be added later
 
@@ -128,7 +142,7 @@ get_footer();
         $j('#which_council').html(council);
 
         url_args += 'council=' + council_slug + '&';
-        console.log(url_args);
+        //console.log(url_args);
 		<?php else: ?>
         //echo "alert('we dont have a council')";
 		<?php endif; ?>
@@ -160,6 +174,8 @@ get_footer();
 
 
 
+
+
 		<?php if (isset( $_GET['camp'] ) && strlen( $_GET['camp'] ) > 1 ) :
 
 		$value_key = $_GET['camp'];
@@ -179,6 +195,59 @@ get_footer();
 		<?php else: ?>
         //echo "alert('we dont have a camp')";
 		<?php endif; ?>
+
+
+
+
+
+
+
+
+        <?php
+            if (isset( $_GET['start_date'] ) && strlen( $_GET['start_date'] ) > 1 ) :
+            $value_key = $_GET['start_date'];
+            $field = get_field_object( 'field_5b1d731796f58' );
+        ?>
+        //echo "alert('we have a start date')";
+
+        var start_date = "<?=$value_key?>";
+        //console.log(camp);
+        $j('#start_date').html(start_date);
+
+        url_args += 'start_date=' + start_date + '&';
+        //console.log(url_args);
+        <?php else: ?>
+        //echo "alert('we dont have a start date ')";
+        <?php endif; ?>
+
+
+
+
+
+
+
+        <?php
+        if (isset( $_GET['end_date'] ) && strlen( $_GET['end_date'] ) > 1 ) :
+        $value_key = $_GET['end_date'];
+        $field = get_field_object( 'field_5b1d734296f59' );
+        ?>
+        //echo "alert('we have a start date')";
+
+        var end_date = "<?=$value_key?>";
+        //console.log(camp);
+        $j('#end_date').html(end_date);
+
+        url_args += 'end_date=' + end_date + '&';
+        //console.log(url_args);
+        <?php else: ?>
+        //echo "alert('we dont have a start date ')";
+        <?php endif; ?>
+
+
+
+
+
+
 
 
         $j('.entry-content .et_pb_button').each( function () {
