@@ -1,0 +1,81 @@
+/*!
+Theme Name: Scouting Memories
+Theme URI: http://www.elegantthemes.com/gallery/divi/
+Version: 3.0.92
+Description: Smart. Flexible. Beautiful. Divi is the most powerful theme in our collection.
+Template: Divi
+Author: Elegant Themes
+Author URI: http://www.elegantthemes.com
+Tags: responsive-layout, one-column, two-columns, three-columns, four-columns, left-sidebar, right-sidebar, custom-background, custom-colors, featured-images, full-width-template, post-formats, rtl-language-support, theme-options, threaded-comments, translation-ready
+License: GNU General Public License v2
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+*/
+
+body { overflow-x: hidden; color: #777 !important; }
+
+body .frm_style_divi.with_frm_style .frm_form_field.frm_html_container,
+body .frm_style_divi.with_frm_style .frm_form_field .frm_show_it {
+    color: #777 !important;
+}
+
+.error { color:red; }
+
+/* Header */
+#main-header { top: 0; width:100%;  }
+#et-top-navigation > span:after,
+#et-top-navigation > span:before { color: #FFF; }
+
+
+.frm_style_divi.with_frm_style .frm_form_fields > fieldset { border-radius: 5px; }
+
+
+#logo { max-height: 140%; }
+
+#main-footer {
+    
+    bottom: 0;
+    width: 100%;
+    z-index: 100;
+}
+
+.single-post #main-footer {
+    position: relative;}
+
+
+
+.post-meta { margin-bottom: 0em; }
+.entry > p { margin-bottom: 1em; }
+.category hr { margin-bottom: 5em;
+    display: block; border: 1px #DDD solid; border-collapse: collapse; }
+
+/* bottom footer banner */
+#custom_html-2 {
+    float: none; text-align: center;
+}
+
+#footer-widgets { padding: 0; }
+.et_pb_gutters3 .footer-widget { margin-bottom: 0; }
+
+#custom_html-2 > div > a { display: block; padding: 1% 0 .25% 0;}
+
+#top-banner {  display: inline; text-align: center;  clear: both;  margin-left: 40%; float: left; padding-top: 1.6em; z-index: 100;
+    position: relative;}
+
+.et_pb_image_0 {
+    max-width:100%!important;
+    width:429px ;
+    margin-left: 0;
+}
+
+.hidden { visibility: hidden;
+    display: none;
+    position: absolute;}
+
+.myBuddyPress .container:before { right: auto; border: none !important;  }
+
+.no-height.no-display { height:0; margin: 0 !important; padding: 0; }
+
+.page-id-84 #main-footer {
+    position: fixed;
+    bottom:0;
+}
