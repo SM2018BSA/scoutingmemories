@@ -106,3 +106,5 @@ Thumbs.db
 #!wp-content/plugins/example-plugin/
 !wp-content/themes/Scouting-Memories/
 
+cors-config.txt
+
