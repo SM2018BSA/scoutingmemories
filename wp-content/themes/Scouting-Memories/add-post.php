@@ -1,10 +1,9 @@
 <?php
-
 /*
-   Template Name: My Register
+  Template Name: Add Post
+
 
  */
-
 get_header();
 
 $show_default_title = get_post_meta( get_the_ID(), '_et_pb_show_title', true );
@@ -31,9 +30,9 @@ $is_page_builder_used = et_pb_is_pagebuilder_used( get_the_ID() );
 		<?php endwhile;
 		else:
 	?>
-	<div class="container">
+	<div class="et_pb_row et_pb_row_0 et_pb_row_fullwidth et_pb_row_1-4_1-2_1-4">
 		<div id="content-area" class="clearfix">
-			<div id="left-area">
+
 			<?php while ( have_posts() ) : the_post(); ?>
 				<?php if (et_get_option('divi_integration_single_top') <> '' && et_get_option('divi_integrate_singletop_enable') == 'on') echo(et_get_option('divi_integration_single_top')); ?>
 				<article id="post-<?php the_ID(); ?>" <?php post_class( 'et_pb_post' ); ?>>
@@ -155,27 +154,26 @@ $is_page_builder_used = et_pb_is_pagebuilder_used( get_the_ID() );
 				</article> <!-- .et_pb_post -->
 
 			<?php endwhile; ?>
-			</div> <!-- #left-area -->
 
-			<?php get_sidebar(); ?>
+
+
 		</div> <!-- #content-area -->
 	</div> <!-- .container -->
 	<?php endif; ?>
 </div> <!-- #main-content -->
-<script>
-    $j = jQuery.noConflict();
-    $j(window).load(function () {
-
-        $j('.frm_button_submit').on('click', function(){
-
-            $j('#signup_form').submit();
-        });
-    });
-</script>
 
 <?php
 
 get_footer();
 ?>
+<script>
+$j = jQuery.noConflict();
+$j(window).load(function () {
 
+    $j('.frm_button_submit').on('click', function(){
+
+        $j('#form_n146q').submit();
+    });
+});
+</script>
 
