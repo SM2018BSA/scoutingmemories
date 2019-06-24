@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="WEB_MODULE" version="4">
   <component name="NewModuleRootManager">
-    <content url="file://$MODULE_DIR$" />
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/wp-admin" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/mu-plugins/force-strong-passwords" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/mu-plugins/wpengine-common" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/plugins/akismet" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/themes/twentyfifteen" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/themes/twentyseventeen" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/themes/twentysixteen" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/uploads" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-includes" />
+    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
