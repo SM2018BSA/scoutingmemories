@@ -1,0 +1,22 @@
+body.settings_page_wpengine-content-performance .status-enabled {
+	color: green;
+	font-weight: bold;
+}
+
+body.settings_page_wpengine-content-performance .status-disabled {
+	color: #e89702;
+	font-weight: bold;
+}
+
+body.settings_page_wpengine-content-performance .spinner {
+	float: none;
+}
+
+body.settings_page_wpengine-content-performance .policy {
+	font-size: 0.8em;
+}
+
+body.settings_page_wpengine-content-performance .settings-disabled .form-table,
+body.settings_page_wpengine-content-performance .settings-disabled .form-table th {
+	color: rgba(51,51,51,.5);
+}
