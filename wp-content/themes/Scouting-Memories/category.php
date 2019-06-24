@@ -1,95 +1,66 @@
 <?php
 /**
- * A Simple Category Template
+ * The template for displaying archive pages
+ *
+ * @link https://codex.wordpress.org/Template_Hierarchy
+ *
+ * @package StrapPress
  */
 
 get_header(); ?>
 
-	<section id="primary" class="site-content category" >
-
-		<div class="et_pb_section  et_pb_section_1 et_section_regular">
 
 
-
-			<div class=" et_pb_row et_pb_row_1">
-
-				<div id="content" role="main">
-					<?php
-					// Check if there are any posts to display
-					if ( have_posts() ) : ?>
-
-						<header class="category-header">
-							<?php
-							// Since this template will only be used for Design category
-							// we can add category title and description manually.
-							// or even add images or change the layout
-							?>
-
-							<h1 class="archive-title">
-								<?php
-
-								if ( $term_ids = get_ancestors( get_queried_object_id(), 'category', 'taxonomy' ) ) {
-									$crumbs = [];
-
-									foreach ( $term_ids as $term_id ) {
-										$term = get_term( $term_id, 'category' );
-
-										if ( $term && ! is_wp_error( $term ) ) {
-											$crumbs[] = sprintf( '<a href="%s">%s</a>', esc_url( get_term_link( $term ) ), esc_html( $term->name ) );
-										}
-									}
-
-									echo implode( ' | ', array_reverse( $crumbs ) );
-									echo ' | ';
-								}
-								?>
-								<?php
-
-								$category = get_category( get_query_var( 'cat' ) );
-								$cat_id = $category->cat_ID;
-								$category_link = get_category_link( $cat_id );
-
-								echo '<a href="' .  $category_link . '" target="_self" >';
-									single_cat_title();
-								echo '</a>';
-								?>
-							</h1>
-
-						</header>
-						<hr />
-						<?php
-
-// The Loop
-						while ( have_posts() ) : the_post(); ?>
-							<h2><a href="<?php the_permalink() ?>" rel="bookmark" title="Permanent Link to <?php the_title_attribute(); ?>"><?php the_title(); ?></a></h2>
-							<p class="post-meta"> by <span class="author vcard"><?php the_author_posts_link() ?> | <span class="published"><?php the_time('F jS, Y') ?></span>
+    <div id="primary" class="content-area">
+        <main id="main" class="site-main smbsa container " role="main">
 
 
 
-							<div class="entry">
-								<?php the_excerpt(); ?>
-								<a class="et_pb_button  et_pb_button_1 et_pb_module et_pb_bg_layout_light"
-								      href="<?php the_permalink() ?>" rel="bookmark" title="Permanent Link to <?php the_title_attribute(); ?>">Read More</a>
-								<?php /*<p class="postmetadata"><?php
-									comments_popup_link( 'No comments yet', '1 comment', '% comments', 'comments-link', 'Comments closed');
-									?></p> */?>
-							</div>
-							<hr style="border:none" />
+            <?php
+            if (have_posts()) : ?>
 
-						<?php endwhile; // End Loop
+            <header class="page-header">
+                <?php
+                the_archive_title('<h1 class="page-title">', '</h1>');
+                the_archive_description('<div class="archive-description">', '</div>');
+                ?>
+            </header><!-- .page-header -->
 
-					else: ?>
-						<p>Sorry, no posts matched your criteria.</p>
-					<?php endif; ?>
-				</div>
-
-			</div> <!-- .et_pb_row -->
-
-		</div>
+            <div class="container">
+               <?php echo FrmFormsController::show_form('31', $key = '', $title=false, $description=true); ?>
+            </div>
 
 
+            <div class="row pt-5">
+                <?php
+                /* Start the Loop */
+                while (have_posts()) : the_post();
 
-	</section>
+                    /*
+                        * Include the Post-Format-specific template for the content.
+                        * If you want to override this in a child theme, then include a file
+                        * called content-___.php (where ___ is the Post Format name) and that will be used instead.
+                        */
+                    get_template_part('template-parts/content-search', get_post_format());
 
+                endwhile;
 
-<?php get_footer(); ?>
+                echo '<div class="p-5 w-100">';
+                the_posts_pagination(array(
+                    'prev_text' => '<i class="fa fa-arrow-left" aria-hidden="true"></i><span class="screen-reader-text">' . __('Previous Page', 'pool') . '</span>',
+                    'next_text' => '<span class="screen-reader-text">' . __('Next Page', 'pool') . '</span><i class="fa fa-arrow-right" aria-hidden="true"></i>',
+                ));
+                echo '</div>';
+
+                else :
+
+                    get_template_part('template-parts/content', 'none');
+
+                endif; ?>
+
+            </div>
+        </main><!-- #main -->
+    </div><!-- #primary -->
+
+<?php
+get_footer();
