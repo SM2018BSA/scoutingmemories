@@ -58,6 +58,7 @@ wp-content/mysql.sql
 /xmlrpc.php
 /wp-admin
 /wp-includes
+/wp-content/plugins/
 /wp-content/index.php
 /wp-content/themes/twentyten
 /wp-content/themes/twentyeleven
@@ -105,3 +106,4 @@ wp-content/mysql.sql
 *.asf
 *.wmv
 *.avi
+
