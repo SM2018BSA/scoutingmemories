@@ -74,6 +74,7 @@ wp-content/mysql.sql
 /wp-content/themes/index.php
 /wp-content/plugins/index.php
 /wp-content/plugins/akismet*
+/.idea/
 
 # large/disallowed file types
 # a CDN should be used for these
