@@ -4,6 +4,7 @@
 .cvs
 *.bak
 *.swp
+*.yml
 Thumbs.db
 
 # wordpress specific
@@ -111,4 +112,6 @@ wp-content/mysql.sql
 *.wmv
 *.avi
 
+.idea
+.idea/workspace.xml
 .idea
