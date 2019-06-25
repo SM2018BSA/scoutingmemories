@@ -7,7 +7,7 @@
  */
 
 
-// Register Custom Navigation Walker
+// Register Custom Navigation Walker test
 function wpb_widgets_init() {
 	register_sidebar( array(
 			'name' => 'Related Info',
@@ -74,10 +74,6 @@ add_filter('query_vars', 'add_query_vars_filter');
 
 function add_group($entry_id, $form_id)
 {
-
-
-    global $wpdb;
-
 
 
     // Add a Council
@@ -327,7 +323,7 @@ add_action('frm_after_create_entry', 'add_group', 30, 2);
 
 
 function after_entry_updated($entry_id, $form_id) {
-	global $wpdb;
+
 
 	// editing a Post
 	if ( $form_id == 6 ) {

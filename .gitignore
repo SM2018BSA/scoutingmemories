@@ -29,7 +29,8 @@ wp-content/mu-plugins/force-strong-passwords*
 wp-content/mu-plugins/wpengine-common*
 wp-content/mysql.sql
 
-# wp core (as of 4.9.5)
+# wp core (as of 5.2.1 )
+/_config.yml
 /db-config.php
 /index.php
 /license.txt
@@ -58,7 +59,9 @@ wp-content/mysql.sql
 /xmlrpc.php
 /wp-admin
 /wp-includes
+/wp-content/plugins/
 /wp-content/index.php
+/wp-content/themes/StrapPress
 /wp-content/themes/twentyten
 /wp-content/themes/twentyeleven
 /wp-content/themes/twentytwelve
@@ -67,6 +70,7 @@ wp-content/mysql.sql
 /wp-content/themes/twentyfifteen
 /wp-content/themes/twentysixteen
 /wp-content/themes/twentyseventeen
+/wp-content/themes/twentynineteen
 /wp-content/themes/index.php
 /wp-content/plugins/index.php
 /wp-content/plugins/akismet*
@@ -105,3 +109,5 @@ wp-content/mysql.sql
 *.asf
 *.wmv
 *.avi
+
+.idea
