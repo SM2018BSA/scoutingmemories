@@ -115,3 +115,4 @@ wp-content/mysql.sql
 .idea
 .idea/workspace.xml
 .idea
+phpinfo.php
