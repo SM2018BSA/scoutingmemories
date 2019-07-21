@@ -116,3 +116,8 @@ wp-content/mysql.sql
 .idea/workspace.xml
 .idea
 phpinfo.php
+wp-content/mu-plugins
+wp-content/themes/Scouting-Memories/temp.html
+README.md
+LICENSE
+wp-content/plugins
