@@ -11,7 +11,7 @@ require_once('inc/add-google-fonts.php');
 require_once('inc/utility-functions.php');
 require_once('inc/add-group.php');
 require_once('inc/add-shortcodes.php');
-require_once('inc/edit-defaults.php');
+
 
 
 function after_entry_updated($entry_id, $form_id)
