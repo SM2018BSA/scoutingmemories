@@ -22,8 +22,8 @@ Underscores is distributed under the terms of the GNU GPL v2 or later.
 @media (max-width: 992px) {
     .navbar-collapse {
         position: fixed !important;
-        top: 96px;
-        left: 0;
+        top: 50px;
+        right: 0;
         padding: 1em;
         width: 100%;
     }
@@ -39,7 +39,7 @@ Underscores is distributed under the terms of the GNU GPL v2 or later.
     }
 
     .navbar-collapse.show {
-        left: 75%;
+        left: 60%;
 
         -webkit-transition: left 0.4s ease-in;
         -o-transition: left 0.4s ease-in;
@@ -47,6 +47,12 @@ Underscores is distributed under the terms of the GNU GPL v2 or later.
         transition: left 0.4s ease-in;
 
     }
+
+    .navbar-brand a {
+         top:-15px !important;
+    }
+
+
 
 }
 
@@ -11702,8 +11708,7 @@ a.text-white:hover, a.text-white:focus {
 --------------------------------------------------------------*/
 #field_ap_council_chosen > a { padding-bottom: 3em; line-height: 2em;}
 
-.strong {
-    font-weight: bold;}
+.strong { font-weight: bold;}
 
 /* fix checkboxes in my account */
 .page-id-832 .frm_checkbox label { line-height: 200% !important; margin-bottom: 0 !important; }
@@ -11712,60 +11717,73 @@ a.text-white:hover, a.text-white:focus {
 .with_frm_style .chosen-container-single .chosen-single-with-deselect span {    line-height: 330%;}
 
 
-.pagination {
-    display: block;
-    width: 100%;
-}
+.pagination { display: block; width: 100%;}
 
-.form-check label:hover {
-    cursor: pointer;}
-.page-id-84 h1,
-.page-id-2 h1 { display: none; } /* Hide content title on home page and info page */
+.form-check label:hover { cursor: pointer;}
 
-.hidden { display: none !important;
-    position: absolute !important;}
 
-html {
-    height: 100%;}
 
-body {
-    min-height: 100%;
-    height: 100%;
-    position: relative;
-    margin: 0;
-}
 
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Roboto Slab',serif !important;
-}
-h1 {
-    font-weight: bold;}
+.entry-footer,
+.hidden { display: none !important; position: absolute !important;}
 
-#primary,
-.site-content { min-height: 100%; }
 
-#masthead > nav > div > div:nth-child(1) > div > a { z-index: 100 } /* KEEP logo on top */
-.navbar-expand-lg .navbar-nav .dropdown-menu { z-index: 50; }
+
+
+h1, h2, h3, h4, h5, h6 { font-family: 'Roboto Slab',serif !important;}
+h1 { font-weight: bold;}
+
+
+body, html { height:100% }
+
+
+
+
+/*#primary,*/
+/*.site-content { min-height: 100%; }*/
+
+/*#masthead > nav > div > div:nth-child(1) > div > a { z-index: 100 } !* KEEP logo on top *!*/
+/*.navbar-expand-lg .navbar-nav .dropdown-menu { z-index: 50; }*/
 
 footer {
 
     bottom: 0;
 }
 
-#post-84 .has-3-columns.h-100 .wp-block-column { margin-bottom: auto !important; margin-top: auto !important; }
+/*#post-84 .has-3-columns.h-100 .wp-block-column { margin-bottom: auto !important; margin-top: auto !important; }*/
 
-.page-template-short-centered-page .site-content.container,
-.page-template-centered-page .site-content.container { height: 100%; padding-bottom: 3em;  }
+/*.page-template-short-centered-page .site-content.container,*/
+/*.page-template-centered-page .site-content.container { height: 100%; padding-bottom: 3em;  }*/
 
-#post-84 > div > div.wp-block-columns.has-3-columns.h-100 > div:nth-child(3) {
-    margin-right: 0!important;}
+/*#post-84 > div > div.wp-block-columns.has-3-columns.h-100 > div:nth-child(3) {*/
+/*    margin-right: 0!important;}*/
 
 
-.page-template-short-centered-page header#masthead,
-.page-template-centered-page header#masthead,
-.page-template-short-centered-page .site-footer,
-.page-template-centered-page .site-footer {
-    position: absolute;}
+/*.page-template-short-centered-page header#masthead,*/
+/*.page-template-centered-page header#masthead,*/
+/*.page-template-short-centered-page .site-footer,*/
+/*.page-template-centered-page .site-footer {*/
+/*    position: absolute;}*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .megamenu .dropdown-item:hover, .megamenu .dropdown-item:focus {
     color: #FFF !important;

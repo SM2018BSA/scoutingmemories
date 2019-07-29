@@ -3,9 +3,9 @@
 get_header(); ?>
 
 
-<div class="container h-100">
-    <div id="primary" class="content-area row h-100">
-        <main id="main" class="site-main container my-auto" role="main">
+<div class="container d-flex h-100">
+    <div id="primary" class="row w-100 justify-content-center align-self-center mx-auto">
+        <main id="main" class="col" role="main">
 
             <?php
             while ( have_posts() ) : the_post();
