@@ -24,7 +24,7 @@
         <nav class="navbar navbar-expand-lg has-primary-background-color navbar-dark col" style="z-index: 100; ">
             <div class="container row mx-auto">
                 <div class="col-3">
-                    <div class="navbar-brand mb-0 "><a class="position-absolute" style="top:-50px"
+                    <div class="navbar-brand mb-0 "><a class="position-absolute" style="top:-29px"
                                                        href="<?php echo esc_url(home_url('/')); ?>" rel="home"><img
                                     src="//storage.scoutingmemories.org/2019/02/cccbadfe-scouting-memories.png"
                                     alt="Scouting Memories"></a></div>
