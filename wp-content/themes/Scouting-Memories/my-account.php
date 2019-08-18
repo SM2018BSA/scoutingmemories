@@ -44,7 +44,7 @@ $posts_view_id         = 1186;
 $all_councils_view_id  = 1172;
 $all_camps_view_id     = 1179;
 $all_lodges_view_id    = 1180;
-$councils_stf_view_id  = 1319;   // councils filtered by state
+$councils_stf_view_id  = 1315;   // councils filtered by state
 
 $current_user = wp_get_current_user();
 
