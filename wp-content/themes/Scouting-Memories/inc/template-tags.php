@@ -7,6 +7,8 @@
  * @package StrapPress
  */
 
+
+
 if ( ! function_exists( 'strappress_posted_on' ) ) :
 /**
  * Prints HTML with meta information for the current post-date/time and author.

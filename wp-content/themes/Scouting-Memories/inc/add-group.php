@@ -1,6 +1,12 @@
 <?php
+/*
+ *  This is executed every time a form is submitted
+ *
+ *
+ * */
 
 if (!function_exists('add_group')) :
+
     function add_group($entry_id, $form_id)
     {
 
