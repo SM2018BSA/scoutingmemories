@@ -28,8 +28,8 @@ function show_form($form_id=NULL, $title=false, $description=false) {
  *
  *   return String:     html of view
  * */
-function show_view($view_id ) {
-    return FrmProDisplaysController::get_shortcode(array('id' => $view_id ));
+function show_view($view_id, $filter='limited' ) {
+    return FrmProDisplaysController::get_shortcode(array('id' => $view_id, 'filter' => $filter ));
 }
 
 
@@ -45,6 +45,8 @@ $all_councils_view_id  = 1172;
 $all_camps_view_id     = 1179;
 $all_lodges_view_id    = 1180;
 $councils_stf_view_id  = 1315;   // councils filtered by state
+
+$posts_pending_view_id = 1316;
 
 $current_user = wp_get_current_user();
 
@@ -102,32 +104,66 @@ $current_user = wp_get_current_user();
                                 </ul>
                             </li>
                         </ul>
-                        <div class="tab-content">
-                            <div id="myAccount" class="tab-pane container active">
+                        <div id="main-tabs" class="tab-content">
+                            <div id="myAccount"  class="tab-pane container active">
                                 <p><?=show_form($my_account_form_id)?></p>
                             </div>
-                            <p><!--/tab-pane--></p>
-                            <div id="myPosts" class="tab-pane container fade">
+                            <!--/tab-pane-->
+                            <div id="myPosts"    class="tab-pane container fade">
                                 <?php if( in_array('create_posts', (array) $current_user->allcaps)) : ?>
-                                    <div class="row">
-                                        <div class="col p-5">
-                                            <div class="pagination ">
-                                                <p><?=show_view($posts_view_id )?> </p>
+
+
+                                    <div class="row ">
+                                        <div class="col p-3">
+                                            <nav>
+                                                <div id="posts-nav-tabs" class="nav nav-pills" role="tablist">
+
+                                                    <a id="councils-tab"
+                                                       class="nav-item nav-link active"
+                                                       role="tab"
+                                                       href="#posts"
+                                                       data-toggle="tab">My Posts</a>
+
+                                                    <a id="camps-tab"
+                                                       class="nav-item nav-link"
+                                                       role="tab"
+                                                       href="#pendingReview"
+                                                       data-toggle="tab">Pending Review</a>
+
+                                                </div>
+                                            </nav>
+                                            <div id="posts-tabs" class="tab-content">
+                                                <div id="posts"
+                                                     class="tab-pane fade pt-3 show active"
+                                                     role="tabpanel">
+
+                                                    <?=show_view($posts_view_id)?>
+                                                </div>
+                                                <div id="pendingReview"
+                                                     class="tab-pane fade pt-3"
+                                                     role="tabpanel">
+                                                    <?=show_view($posts_pending_view_id)?>
+                                                </div>
+
                                             </div>
                                         </div>
                                     </div>
+
+
+
                                 <?php else: ?>
                                     <p>You do not have permission to upload content.</p>
                                 <?php endif ?>
                             </div>
-                            <p><!--/tab-pane--></p>
-                            <div id="myMedia" class="tab-pane container fade">
+                            <!--/tab-pane-->
+                            <div id="myMedia"    class="tab-pane container fade">
                                 <div class="row ">
                                     <div class="col p-5">
                                         <p><?=do_shortcode('[frontend-button]')?></p>
                                     </div>
                                 </div>
                             </div>
+                            <!--/tab-pane-->
                             <div id="myDefaults" class="tab-pane container fade">
                                 <?php if(in_array('create_posts', (array) $current_user->allcaps)) : ?>
                                     <div class="row ">
@@ -139,78 +175,72 @@ $current_user = wp_get_current_user();
                                     <p>You do not have permission to upload content.</p>
                                 <?php endif ?>
                             </div>
+                            <!--/tab-pane-->
                             <div id="myIndexing" class="tab-pane container fade">
 
                                 <?php if(in_array('index_contributor', (array) $current_user->roles)) : ?>
                                 <div class="row ">
                                     <div class="col p-3">
                                         <nav>
-                                            <div id="nav-tab" class="nav nav-pills" role="tablist">
+                                            <div id="indexing-nav-tabs" class="nav nav-pills" role="tablist">
 
                                                 <a id="councils-tab"
                                                    class="nav-item nav-link active"
-                                                   role="tab" href="#councils"
-                                                   data-toggle="tab"
-                                                   aria-controls="councils"
-                                                   aria-selected="true">Councils</a>
+                                                   role="tab"
+                                                   href="#councils"
+                                                   data-toggle="tab">Councils</a>
 
-                                                <a
-                                                    id="camps-tab"
-                                                    class="nav-item nav-link"
-                                                    role="tab"
-                                                    href="#camps"
-                                                    data-toggle="tab"
-                                                    aria-controls="councils"
-                                                    aria-selected="true">Camps</a>
+                                                <a id="camps-tab"
+                                                   class="nav-item nav-link"
+                                                   role="tab"
+                                                   href="#camps"
+                                                   data-toggle="tab">Camps</a>
 
-                                                <a
-                                                    id="lodges-tab"
-                                                    class="nav-item nav-link"
-                                                    role="tab"
-                                                    href="#lodges"
-                                                    data-toggle="tab"
-                                                    aria-controls="councils"
-                                                    aria-selected="true">Lodges</a>
-
+                                                <a id="lodges-tab"
+                                                   class="nav-item nav-link"
+                                                   role="tab"
+                                                   href="#lodges"
+                                                   data-toggle="tab">Lodges</a>
                                             </div>
                                         </nav>
-                                        <div id="nav-tabContent" class="tab-content">
+                                        <div id="indexing-tabs" class="tab-content">
                                             <div id="councils"
                                                  class="tab-pane fade pt-3 show active"
-                                                 role="tabpanel"
-                                                 aria-labelledby="councils-tab">
+                                                 role="tabpanel">
 
                                                 <?=show_view($councils_stf_view_id, '0')?>
                                             </div>
                                             <div id="camps"
                                                  class="tab-pane fade pt-3"
-                                                 role="tabpanel"
-                                                 aria-labelledby="nav-camps-tab">
+                                                 role="tabpanel">
                                                 <?=show_view($all_camps_view_id)?>
                                             </div>
                                             <div id="lodges"
                                                  class="tab-pane fade pt-3"
-                                                 role="tabpanel"
-                                                 aria-labelledby="nav-lodges-tab">
+                                                 role="tabpanel">
                                                 <?=show_view($all_lodges_view_id)?>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
+
+
+
                                 <?php else: ?>
                                     <p>You do not have permission to upload content.</p>
                                 <?php endif ?>
 
                             </div>
+                            <!--/tab-pane-->
                         </div>
-                        <p><!--/tab-pane--></p>
+                        <!--/tab-pane-->
                     </div>
-                    <p><!--/tab-content--></p>
+                    <!--/tab-content-->
                 </div>
-                <p><!--/col-9--></p>
+                <!--/col-9-->
             </div>
-            <p><!--/row--></p>
+            <!--/row-->
 
 
 
