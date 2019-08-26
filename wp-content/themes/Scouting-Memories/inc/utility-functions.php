@@ -25,8 +25,8 @@ endif;
 
 
 if (!function_exists('get_field_id_from_key')) :
-    function get_field_id_from_key($field_key)
-    {
+    function get_field_id_from_key($field_key) {
+        if (is_array($field_key)) $field_key = implode(",", $field_key);
         global $wpdb;
         $entry_id = $wpdb->get_var("SELECT item_id FROM $wpdb->prefix" . "frm_item_metas WHERE meta_value LIKE '" . $field_key . "'");
         if ($wpdb->last_error !== '') $wpdb->print_error();
@@ -44,7 +44,6 @@ if (!function_exists('get_state_name')) :
         $state_name = 'none';
 
         if (is_array($state_acl) && count($state_acl) == 1) {
-            $state_acl = @implode(', ', $state_acl);
             $entry_id = get_field_id_from_key($state_acl);
             $state_name = '<span class="small">' . get_field_val(S_NAME_FID, $entry_id) . '</span>';
         } elseif (is_array($state_acl) && count($state_acl) > 1) {
@@ -65,10 +64,8 @@ endif;
 if (!function_exists('get_council_name_number')) :
     function get_council_name_number($council_slug)
     {
-
         $council_name_number = 'none';
         $council_slug = explode(", ", $council_slug);
-
         if (count($council_slug) == 1) {
             $entry_id = get_field_id_from_key($council_slug);
             $council_name = get_field_val(AACOUNCIL_NAME_FID, $entry_id);
