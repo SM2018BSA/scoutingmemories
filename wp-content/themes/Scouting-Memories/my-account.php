@@ -6,47 +6,9 @@
  */
 
 get_header();
-/*   get current user field value
- *   return String:     current user field value for the field id given
- *
- * */
-function get_cuf_val( $field_id ) {
-    return FrmProEntriesController::get_field_value_shortcode(array('field_id' => $field_id, 'user_id' => 'current')) ;
-}
-
-/*   $title Bool:       show or hide title of form
- *   $description Bool:      show or hide form description
- *
- *   return String:     html of form
- * */
-function show_form($form_id=NULL, $title=false, $description=false) {
-    return FrmFormsController::get_form_shortcode(array('id' => $form_id, 'title' => $title, 'description' => $description));
-}
-/*
- *   $view_id Int:      id of the view to show
- *   $filter String:    value for filter
- *
- *   return String:     html of view
- * */
-function show_view($view_id, $filter='limited' ) {
-    return FrmProDisplaysController::get_shortcode(array('id' => $view_id, 'filter' => $filter ));
-}
 
 
-$avatar_image_fid      = 183;
-$first_name_fid        = 168;
-$last_name_fid         = 184;
 
-$my_account_form_id    = 22;
-$user_defaults_form_id = 30;
-
-$posts_view_id         = 1186;
-$all_councils_view_id  = 1172;
-$all_camps_view_id     = 1179;
-$all_lodges_view_id    = 1180;
-$councils_stf_view_id  = 1315;   // councils filtered by state
-
-$posts_pending_view_id = 1316;
 
 $current_user = wp_get_current_user();
 
