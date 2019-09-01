@@ -238,7 +238,10 @@ function frm_reorder_options($values, $field)
         || $field->id == AAP_COUNCIL_FID
         || $field->id == AACAMP_COUNCIL_FID
         || $field->id == AALODGE_COUNCIL_FID
-        || $field->id == AACOUNCIL_OLDER_NAME_FID) {
+        || $field->id == AACOUNCIL_OLDER_NAME_FID
+        || $field->id == AACAMP_LINKED_COUNCIL_FID
+        || $field->id == AALODGE_LINKED_COUNCIL_FID
+        ) {
 
         foreach ($values['options'] as $key => $value)
             if ($key == '') unset($values['options'][$key]);

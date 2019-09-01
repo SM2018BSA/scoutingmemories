@@ -42,10 +42,12 @@ define('AACOUNCIL_COUNCIL_ACTIVE_FID',     329);
 // Add a Camp field IDs
 define('AACAMP_NAME_FID',                  117);
 define('AACAMP_COUNCIL_FID',               116);
+define('AACAMP_LINKED_COUNCIL_FID',        220);
 
 // Lodge field IDs
 define('AALODGE_NAME_FID',                  90);
 define('AALODGE_COUNCIL_FID',               89);
+define('AALODGE_LINKED_COUNCIL_FID',       279);
 
 // Edit User field IDs
 define('EU_USERNAME_FID',                  478);
