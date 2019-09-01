@@ -241,6 +241,7 @@ function frm_reorder_options($values, $field)
         || $field->id == AACOUNCIL_OLDER_NAME_FID
         || $field->id == AACAMP_LINKED_COUNCIL_FID
         || $field->id == AALODGE_LINKED_COUNCIL_FID
+        || $field->id == NUR_DEFAULT_COUNCIL_FID
         ) {
 
         foreach ($values['options'] as $key => $value)

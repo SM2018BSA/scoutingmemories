@@ -62,6 +62,7 @@ define('EU_CURRENT_ROLES_FID',             484);
 // New User Registration
 define('NUR_EMAIL_FID',                    163);
 define('NUR_ASSIGNED_COUNCIL_FID',         439);
+define('NUR_DEFAULT_COUNCIL_FID',          172);
 
 
 // Add a Post field IDs
