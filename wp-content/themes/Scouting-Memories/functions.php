@@ -13,9 +13,7 @@ require_once('inc/add-group.php');
 require_once('inc/add-shortcodes.php');
 require_once('inc/form-field-ids.php');
 require_once('inc/utility-functions.php');
-
-
-
+require_once('inc/edit-users.php');
 
 
 // Add media button to front end forms
@@ -51,7 +49,7 @@ $GLOBALS['wp_category_ids'] = array(
 );
 
 // action
-
+add_action('pre_get_posts', 'my_pre_get_posts');
 function my_pre_get_posts($query)
 {
 
@@ -187,9 +185,8 @@ function my_pre_get_posts($query)
     return $query;
 }
 
-add_action('pre_get_posts', 'my_pre_get_posts');
 
-
+add_filter('pre_get_posts', 'limit_historian_posts');
 function limit_historian_posts($query)
 {
     global $pagenow;
@@ -215,27 +212,43 @@ function limit_historian_posts($query)
     return $query;
 }
 
-add_filter('pre_get_posts', 'limit_historian_posts');
-
-
-function frm_reorder_options($values, $field)
-{
-    if ($field->id == 439) { // Field ID of assigned councils in new account form
-        asort($values['options']); // sort the values here
-
-        // Filter Assigned Councils to only show active ones
-        $council_active_fid = '329';
-        foreach ($values['options'] as $key => $value) {
-            $val = FrmProEntriesController::get_field_value_shortcode(array('field_id' => $council_active_fid, 'entry' => $key));
-            if ($val == 'No')
-                unset($values['options'][$key]);
-        }
-    }
-    return $values;
-}
 
 add_filter('frm_setup_new_fields_vars', 'frm_reorder_options', 30, 2);
+function frm_reorder_options($values, $field)
+{
 
+
+    if ($field->id == NUR_ASSIGNED_COUNCIL_FID || $field->id == EU_ASSIGNED_COUNCIL_FID) {
+        asort($values['options']); // sort the values here
+
+        add_council_number($values);
+
+        foreach ($values['options'] as $key => $value) {
+            $val = get_field_val(AACOUNCIL_COUNCIL_ACTIVE_FID, $key);
+            if ($key == '') unset($values['options'][$key]);
+            if ($val == 'No') unset($values['options'][$key]);
+        }
+    }
+
+
+    if (   $field->id == SM1_COUNCIL_FID
+        || $field->id == SM2_COUNCIL_FID
+        || $field->id == SM3_COUNCIL_FID
+        || $field->id == EAD_COUNCIL_FID
+        || $field->id == AAP_COUNCIL_FID
+        || $field->id == AACAMP_COUNCIL_FID
+        || $field->id == AALODGE_COUNCIL_FID
+        || $field->id == AACOUNCIL_OLDER_NAME_FID) {
+
+        foreach ($values['options'] as $key => $value)
+            if ($key == '') unset($values['options'][$key]);
+
+        add_council_number($values);
+    }
+
+
+    return $values;
+}
 
 
 function frm_reorder_userlist($values, $field)

@@ -21,11 +21,33 @@ if (!function_exists('debug_to_console')) :
 endif;
 
 
+/**
+ * Gets the request parameter.
+ *
+ * @param string $key The query parameter
+ * @param string $default The default value to return if not found
+ *
+ * @return     string  The request parameter.
+ */
+
+function get_request_parameter($key, $default = '')
+{
+    // If not request set
+    if (!isset($_REQUEST[$key]) || empty($_REQUEST[$key])) {
+        return $default;
+    }
+
+    // Set so process it
+    return strip_tags((string)wp_unslash($_REQUEST[$key]));
+}
+
+
 //Show Timeline on Post
 
 
 if (!function_exists('get_field_id_from_key')) :
-    function get_field_id_from_key($field_key) {
+    function get_field_id_from_key($field_key)
+    {
         if (is_array($field_key)) $field_key = implode(",", $field_key);
         global $wpdb;
         $entry_id = $wpdb->get_var("SELECT item_id FROM $wpdb->prefix" . "frm_item_metas WHERE meta_value LIKE '" . $field_key . "'");
@@ -88,7 +110,8 @@ endif;
 
 
 if (!function_exists('get_camp_name')) :
-    function get_camp_name($camp_slug) {
+    function get_camp_name($camp_slug)
+    {
         $camp_name = 'none';
         $camp_slug = explode(", ", $camp_slug);
         if (count($camp_slug) == 1) {
@@ -108,7 +131,8 @@ endif;
 
 
 if (!function_exists('get_lodge_name')) :
-    function get_lodge_name($lodge_slug) {
+    function get_lodge_name($lodge_slug)
+    {
         $lodge_name = 'none';
         $lodge_slug = explode(", ", $lodge_slug);
         if (count($lodge_slug) == 1) {
@@ -127,6 +151,42 @@ if (!function_exists('get_lodge_name')) :
 endif;
 
 /////////MY ACCOUNT UTILITY FUNCTIONS
+///
+///
+///
+///
+if (!function_exists('show_user_roles')) :
+    function show_user_roles(&$current_user)
+    {
+        $user_roles = '';
+        $roles = $current_user->roles;
+        if (count($roles) == 1) {
+            $user_roles = '<span class="small">' . @implode(", ", $roles) . '</span>';
+        } elseif (count($roles) > 1) {
+            $user_roles = '<ul class="text-capitalize small">';
+            foreach ($roles as $role) {
+                $user_roles .= '<li>' . str_replace("_", " ", $role) . '</li>';
+            }
+            $user_roles .= '</ul>';
+        }
+        return $user_roles;
+    }
+endif;
+
+// show council number with council name
+// @params    $values
+if (!function_exists('add_council_number')) :
+function add_council_number(&$values) {
+
+    foreach ($values['options'] as $key => $value) {
+        $val = get_field_val(AACOUNCIL_NUMBER_FID, $key);
+        $values['options'][$key] .= ' (#' . $val . ')';
+    }
+
+}
+
+endif;
+
 /*   get current user field value
  *   return String:     current user field value for the field id given
  *
