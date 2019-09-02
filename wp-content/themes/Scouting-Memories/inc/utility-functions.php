@@ -41,8 +41,39 @@ function get_request_parameter($key, $default = '')
     return strip_tags((string)wp_unslash($_REQUEST[$key]));
 }
 
+if (!function_exists('get_all_field_values')) :
+    function get_all_field_values($field_id)
+    {
+        global $wpdb;
+        $sql = $wpdb->prepare("SELECT * FROM $wpdb->prefix" . "frm_item_metas WHERE field_id = %d", $field_id);
+        $entry_data = $wpdb->get_results( $sql );
+        if ($wpdb->last_error !== '') $wpdb->print_error();
 
-//Show Timeline on Post
+        return $entry_data;
+    }
+endif;
+
+
+if (!function_exists('get_users_active_councils')) :
+    function get_users_active_councils()
+    {
+        // perform self join to get info from both rows matching entries
+        global $wpdb;
+        $sql = $wpdb->prepare("SELECT a.item_id AS entry_id, a.meta_value AS council, b.meta_value AS active
+                               FROM $wpdb->prefix" . "frm_item_metas a, $wpdb->prefix" . "frm_item_metas b
+                               WHERE a.item_id = b.item_id AND a.field_id = %d AND b.field_id = %d",
+                               NUR_ASSIGNED_COUNCIL_FID, NUR_ASSIGNED_COUNCIL_ACTIVE_FID);
+
+        $entry_data = $wpdb->get_results($sql);
+        if ($wpdb->last_error !== '') $wpdb->print_error();
+        return $entry_data;
+    }
+endif;
+
+
+
+
+
 
 
 if (!function_exists('get_field_id_from_key')) :
@@ -50,7 +81,7 @@ if (!function_exists('get_field_id_from_key')) :
     {
         if (is_array($field_key)) $field_key = implode(",", $field_key);
         global $wpdb;
-        $entry_id = $wpdb->get_var("SELECT item_id FROM $wpdb->prefix" . "frm_item_metas WHERE meta_value LIKE '" . $field_key . "'");
+        $entry_id = $wpdb->get_var($wpdb->prepare("SELECT item_id FROM $wpdb->prefix" . "frm_item_metas WHERE meta_value LIKE %s", $field_key));
         if ($wpdb->last_error !== '') $wpdb->print_error();
         return $entry_id;
     }
@@ -154,7 +185,28 @@ endif;
 ///
 ///
 ///
-///
+
+if (!function_exists('update_entry')) :
+    function update_entry($entry_id, $field_id, $meta_value)
+    {
+        global $wpdb;
+        $sql = $wpdb->prepare("SELECT field_id FROM $wpdb->prefix" . "frm_item_metas WHERE item_id = %d AND field_id=%d", $entry_id, $field_id );
+        $result = $wpdb->query($sql);
+        if (!$result) {
+            // the field wasnt there it needs to be added
+            $sql = $wpdb->prepare("INSERT INTO $wpdb->prefix" . "frm_item_metas ( meta_value, field_id, item_id, created_at )
+                            VALUES (%s, %d, %d, %s)",
+                $meta_value, $field_id, $entry_id, current_time('mysql') );
+            $wpdb->query($sql);
+            return;
+        }
+        $sql = $wpdb->prepare("UPDATE $wpdb->prefix" . "frm_item_metas SET meta_value = %s
+                        WHERE item_id = %d AND field_id = %d",
+                        $meta_value, $entry_id, $field_id );
+        $wpdb->query($sql);
+    }
+endif;
+
 if (!function_exists('show_user_roles')) :
     function show_user_roles(&$current_user)
     {
@@ -176,14 +228,15 @@ endif;
 // show council number with council name
 // @params    $values
 if (!function_exists('add_council_number')) :
-function add_council_number(&$values) {
+    function add_council_number(&$values)
+    {
 
-    foreach ($values['options'] as $key => $value) {
-        $val = get_field_val(AACOUNCIL_NUMBER_FID, $key);
-        $values['options'][$key] .= ' (#' . $val . ')';
+        foreach ($values['options'] as $key => $value) {
+            $val = get_field_val(AACOUNCIL_NUMBER_FID, $key);
+            $values['options'][$key] .= ' (#' . $val . ')';
+        }
+
     }
-
-}
 
 endif;
 
@@ -213,6 +266,7 @@ endif;
 
 /*   $title Bool:       show or hide title of form
  *   $description Bool:      show or hide form description
+ *   $params:           array for optional parameters ('tab' => 'defaults')
  *
  *   return String:     html of form
  * */

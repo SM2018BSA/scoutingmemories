@@ -5,13 +5,12 @@
  *
  * */
 
-if (!function_exists('after_entry_updated') ) :
 
+if (!function_exists('after_entry_updated')) :
+    add_action('frm_after_update_entry', 'after_entry_updated', 20, 2);
     function after_entry_updated($entry_id, $form_id)
     {
-
-
-// editing a Post
+        // editing a Post
         if ($form_id == 6) {
 
 // used to get my new posts ID
@@ -171,58 +170,12 @@ if (!function_exists('after_entry_updated') ) :
 
         }
 
-// map user meta info
-        if ($form_id == 30) {
-
-            $current_user_id = get_current_user_id();
-
-            $user_state = $_POST['item_meta']['394'];
-            $user_council = $_POST['item_meta']['396'];
-            $user_camp = $_POST['item_meta']['398'];
-            $user_lodge = $_POST['item_meta']['399'];
-            $user_category = $_POST['item_meta']['395'];
-            $user_credit_author = $_POST['item_meta']['407'];
-            $user_photographer = $_POST['item_meta']['408'];
-            $user_contributors = $_POST['item_meta']['409'];
-            $date_original = $_POST['item_meta']['412'];
-            $user_date_digital = $_POST['item_meta']['414'];
-            $user_pub_digital = $_POST['item_meta']['418'];
-            $user_subject = $_POST['item_meta']['416'];
-            $user_location = $_POST['item_meta']['417'];
-            $user_identifier = $_POST['item_meta']['413'];
-            $user_physical_description = $_POST['item_meta']['421'];
-            $user_state_slug = $_POST['item_meta']['452'];
-            $user_council_slug = $_POST['item_meta']['453'];
-            $user_camp_slug = $_POST['item_meta']['454'];
-            $user_lodge_slug = $_POST['item_meta']['455'];
-
-
-            update_user_meta($current_user_id, 'user_state', $user_state);
-            update_user_meta($current_user_id, 'user_council', $user_council);
-            update_user_meta($current_user_id, 'user_camp', $user_camp);
-            update_user_meta($current_user_id, 'user_lodge', $user_lodge);
-            update_user_meta($current_user_id, 'user_category', $user_category);
-            update_user_meta($current_user_id, 'user_credit_author', $user_credit_author);
-            update_user_meta($current_user_id, 'user_photographer', $user_photographer);
-            update_user_meta($current_user_id, 'user_contributors', $user_contributors);
-            update_user_meta($current_user_id, 'date_original', $date_original);
-            update_user_meta($current_user_id, 'user_date_digital', $user_date_digital);
-            update_user_meta($current_user_id, 'user_pub_digital', $user_pub_digital);
-            update_user_meta($current_user_id, 'user_subject', $user_subject);
-            update_user_meta($current_user_id, 'user_location', $user_location);
-            update_user_meta($current_user_id, 'user_identifier', $user_identifier);
-            update_user_meta($current_user_id, 'user_physical_description', $user_physical_description);
-            update_user_meta($current_user_id, 'user_state_slug', $user_state_slug);
-            update_user_meta($current_user_id, 'user_council_slug', $user_council_slug);
-            update_user_meta($current_user_id, 'user_camp_slug', $user_camp_slug);
-            update_user_meta($current_user_id, 'user_lodge_slug', $user_lodge_slug);
-
-
-        }
-
-
+        return;
     }
 
-    add_action('frm_after_update_entry', 'after_entry_updated', 10, 2);
-
 endif;
+
+
+
+
+

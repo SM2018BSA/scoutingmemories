@@ -13,8 +13,19 @@ require_once('inc/add-group.php');
 require_once('inc/add-shortcodes.php');
 require_once('inc/form-field-ids.php');
 require_once('inc/utility-functions.php');
+require_once('inc/entry-updated.php');
 require_once('inc/edit-users.php');
 
+
+// include custom Bootstrap JS
+if (!function_exists('include_custom_bootstrapjs')):
+    add_action('wp_enqueue_scripts', 'include_custom_bootstrapjs');
+    function include_custom_bootstrapjs()
+    {
+        $rand = rand(1, 9999999);
+        wp_enqueue_script('bootstrap',get_theme_file_uri() .'/js/bootstrap.min.js' ,array(), $rand);
+    }
+endif;
 
 // Add media button to front end forms
 add_filter('frm_rte_options', 'frm_rte_options', 10, 2);
@@ -231,7 +242,7 @@ function frm_reorder_options($values, $field)
     }
 
 
-    if (   $field->id == SM1_COUNCIL_FID
+    if ($field->id == SM1_COUNCIL_FID
         || $field->id == SM2_COUNCIL_FID
         || $field->id == SM3_COUNCIL_FID
         || $field->id == EAD_COUNCIL_FID
@@ -242,7 +253,7 @@ function frm_reorder_options($values, $field)
         || $field->id == AACAMP_LINKED_COUNCIL_FID
         || $field->id == AALODGE_LINKED_COUNCIL_FID
         || $field->id == NUR_DEFAULT_COUNCIL_FID
-        ) {
+    ) {
 
         foreach ($values['options'] as $key => $value)
             if ($key == '') unset($values['options'][$key]);
@@ -255,6 +266,7 @@ function frm_reorder_options($values, $field)
 }
 
 
+add_filter('frm_setup_new_fields_vars', 'frm_reorder_userlist', 30, 2);
 function frm_reorder_userlist($values, $field)
 {
     if ($field->id == 457) { // Field ID of assigned councils in new account form
@@ -271,7 +283,7 @@ function frm_reorder_userlist($values, $field)
     return $values;
 }
 
-add_filter('frm_setup_new_fields_vars', 'frm_reorder_userlist', 30, 2);
+
 
 
 

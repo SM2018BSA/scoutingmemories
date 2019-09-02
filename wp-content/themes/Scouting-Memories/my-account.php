@@ -31,9 +31,7 @@ $current_user = wp_get_current_user();
                                 </div>
                                 <div><a class="btn btn-secondary btn-sm " href="<?= wp_logout_url() ?>">Logout</a></div>
 
-                                <?php if (in_array('administrator', (array)$current_user->roles)) : ?>
-                                    <div class="admin-tab btn btn-secondary btn-sm mt-3" style="cursor: pointer" href="#myAdmin"  data-toggle="tab"> Admin Panel </div>
-                                <? endif ?>
+
 
                             </div>
                         </div>
@@ -45,24 +43,33 @@ $current_user = wp_get_current_user();
                             <li style="list-style-type: none;">
                                 <ul class="nav nav-tabs">
 
-                                    <li class="nav-item active"><a class="nav-link active" href="#myAccount"
+                                    <li class="nav-item active"><a class="myAccount nav-link active" href="#myAccount"
                                                                    data-toggle="tab">Home</a></li>
 
                                     <?php if (in_array('create_posts', (array)$current_user->allcaps)) : ?>
-                                        <li class="nav-item"><a class="nav-link" href="#myPosts"
+                                        <li class="nav-item"><a class="myPosts nav-link" href="#myPosts"
                                                                 data-toggle="tab">Posts</a></li>
                                     <? endif ?>
 
-                                    <li class="nav-item"><a class="nav-link" href="#myMedia" data-toggle="tab">Media</a>
+                                    <li class="nav-item"><a class="myMedia nav-link" href="#myMedia" data-toggle="tab">Media</a>
                                     </li>
 
-                                    <li class="nav-item"><a class="nav-link" href="#myDefaults" data-toggle="tab">Defaults</a>
+                                    <li class="nav-item"><a class="myDefaults nav-link" href="#myDefaults" data-toggle="tab">Defaults</a>
                                     </li>
 
                                     <?php if (in_array('index_contributor', (array)$current_user->roles)) : ?>
-                                        <li class="nav-item"><a class="nav-link" href="#myIndexing" data-toggle="tab">Indexing</a>
+                                        <li class="nav-item"><a class="myIndexing nav-link" href="#myIndexing" data-toggle="tab">Indexing</a>
                                         </li>
                                     <?php endif ?>
+                                    <?php if (in_array('administrator', (array)$current_user->roles)) : ?>
+                                        <li class="nav-item"><a class="myAdmin nav-link" href="#myAdmin" data-toggle="tab">Admin</a>
+                                        </li>
+                                        <li class="nav-item hidden"><a class="myAdmin2 nav-link" href="#myAdmin2" data-toggle="tab">Admin 2 </a>
+                                        </li>
+
+
+                                    <? endif ?>
+
 
                                 </ul>
                             </li>
@@ -221,6 +228,7 @@ $current_user = wp_get_current_user();
         </main><!-- #main -->
     </section><!-- #primary -->
     <script type="text/javascript">
+
         (function($) {
             // $("#field_council_active_0").val(this.checked);
             // let currentYear = new Date().getFullYear();
@@ -236,6 +244,29 @@ $current_user = wp_get_current_user();
             // if ( $('#field_council_active_1').val() == 'Yes') {
             //     $('#field_council_active_0').prop("checked", true);
             // }
+
+            let tab = '<?=get_request_parameter('tab') ?>';
+
+            console.log(tab);
+            switch(tab) {
+                case 'myDefaults':
+                    $('a.myDefaults').tab('show');
+                    break;
+                case 'myAdmin':
+                    $('a.myAdmin').tab('show');
+                    break;
+                case 'myAdmin2':
+                    $('a.myAdmin2').tab('show');
+                    break;
+                default:
+                // code block
+            }
+
+
+            $("#myAdmin a").each( function(){
+                let href = this.href += '&tab=myAdmin2';
+                $(this).attr('href', href );
+            });
 
             $(".dashboard-tabs a").on("click", function(){
                 $(".admin-tab").removeClass("active");

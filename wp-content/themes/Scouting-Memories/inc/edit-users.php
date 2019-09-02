@@ -37,11 +37,10 @@ if (!function_exists('frm_populate_user_dropdown')) :
         $entry_id = get_request_parameter('entry');
         $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
         $user = get_user_by_email($user_email);
-
+        $roles = $user->roles;
 
         if ($field->id == EU_CURRENT_ROLES_FID) {
-            $roles = implode(', ', $user->roles);
-            $values['value'] = $roles;
+            $values['value'] = implode(', ', $roles);
         }
 
 
@@ -59,6 +58,12 @@ if (!function_exists('frm_populate_user_dropdown')) :
             return $values;
         }
 
+        if ($field->id == EU_ASSIGNED_ACTIVE_COUNCIL_FID) {
+            $assigned_active_council = get_user_meta($user->ID, 'active_assigned_council', true);
+            // set default on dynamic drop down
+            $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_active_council;
+            return $values;
+        }
 
 
         return $values;
@@ -66,30 +71,95 @@ if (!function_exists('frm_populate_user_dropdown')) :
 endif;
 
 
+if (!function_exists('frm_edit_users')) :
+    add_filter('frm_pre_create_entry', 'frm_edit_users');
+    function frm_edit_users($values)
+    {
+        if ($values['form_id'] == EDIT_USERS_FORMID) {
 
+            $entry_id = get_request_parameter('entry');
+            $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
+            $user = get_user_by_email($user_email);
+            $roles = $user->roles;
+
+            $set_roles = $values['item_meta'][EU_SET_ROLE_FID];
+
+            update_entry($entry_id, NUR_ASSIGNED_STATE_FID, $values['item_meta'][EU_ASSIGNED_STATE_FID]);
+            update_entry($entry_id, NUR_ASSIGNED_COUNCIL_FID, $values['item_meta'][EU_ASSIGNED_COUNCIL_FID]);
+            update_entry($entry_id, NUR_ASSIGNED_COUNCIL_ACTIVE_FID, $values['item_meta'][EU_ASSIGNED_ACTIVE_COUNCIL_FID]);
+
+            update_user_meta($user->ID, 'assigned_state', $values['item_meta'][EU_ASSIGNED_STATE_FID]);
+            update_user_meta($user->ID, 'assigned_council', $values['item_meta'][EU_ASSIGNED_COUNCIL_FID]);
+            update_user_meta($user->ID, 'active_assigned_council', $values['item_meta'][EU_ASSIGNED_ACTIVE_COUNCIL_FID]);
+
+            if ($set_roles != '') {
+                foreach ($roles as $role) $user->remove_role($role);
+                if (count($set_roles) > 1): foreach ($set_roles as $set_role) $user->add_role($set_role);
+                else: $user->set_role($set_roles);
+                endif;
+            }
+        }
+
+        // map user meta info
+        if ($values['form_id'] == EDIT_USER_DEFAULTS_FORMID) {
+
+            $current_user_id = get_current_user_id();
+
+            update_user_meta($current_user_id, 'user_state', $values['item_meta'][EAD_STATE_FID]);
+            update_user_meta($current_user_id, 'user_council', $values['item_meta'][EAD_COUNCIL_FID]);
+            update_user_meta($current_user_id, 'user_camp', $values['item_meta'][EAD_CAMP_FID]);
+            update_user_meta($current_user_id, 'user_lodge', $values['item_meta'][EAD_LODGE_FID]);
+            update_user_meta($current_user_id, 'user_category', $values['item_meta'][EAD_CATEGORY_FID]);
+            update_user_meta($current_user_id, 'user_credit_author', $values['item_meta'][EAD_AUTHOR_FID]);
+            update_user_meta($current_user_id, 'user_photographer', $values['item_meta'][EAD_PHOTOGRAPHER_FID]);
+            update_user_meta($current_user_id, 'user_contributors', $values['item_meta'][EAD_CONTRIBUTORS_FID]);
+            update_user_meta($current_user_id, 'date_original', $values['item_meta'][EAD_DATE_ORIGINAL_FID]);
+            update_user_meta($current_user_id, 'user_date_digital', $values['item_meta'][EAD_DATE_DIGITAL_FID]);
+            update_user_meta($current_user_id, 'user_pub_digital', $values['item_meta'][EAD_PUB_DIGITAL_FID]);
+            update_user_meta($current_user_id, 'user_subject', $values['item_meta'][EAD_SUBJECT_FID]);
+            update_user_meta($current_user_id, 'user_location', $values['item_meta'][EAD_LOCATION_FID]);
+            update_user_meta($current_user_id, 'user_identifier', $values['item_meta'][EAD_IDENTIFIER_FID]);
+            update_user_meta($current_user_id, 'user_physical_description', $values['item_meta'][EAD_PHY_DSC_FID]);
+            update_user_meta($current_user_id, 'user_state_slug', $values['item_meta'][EAD_STATE_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_council_slug', $values['item_meta'][EAD_COUNCIL_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_camp_slug', $values['item_meta'][EAD_CAMP_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_lodge_slug', $values['item_meta'][EAD_LODGE_SLUG_FID]);
+
+
+        }
+
+        return $values;
+    }
+endif;
+
+
+// Conditionally require and make Requested Councils Unique if it is active
+// This will affect the New User Signup if they try to request a council that is already activated for another historian
 //
-//if (!function_exists('frm_edit_users')) :
-//    add_filter('frm_pre_create_entry', 'frm_edit_users');
-//    function adjust_my_field($values) {
-//        if ($values['form_id'] == EDIT_USERS_FORMID) {
-//            var_dump($values);
-//
-//
-//            //        if ($field->id == EU_SET_ROLE_FID) {
-////
-////            $roles = array(
-////                'administrator'
-////
-////            );
-////
-////            $user->set_role($roles[0]);
-////
-////        }
-//
-//
-//            //die('hello');
-//        }
-//    }
-//endif;
+add_filter('frm_validate_field_entry', 'conditionally_require_a_field', 10, 3);
+function conditionally_require_a_field($errors, $field, $value)
+{
+    $active_councils = get_users_active_councils();
+
+    if ($field->id == NUR_ASSIGNED_COUNCIL_FID) {
+        foreach ($active_councils as $active_council) {
+            if ($active_council->council == $value && $active_council->active == 'Yes')
+                $errors['field' . $field->id] = 'That council already has an assigned historian.';
+        }
+    }
+
+    if ($field->id == EU_ASSIGNED_COUNCIL_FID) {
+        // check the user being edited
+        // skip check for active if changing the user with the active council
+        $entry_id = get_request_parameter('entry');
+        foreach ($active_councils as $active_council) {
+            if ($active_council->council == $value && $active_council->active == 'Yes' && $entry_id != $active_council->entry_id)
+                $errors['field' . $field->id] = 'That council already has an assigned historian.';
+        }
+    }
+    return $errors;
+}
+
+
 
 

@@ -8,7 +8,7 @@ define('EDIT_USER_DEFAULTS_FORMID',         34);
 
 
 
-define('EDIT_USERS_VIEWID',               1322);
+define('EDIT_USERS_VIEWID',               1323);
 
 //Search Memorires 1 on home page
 define('SM1_COUNCIL_FID',                  108);
