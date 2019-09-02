@@ -130,7 +130,7 @@ $current_user = wp_get_current_user();
                                 <?php if (in_array('create_posts', (array)$current_user->allcaps)) : ?>
                                     <div class="row ">
                                         <div class="col p-3">
-                                            <p><?= show_form(USER_DEFAULTS_FORMID) ?></p>
+                                            <p><?= show_form(EDIT_USER_DEFAULTS_FORMID) ?></p>
                                         </div>
                                     </div>
                                 <?php else: ?>
