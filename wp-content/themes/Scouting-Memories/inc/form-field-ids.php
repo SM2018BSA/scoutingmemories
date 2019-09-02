@@ -3,7 +3,12 @@
 
 define('SEARCH_MEMORIES_1_FORMID',           9);
 define('EDIT_USERS_FORMID',                 33);
+define('NEW_USER_REG_FORM_ID',              17);
+define('EDIT_USER_DEFAULTS_FORMID',         34);
 
+
+
+define('EDIT_USERS_VIEWID',               1322);
 
 //Search Memorires 1 on home page
 define('SM1_COUNCIL_FID',                  108);
@@ -12,7 +17,28 @@ define('SM3_COUNCIL_FID',                  430);
 
 
 // Edit Account Defaults
-define('EAD_COUNCIL_FID',                  396);
+define('EAD_STATE_FID',                    488);
+define('EAD_CATEGORY_FID',                 489);
+define('EAD_COUNCIL_FID',                  490);
+define('EAD_CAMP_FID',                     491);
+define('EAD_LODGE_FID',                    493);
+define('EAD_AUTHOR_FID',                   495);
+define('EAD_PHOTOGRAPHER_FID',             496);
+define('EAD_CONTRIBUTORS_FID',             497);
+define('EAD_DATE_ORIGINAL_FID',            500);
+define('EAD_IDENTIFIER_FID',               501);
+define('EAD_PUB_DIGITAL_FID',              502);
+define('EAD_DATE_DIGITAL_FID',             503);
+define('EAD_SUBJECT_FID',                  504);
+define('EAD_LOCATION_FID',                 505);
+define('EAD_PHY_DSC_FID',                  506);
+
+define('EAD_STATE_SLUG_FID',               512);
+define('EAD_COUNCIL_SLUG_FID',             513);
+define('EAD_CAMP_SLUG_FID',                514);
+define('EAD_LODGE_SLUG_FID',               515);
+
+
 
 
 
@@ -51,17 +77,20 @@ define('AALODGE_LINKED_COUNCIL_FID',       279);
 
 // Edit User field IDs
 define('EU_USERNAME_FID',                  478);
-define('EU_ROLES_FID',                     475);
 define('EU_FIRST_NAME_FID',                481);
 define('EU_ASSIGNED_STATE_FID',            485);
 define('EU_ASSIGNED_COUNCIL_FID',          470);
+define('EU_ASSIGNED_ACTIVE_COUNCIL_FID',   471);
 define('EU_SET_ROLE_FID',                  475);
 define('EU_CURRENT_ROLES_FID',             484);
 
 
+
 // New User Registration
 define('NUR_EMAIL_FID',                    163);
+define('NUR_ASSIGNED_STATE_FID',           437);
 define('NUR_ASSIGNED_COUNCIL_FID',         439);
+define('NUR_ASSIGNED_COUNCIL_ACTIVE_FID',  472);
 define('NUR_DEFAULT_COUNCIL_FID',          172);
 
 
@@ -74,7 +103,7 @@ $first_name_fid        = 168;
 $last_name_fid         = 184;
 
 $my_account_form_id    = 22;
-$user_defaults_form_id = 30;
+
 
 $posts_view_id         = 1186;
 $all_councils_view_id  = 1172;

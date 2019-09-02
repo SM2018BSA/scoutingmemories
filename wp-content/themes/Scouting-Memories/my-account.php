@@ -32,7 +32,7 @@ $current_user = wp_get_current_user();
                                 <div><a class="btn btn-secondary btn-sm " href="<?= wp_logout_url() ?>">Logout</a></div>
 
                                 <?php if (in_array('administrator', (array)$current_user->roles)) : ?>
-                                    <div class="btn btn-secondary btn-sm mt-3" style="cursor: pointer" href="#myAdmin"  data-toggle="tab"> Admin Panel </div>
+                                    <div class="admin-tab btn btn-secondary btn-sm mt-3" style="cursor: pointer" href="#myAdmin"  data-toggle="tab"> Admin Panel </div>
                                 <? endif ?>
 
                             </div>
@@ -41,7 +41,7 @@ $current_user = wp_get_current_user();
                     </div>
                     <p><!--/col-3--></p>
                     <div class="col-sm-9">
-                        <ul class="nav nav-tabs">
+                        <ul class="nav nav-tabs dashboard-tabs">
                             <li style="list-style-type: none;">
                                 <ul class="nav nav-tabs">
 
@@ -130,7 +130,7 @@ $current_user = wp_get_current_user();
                                 <?php if (in_array('create_posts', (array)$current_user->allcaps)) : ?>
                                     <div class="row ">
                                         <div class="col p-3">
-                                            <p><?= show_form($user_defaults_form_id) ?></p>
+                                            <p><?= show_form(USER_DEFAULTS_FORMID) ?></p>
                                         </div>
                                     </div>
                                 <?php else: ?>
@@ -193,10 +193,14 @@ $current_user = wp_get_current_user();
 
                             </div>
                             <!--/tab-pane-->
-                            <div id="myAdmin" class="tab-pane container fade">
-                                admin stuff
-
-                            </div>
+                            <?php if (in_array('administrator', (array)$current_user->roles)) : ?>
+                                <div id="myAdmin" class="tab-pane container fade pt-5">
+                                    <?=show_view(EDIT_USERS_VIEWID)?>
+                                </div>
+                                <div id="myAdmin2" class="tab-pane container fade pt-5">
+                                    <?=show_form(EDIT_USERS_FORMID)?>
+                                </div>
+                            <?php endif?>
                         </div>
                         <!--/tab-pane-->
                     </div>
@@ -216,6 +220,29 @@ $current_user = wp_get_current_user();
             <?php endif ?>
         </main><!-- #main -->
     </section><!-- #primary -->
+    <script type="text/javascript">
+        (function($) {
+            // $("#field_council_active_0").val(this.checked);
+            // let currentYear = new Date().getFullYear();
+            // $('#field_council_active_0').on( "change", function() {
+            //     if(this.checked) {
+            //         $('#field_council_end').val(currentYear);
+            //         $('#field_council_active_1').val('Yes');
+            //     } else {
+            //         $('#field_council_active_1').val('No');
+            //     }
+            // });
+            //
+            // if ( $('#field_council_active_1').val() == 'Yes') {
+            //     $('#field_council_active_0').prop("checked", true);
+            // }
+
+            $(".dashboard-tabs a").on("click", function(){
+                $(".admin-tab").removeClass("active");
+            });
+
+        })( jQuery );
+    </script>
 
 <?php
 get_footer();
