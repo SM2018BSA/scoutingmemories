@@ -224,8 +224,14 @@ function limit_historian_posts($query)
 }
 
 
-add_filter('frm_setup_new_fields_vars', 'frm_reorder_options', 30, 2);
-function frm_reorder_options($values, $field)
+
+
+// Adds council number to council name in drop downs
+// if a new form with council selection is made it should be added here
+//
+add_filter('frm_setup_new_fields_vars', 'frm_add_council_number', 30, 2);
+add_filter('frm_setup_edit_fields_vars', 'frm_add_council_number', 30, 2);
+function frm_add_council_number($values, $field)
 {
 
 
@@ -264,6 +270,8 @@ function frm_reorder_options($values, $field)
 
     return $values;
 }
+
+
 
 
 add_filter('frm_setup_new_fields_vars', 'frm_reorder_userlist', 30, 2);

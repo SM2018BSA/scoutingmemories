@@ -64,8 +64,8 @@ get_header(); ?>
                                 <li class="list-group-item-dark text-white strong p-3 list-unstyled font-weight-bold" >Timeline</li>
                                 <li class="list-group-item"><strong>State:</strong>   <?=get_state_name(         get_field('state'))  ?></li>
                                 <li class="list-group-item"><strong>Council:</strong> <?=get_council_name_number(get_field('council'))?></li>
-                                <li class="list-group-item"><strong>Camp:</strong>    <?=get_camp_name(          get_field('camp'))   ?></li>
-                                <li class="list-group-item"><strong>Lodge:</strong>   <?=get_lodge_name(         get_field('lodge'))  ?></li>
+                                <li class="list-group-item"><strong>Camp:</strong>    <?=get_camp_name(          get_field('camp')) ?></li>
+                                <li class="list-group-item"><strong>Lodge:</strong>   <?=get_lodge_name(         get_field('lodge'));  ?></li>
                                 <li class="list-group-item"><strong>Start Date:</strong>  <span class="small"><?php the_field('start_date') ?></span> </li>
                                 <li class="list-group-item"><strong>End Date:</strong>  <span class="small"><?php the_field('end_date')   ?></span> </li>
                             </ul>

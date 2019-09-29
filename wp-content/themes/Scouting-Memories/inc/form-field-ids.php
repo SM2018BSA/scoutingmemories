@@ -51,6 +51,8 @@ define('AAP_CAMP_SLUG_FID',                 75);
 define('AAP_LODGE_SLUG_FID',                73);
 define('AAP_START_DATE_FID',                76);
 define('AAP_END_DATE_SLUG_FID',             77);
+define('AAP_CATEGORY',                      81);
+
 
 
 // States field IDS
