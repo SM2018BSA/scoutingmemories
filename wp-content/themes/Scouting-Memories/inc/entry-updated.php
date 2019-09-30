@@ -179,15 +179,35 @@ if (!function_exists('frm_set_edit_val')) :
     add_filter('frm_setup_edit_fields_vars', 'frm_set_edit_val', 20, 3);
     function frm_set_edit_val($values, $field, $entry_id)
     {
-        if ( FrmAppHelper::is_admin() ) {
-            return $values;
-        }
+//        if ( FrmAppHelper::is_admin() ) {
+//            return $values;
+//        }
 
-        if ($field->id == AAP_STATES_FID) { //Replace 171 with your field ID
 
-            $values['value'] = $values['dyn_default_value'] = $values['default_value'];
 
-        }
+//        switch ($field->id) {
+//
+//            case AAP_STATES_FID:
+//                var_dump($values);
+//                if (is_array($values)) {
+//
+//                    foreach ($values['value'] as $key => $value)
+//                        $values['value'][$key] = get_field_id_from_key($value);
+//
+//                } else {
+//                    $values['value'] = $values['dyn_default_value'] = $values['default_value'] = get_field_id_from_key(get_field_val($field->id, $entry_id));
+//                }
+//                var_dump($values);
+//                die();
+//                break;
+//
+//            // convert state code from ACL to formidable selections
+//
+//
+//        }
+
+
+
         return $values;
     }
 endif;
