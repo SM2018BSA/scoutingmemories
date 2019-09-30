@@ -69,13 +69,13 @@ function my_pre_get_posts($query)
 
 
     // bail early if is in admin
-    if (is_admin()) return;
+    if (is_admin()) return $query;
 
     // bail early if not main query
-    if (!$query->is_main_query()) return;
+    if (!$query->is_main_query()) return $query;
 
     // bail if not in one of my categories
-    if (!in_array($current_category, $GLOBALS['wp_category_ids'])) return;
+    if (!in_array($current_category, $GLOBALS['wp_category_ids'])) return $query;
 
 
     // get meta query
@@ -148,7 +148,7 @@ function my_pre_get_posts($query)
         $query->set('meta_query',
             array('relation' => 'AND',
                 array(
-                    'relation' => 'OR',
+                    'relation' => 'AND',
                     $meta_query[0],
                     (isset($meta_query[1]) ? $meta_query[1] : null),
                     (isset($meta_query[2]) ? $meta_query[2] : null),
