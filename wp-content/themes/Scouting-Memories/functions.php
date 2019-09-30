@@ -14,6 +14,7 @@ require_once('inc/add-shortcodes.php');
 require_once('inc/form-field-ids.php');
 require_once('inc/utility-functions.php');
 require_once('inc/entry-updated.php');
+require_once ('inc/entry-view.php');
 require_once('inc/edit-users.php');
 
 

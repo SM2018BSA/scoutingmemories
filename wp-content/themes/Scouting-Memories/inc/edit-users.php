@@ -34,6 +34,7 @@ if (!function_exists('frm_populate_user_dropdown')) :
     {
 
 
+
         $entry_id = get_request_parameter('entry');
         $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
         $user = get_user_by_email($user_email);
