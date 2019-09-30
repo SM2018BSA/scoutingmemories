@@ -163,6 +163,8 @@ function my_pre_get_posts($query)
 
         );
 
+        var_dump($query->query_vars['meta_query']);
+      // die();
 
         return $query;
     endif;

@@ -2,7 +2,7 @@
 
 
 if (!function_exists('frm_show_post_defaults')) :
-
+    add_filter('frm_setup_new_fields_vars', 'frm_show_post_defaults', 25, 2);
     add_filter('frm_setup_edit_fields_vars', 'frm_show_post_defaults', 25, 2);
     function frm_show_post_defaults($values, $field)
     {
@@ -16,12 +16,17 @@ if (!function_exists('frm_show_post_defaults')) :
                $state_form_ids = $values['value'];
 
 
+
                // convert value to id
                if (isset($state_form_ids)) {
                    if (is_array($state_form_ids)) {
                        foreach ($state_form_ids as $key => $state_form_id) :
 
-                           $state_form_id = get_field_id_from_key(sanitize_text_field($state_form_id));
+                           //check if VAL or ID already
+                           if (!preg_match("/^[a-z]$/i", $state_form_id))
+                               $state_form_id = get_field_id_from_key(sanitize_text_field($state_form_id));
+
+
 
                            $values['value'][$key] = isset($state_form_id) ? $state_form_id : '';
                        endforeach;
@@ -34,7 +39,7 @@ if (!function_exists('frm_show_post_defaults')) :
 
 
                 $values['dyn_default_value'] = $values['default_value'] = $values['value'];
-
+                var_dump($values);
                return $values;
                break;
        }
