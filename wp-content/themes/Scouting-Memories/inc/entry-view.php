@@ -15,7 +15,7 @@ if (!function_exists('frm_show_post_defaults')) :
 
                $state_form_ids = $values['value'];
 
-
+               echo 'frm_show_post_defaults';
 
                // convert value to id
                if (isset($state_form_ids)) {

@@ -13,6 +13,8 @@ if (!function_exists('after_entry_updated')) :
         // editing a Post
         if ($form_id == 6) {
 
+            echo 'after_entry_updated';
+
 // used to get my new posts ID
             $my_entry = FrmEntry::getOne($entry_id);
 
@@ -33,6 +35,9 @@ if (!function_exists('after_entry_updated')) :
 
 
             $_state_form_ids = $_POST['item_meta']['288'];
+
+            debug_to_console($_state_form_ids);
+
             if (isset($_state_form_ids)) {
                 foreach ($_state_form_ids as $state_form_id) :
                     $state_form_id = sanitize_text_field($state_form_id);
