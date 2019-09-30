@@ -20,11 +20,15 @@ if (!function_exists('frm_show_post_defaults')) :
                // convert value to id
                if (isset($state_form_ids)) {
                    if (is_array($state_form_ids)) {
+
+                       echo 'before change: ' . $state_form_ids;
+
                        foreach ($state_form_ids as $key => $state_form_id) :
 
                            //check if VAL or ID already
-                           if (!preg_match("/^[a-z]$/i", $state_form_id))
+                           if (!preg_match("/^[a-z]$/i", $state_form_id)) {
                                $state_form_id = get_field_id_from_key(sanitize_text_field($state_form_id));
+                           }
 
 
 
@@ -39,7 +43,8 @@ if (!function_exists('frm_show_post_defaults')) :
 
 
                 $values['dyn_default_value'] = $values['default_value'] = $values['value'];
-                var_dump($values);
+               echo 'after change: ';
+                var_dump($values['value']);
                return $values;
                break;
        }
