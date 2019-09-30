@@ -35,7 +35,6 @@ if (!function_exists('frm_show_post_defaults')) :
 
                 $values['dyn_default_value'] = $values['default_value'] = $values['value'];
 
-               var_dump($values);
                return $values;
                break;
        }
