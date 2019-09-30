@@ -39,35 +39,36 @@ if (!function_exists('frm_populate_user_dropdown')) :
         $user = get_user_by_email($user_email);
         $roles = $user->roles;
 
-        if ($field->id == EU_CURRENT_ROLES_FID) {
-            $values['value'] = implode(', ', $roles);
+
+        switch ($field->id) {
+
+            case EU_CURRENT_ROLES_FID:
+                $values['value'] = implode(', ', $roles);
+                return $values;
+                break;
+
+            case EU_ASSIGNED_STATE_FID:
+                $assigned_state = get_user_meta($user->ID, 'assigned_state', true);
+                // set default on dynamic drop down
+                $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_state;
+                return $values;
+                break;
+
+            case EU_ASSIGNED_COUNCIL_FID:
+                $assigned_council = get_user_meta($user->ID, 'assigned_council', true);
+                // set default on dynamic drop down
+                $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_council;
+                return $values;
+                break;
+
+            case EU_ASSIGNED_ACTIVE_COUNCIL_FID:
+                $assigned_active_council = get_user_meta($user->ID, 'active_assigned_council', true);
+                // set default on dynamic drop down
+                $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_active_council;
+                return $values;
+                break;
+
         }
-
-
-        if ($field->id == EU_ASSIGNED_STATE_FID) {
-            $assigned_state = get_user_meta($user->ID, 'assigned_state', true);
-            // set default on dynamic drop down
-            $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_state;
-            return $values;
-        }
-
-        if ($field->id == EU_ASSIGNED_COUNCIL_FID) {
-            $assigned_council = get_user_meta($user->ID, 'assigned_council', true);
-            // set default on dynamic drop down
-            $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_council;
-            return $values;
-        }
-
-        if ($field->id == EU_ASSIGNED_ACTIVE_COUNCIL_FID) {
-            $assigned_active_council = get_user_meta($user->ID, 'active_assigned_council', true);
-            // set default on dynamic drop down
-            $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_active_council;
-            return $values;
-        }
-
-
-
-
 
 
         return $values;
