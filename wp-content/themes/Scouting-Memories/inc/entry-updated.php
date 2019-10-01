@@ -36,7 +36,7 @@ if (!function_exists('after_entry_updated')) :
 
             $_state_form_ids = $_POST['item_meta']['288'];
 
-            debug_to_console($_state_form_ids);
+            var_dump($_state_form_ids);
 
             if (isset($_state_form_ids)) {
                 foreach ($_state_form_ids as $state_form_id) :
