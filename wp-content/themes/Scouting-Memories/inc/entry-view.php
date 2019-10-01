@@ -21,12 +21,13 @@ if (!function_exists('frm_show_post_defaults')) :
                if (isset($state_form_ids)) {
                    if (is_array($state_form_ids)) {
 
-                       echo 'before change: ' . $state_form_ids;
+                       echo 'before change: ' ; var_dump( $state_form_ids);
 
                        foreach ($state_form_ids as $key => $state_form_id) :
 
                            //check if VAL or ID already
-                           if (!preg_match("/^[a-z]$/i", $state_form_id)) {
+                           if (!is_numeric($state_form_id) ) {
+                                echo 'true';
                                $state_form_id = get_field_id_from_key(sanitize_text_field($state_form_id));
                            }
 
