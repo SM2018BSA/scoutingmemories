@@ -41,7 +41,7 @@ define('EAD_LODGE_SLUG_FID',               515);
 
 
 
-
+define('AASTATE_STATE_ACL_FID' ,            114);
 
 // Add a Post field IDs
 define('AAP_STATES_FID',                    288);

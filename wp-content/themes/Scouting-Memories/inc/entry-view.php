@@ -15,13 +15,13 @@ if (!function_exists('frm_show_post_defaults')) :
 
                $state_form_ids = $values['value'];
 
-               echo 'frm_show_post_defaults';
+
 
                // convert value to id
                if (isset($state_form_ids)) {
                    if (is_array($state_form_ids)) {
 
-                       echo 'before change: ' ; var_dump( $state_form_ids);
+
 
                        foreach ($state_form_ids as $key => $state_form_id) :
 
@@ -44,8 +44,7 @@ if (!function_exists('frm_show_post_defaults')) :
 
 
                 $values['dyn_default_value'] = $values['default_value'] = $values['value'];
-               echo 'after change: ';
-                var_dump($values['value']);
+
                return $values;
                break;
        }

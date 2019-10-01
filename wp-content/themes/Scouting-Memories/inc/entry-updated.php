@@ -13,7 +13,7 @@ if (!function_exists('after_entry_updated')) :
         // editing a Post
         if ($form_id == 6) {
 
-            echo 'after_entry_updated';
+
 
 // used to get my new posts ID
             $my_entry = FrmEntry::getOne($entry_id);
@@ -22,28 +22,37 @@ if (!function_exists('after_entry_updated')) :
 //  Get my slugs ////////////////////////
             $args = array();
 
-            $council_form_id = sanitize_text_field($_POST['item_meta'][70]);
+            $council_form_id = sanitize_text_field($_POST['item_meta'][AAP_COUNCIL_FID]);
             $args['council_id'] = isset($council_form_id) ? $council_form_id : ''; // field IDs from your form
 
 
-            $lodge_form_id = sanitize_text_field($_POST['item_meta'][72]);
+            $lodge_form_id = sanitize_text_field($_POST['item_meta'][AAP_LODGE_FID]);
             $args['lodge_id'] = isset($lodge_form_id) ? $lodge_form_id : ''; // field IDs from your form
 
 
-            $camp_form_id = sanitize_text_field($_POST['item_meta'][74]);
+            $camp_form_id = sanitize_text_field($_POST['item_meta'][AAP_CAMP_FID]);
             $args['camp_id'] = isset($camp_form_id) ? $camp_form_id : ''; // field IDs from your form
 
 
-            $_state_form_ids = $_POST['item_meta']['288'];
+            $_state_form_ids = $_POST['item_meta'][AAP_STATES_FID];
 
-            var_dump($_state_form_ids);
+
+
+            //If numeric change to values
 
             if (isset($_state_form_ids)) {
+
                 foreach ($_state_form_ids as $state_form_id) :
                     $state_form_id = sanitize_text_field($state_form_id);
+
+                    if (is_numeric($state_form_id)) {
+                        $state_form_id = get_field_val(AASTATE_STATE_ACL_FID, $state_form_id);
+                    }
+
                     $args['state_ids'][] = isset($state_form_id) ? $state_form_id : '';
                 endforeach;
             }
+
 
 
             if ($council_form_id > 0) {
@@ -75,24 +84,19 @@ if (!function_exists('after_entry_updated')) :
 
 
             if (is_array($_state_form_ids)) {
-                foreach ($args['state_ids'] as $state_form_id => $key) {
-                    if ((int)$key > 0) {
-                        $state_slugs[] = FrmProEntriesController::get_field_value_shortcode(array(
-                            'field_id' => 114,
-                            'entry' => $key
-                        ));
-                    }
+                foreach ($args['state_ids'] as $state_form_id) {
+
+                    $state_slugs[] = $state_form_id;
+
                 }
             } else {
 
-                $state_slugs[] = FrmProEntriesController::get_field_value_shortcode(array(
-                    'field_id' => 114,
-                    'entry' => $_state_form_ids
-                ));
+                $state_slugs[] = $_state_form_ids;
 
             }
 
-//$state_slug = FrmProEntriesController::get_field_value_shortcode(array('field_id' => 114, 'entry' => '307'));
+
+
 
 
             $post_id = $my_entry->post_id;
