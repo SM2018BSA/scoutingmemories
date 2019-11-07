@@ -34,42 +34,46 @@ if (!function_exists('frm_populate_user_dropdown')) :
     {
 
 
-
-        $entry_id = get_request_parameter('entry');
-        $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
-        $user = get_user_by_email($user_email);
-        $roles = $user->roles;
-
+        if ($field->id == EU_CURRENT_ROLES_FID ||
+            $field->id == EU_ASSIGNED_STATE_FID ||
+            $field->id == EU_ASSIGNED_COUNCIL_FID ||
+            $field->id == EU_ASSIGNED_ACTIVE_COUNCIL_FID ) {
+            $entry_id = get_request_parameter('entry');
+            $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
+            $user = get_user_by_email($user_email);
+            $roles = $user->roles;
+        }
 
         switch ($field->id) {
-
             case EU_CURRENT_ROLES_FID:
                 $values['value'] = implode(', ', $roles);
-                return $values;
-                break;
+            return $values;
 
             case EU_ASSIGNED_STATE_FID:
                 $assigned_state = get_user_meta($user->ID, 'assigned_state', true);
                 // set default on dynamic drop down
                 $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_state;
-                return $values;
-                break;
+            return $values;
 
             case EU_ASSIGNED_COUNCIL_FID:
                 $assigned_council = get_user_meta($user->ID, 'assigned_council', true);
                 // set default on dynamic drop down
                 $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_council;
-                return $values;
-                break;
+            return $values;
 
             case EU_ASSIGNED_ACTIVE_COUNCIL_FID:
                 $assigned_active_council = get_user_meta($user->ID, 'active_assigned_council', true);
                 // set default on dynamic drop down
                 $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_active_council;
-                return $values;
-                break;
-
+            return $values;
         }
+
+
+
+
+
+
+
 
 
         return $values;

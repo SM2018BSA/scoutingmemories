@@ -62,7 +62,7 @@ if (!function_exists('get_users_active_councils')) :
         $sql = $wpdb->prepare("SELECT a.item_id AS entry_id, a.meta_value AS council, b.meta_value AS active
                                FROM $wpdb->prefix" . "frm_item_metas a, $wpdb->prefix" . "frm_item_metas b
                                WHERE a.item_id = b.item_id AND a.field_id = %d AND b.field_id = %d",
-            NUR_ASSIGNED_COUNCIL_FID, NUR_ASSIGNED_COUNCIL_ACTIVE_FID);
+                               NUR_ASSIGNED_COUNCIL_FID, NUR_ASSIGNED_COUNCIL_ACTIVE_FID);
 
         $entry_data = $wpdb->get_results($sql);
         if ($wpdb->last_error !== '') $wpdb->print_error();
@@ -113,8 +113,9 @@ if (!function_exists('get_council_name_number')) :
     function get_council_name_number($council_slug)
     {
         $council_name_number = 'none';
-        $council_slug = explode(", ", $council_slug);
-        if (count($council_slug) == 1) {
+
+
+        if (is_string($council_slug)) {
             if ($council_slug[0] == 'none') return '<span class="small">' . $council_name_number . '</span>';
             $entry_id = get_field_id_from_key($council_slug);
             $council_name = get_field_val(AACOUNCIL_NAME_FID, $entry_id);
@@ -140,8 +141,8 @@ if (!function_exists('get_camp_name')) :
     function get_camp_name($camp_slug)
     {
         $camp_name = 'none';
-        $camp_slug = explode(", ", $camp_slug);
-        if (count($camp_slug) == 1) {
+
+        if (is_string($camp_slug)) {
             if ($camp_slug[0] == 'none') return '<span class="small">' . $camp_name . '</span>';
             $entry_id = get_field_id_from_key($camp_slug);
             $camp_name = '<span class="small">' . get_field_val(AACAMP_NAME_FID, $entry_id) . '</span>';
@@ -162,9 +163,8 @@ if (!function_exists('get_lodge_name')) :
     function get_lodge_name($lodge_slug)
     {
         $lodge_name = 'none';
-        $lodge_slug = explode(", ", $lodge_slug);
 
-        if (count($lodge_slug) == 1) {
+        if (is_string($lodge_slug)) {
             if ($lodge_slug[0] == 'none') return '<span class="small">' . $lodge_name . '</span>';
             $entry_id = get_field_id_from_key($lodge_slug);
             $lodge_name = '<span class="small">' . get_field_val(AALODGE_NAME_FID, $entry_id) . '</span>';
@@ -195,13 +195,13 @@ if (!function_exists('update_entry')) :
             // the field wasnt there it needs to be added
             $sql = $wpdb->prepare("INSERT INTO $wpdb->prefix" . "frm_item_metas ( meta_value, field_id, item_id, created_at )
                             VALUES (%s, %d, %d, %s)",
-                $meta_value, $field_id, $entry_id, current_time('mysql'));
+                            $meta_value, $field_id, $entry_id, current_time('mysql'));
             $wpdb->query($sql);
             return;
         }
         $sql = $wpdb->prepare("UPDATE $wpdb->prefix" . "frm_item_metas SET meta_value = %s
                         WHERE item_id = %d AND field_id = %d",
-            $meta_value, $entry_id, $field_id);
+                        $meta_value, $entry_id, $field_id);
         $wpdb->query($sql);
     }
 endif;

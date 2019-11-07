@@ -14,8 +14,17 @@ require_once('inc/add-shortcodes.php');
 require_once('inc/form-field-ids.php');
 require_once('inc/utility-functions.php');
 require_once('inc/entry-updated.php');
-require_once ('inc/entry-view.php');
+require_once('inc/entry-view.php');
 require_once('inc/edit-users.php');
+
+
+
+
+function enqueue_css_scripts() {
+    wp_enqueue_style( 'jquery-ui-datepicker', get_stylesheet_uri() );
+    //wp_enqueue_script( 'script-name', get_template_directory_uri() . '/js/example.js', array(), '1.0.0', true );
+}
+add_action( 'wp_enqueue_scripts', 'enqueue_css_scripts');
 
 
 // include custom Bootstrap JS
@@ -69,13 +78,13 @@ function my_pre_get_posts($query)
 
 
     // bail early if is in admin
-    if (is_admin()) return $query;
+    if (is_admin()) return;
 
     // bail early if not main query
-    if (!$query->is_main_query()) return $query;
+    if (!$query->is_main_query()) return;
 
     // bail if not in one of my categories
-    if (!in_array($current_category, $GLOBALS['wp_category_ids'])) return $query;
+    if (!in_array($current_category, $GLOBALS['wp_category_ids'])) return;
 
 
     // get meta query
@@ -148,7 +157,7 @@ function my_pre_get_posts($query)
         $query->set('meta_query',
             array('relation' => 'AND',
                 array(
-                    'relation' => 'AND',
+                    'relation' => 'OR',
                     $meta_query[0],
                     (isset($meta_query[1]) ? $meta_query[1] : null),
                     (isset($meta_query[2]) ? $meta_query[2] : null),
@@ -163,8 +172,6 @@ function my_pre_get_posts($query)
 
         );
 
-        var_dump($query->query_vars['meta_query']);
-      // die();
 
         return $query;
     endif;

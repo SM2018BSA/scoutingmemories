@@ -70,5 +70,5 @@ $full_img = get_post_meta(get_the_ID(), '_strappress_full_featured', true);
         <footer class="entry-footer">
             <?php strappress_entry_footer(); ?>
         </footer><!-- .entry-footer -->
-    <? endif; ?>
+    <?php endif; ?>
 </article><!-- #post-## -->

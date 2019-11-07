@@ -41,15 +41,13 @@ define('EAD_LODGE_SLUG_FID',               515);
 
 
 
-define('AASTATE_STATE_ACL_FID' ,            114);
+
 
 // Add a Post field IDs
 define('AAP_STATES_FID',                    288);
 define('AAP_COUNCIL_FID',                   70);
 define('AAP_COUNCIL_SLUG_FID',              71);
-define('AAP_CAMP_FID',                      74);
 define('AAP_CAMP_SLUG_FID',                 75);
-define('AAP_LODGE_FID',                     72);
 define('AAP_LODGE_SLUG_FID',                73);
 define('AAP_START_DATE_FID',                76);
 define('AAP_END_DATE_SLUG_FID',             77);
@@ -67,19 +65,16 @@ define('AACOUNCIL_NAME_FID',                98);
 define('AACOUNCIL_OLDER_NAME_FID',         210);
 define('AACOUNCIL_NUMBER_FID',             138);
 define('AACOUNCIL_COUNCIL_ACTIVE_FID',     329);
-define('AACOUNCIL_COUNCIL_SLUG_FID',       105);
 
 
 // Add a Camp field IDs
 define('AACAMP_NAME_FID',                  117);
 define('AACAMP_COUNCIL_FID',               116);
-define('AACAMP_CAMP_SLUG_FID',             123);
 define('AACAMP_LINKED_COUNCIL_FID',        220);
 
 // Lodge field IDs
 define('AALODGE_NAME_FID',                  90);
 define('AALODGE_COUNCIL_FID',               89);
-define('AALODGE_LODGE_SLUG_FID',            97);
 define('AALODGE_LINKED_COUNCIL_FID',       279);
 
 // Edit User field IDs

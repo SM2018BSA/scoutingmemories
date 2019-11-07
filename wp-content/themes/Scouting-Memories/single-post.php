@@ -22,6 +22,7 @@ get_header(); ?>
             <?php
             while (have_posts()) : the_post(); ?>
 
+
                 <div class="row">
                     <div class="col-8">
                         <div class="row post-content"><?php get_template_part('template-parts/content', get_post_format()); ?></div>

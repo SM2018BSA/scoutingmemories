@@ -7,8 +7,16 @@
 
 get_header();
 
+global $current_user;
 
 $current_user = wp_get_current_user();
+
+$all_caps = $current_user->allcaps;
+$user_roles = $current_user->roles;
+
+$create_posts__cap_allowed = in_array('create_posts', $all_caps );
+$index_contributor__role_allowed = in_array('index_contributor', $user_roles );
+$administrator__role_allowed = in_array('administrator', $current_user->roles);
 
 
 ?>
@@ -46,10 +54,15 @@ $current_user = wp_get_current_user();
                                     <li class="nav-item active"><a class="myAccount nav-link active" href="#myAccount"
                                                                    data-toggle="tab">Home</a></li>
 
-                                    <?php if (in_array('create_posts', (array)$current_user->allcaps)) : ?>
-                                        <li class="nav-item"><a class="myPosts nav-link" href="#myPosts"
-                                                                data-toggle="tab">Posts</a></li>
-                                    <? endif ?>
+                                    <?php
+
+
+
+                                    if ($create_posts__cap_allowed) { ?>
+                                    <li class="nav-item"><a class="myPosts nav-link" href="#myPosts"
+                                                            data-toggle="tab">Posts</a></li>
+                                    <?php }  ?>
+
 
                                     <li class="nav-item"><a class="myMedia nav-link" href="#myMedia" data-toggle="tab">Media</a>
                                     </li>
@@ -57,18 +70,20 @@ $current_user = wp_get_current_user();
                                     <li class="nav-item"><a class="myDefaults nav-link" href="#myDefaults" data-toggle="tab">Defaults</a>
                                     </li>
 
-                                    <?php if (in_array('index_contributor', (array)$current_user->roles)) : ?>
+                                    <?php
+
+                                    if ($index_contributor__role_allowed) { ?>
                                         <li class="nav-item"><a class="myIndexing nav-link" href="#myIndexing" data-toggle="tab">Indexing</a>
                                         </li>
-                                    <?php endif ?>
-                                    <?php if (in_array('administrator', (array)$current_user->roles)) : ?>
+                                    <?php } ?>
+                                    <?php if ($administrator__role_allowed) { ?>
                                         <li class="nav-item"><a class="myAdmin nav-link" href="#myAdmin" data-toggle="tab">Admin</a>
                                         </li>
                                         <li class="nav-item hidden"><a class="myAdmin2 nav-link" href="#myAdmin2" data-toggle="tab">Admin 2 </a>
                                         </li>
 
 
-                                    <? endif ?>
+                                    <?php } ?>
 
 
                                 </ul>
@@ -80,7 +95,7 @@ $current_user = wp_get_current_user();
                             </div>
                             <!--/tab-pane-->
                             <div id="myPosts" class="tab-pane container fade">
-                                <?php if (in_array('create_posts', (array)$current_user->allcaps)) : ?>
+                                <?php if ($create_posts__cap_allowed) { ?>
 
 
                                     <div class="row ">
@@ -120,9 +135,9 @@ $current_user = wp_get_current_user();
                                     </div>
 
 
-                                <?php else: ?>
+                                <?php } else { ?>
                                     <p>You do not have permission to upload content.</p>
-                                <?php endif ?>
+                                <?php } ?>
                             </div>
                             <!--/tab-pane-->
                             <div id="myMedia" class="tab-pane container fade">
@@ -134,20 +149,20 @@ $current_user = wp_get_current_user();
                             </div>
                             <!--/tab-pane-->
                             <div id="myDefaults" class="tab-pane container fade">
-                                <?php if (in_array('create_posts', (array)$current_user->allcaps)) : ?>
+                                <?php if ($create_posts__cap_allowed) { ?>
                                     <div class="row ">
                                         <div class="col p-3">
                                             <p><?= show_form(EDIT_USER_DEFAULTS_FORMID) ?></p>
                                         </div>
                                     </div>
-                                <?php else: ?>
+                                <?php } else {  ?>
                                     <p>You do not have permission to upload content.</p>
-                                <?php endif ?>
+                                <?php } ?>
                             </div>
                             <!--/tab-pane-->
                             <div id="myIndexing" class="tab-pane container fade">
 
-                                <?php if (in_array('index_contributor', (array)$current_user->roles)) : ?>
+                                <?php if ($index_contributor__role_allowed) { ?>
                                     <div class="row ">
                                         <div class="col p-3">
                                             <nav>
@@ -194,20 +209,20 @@ $current_user = wp_get_current_user();
                                     </div>
 
 
-                                <?php else: ?>
+                                <?php } else { ?>
                                     <p>You do not have permission to upload content.</p>
-                                <?php endif ?>
+                                <?php } ?>
 
                             </div>
                             <!--/tab-pane-->
-                            <?php if (in_array('administrator', (array)$current_user->roles)) : ?>
+                            <?php if ($administrator__role_allowed) { ?>
                                 <div id="myAdmin" class="tab-pane container fade pt-5">
                                     <?=show_view(EDIT_USERS_VIEWID)?>
                                 </div>
                                 <div id="myAdmin2" class="tab-pane container fade pt-5">
                                     <?=show_form(EDIT_USERS_FORMID)?>
                                 </div>
-                            <?php endif?>
+                            <?php } ?>
                         </div>
                         <!--/tab-pane-->
                     </div>
@@ -218,13 +233,16 @@ $current_user = wp_get_current_user();
             <!--/row-->
 
 
-            <?php if (!is_admin()) : ?>
+
+
+
+            <?php if ($administrator__role_allowed) { ?>
                 <style>
                     .show_only_for_admin {
                         display: none !important;
                     }
                 </style>
-            <?php endif ?>
+            <?php } ?>
         </main><!-- #main -->
     </section><!-- #primary -->
     <script type="text/javascript">
@@ -247,7 +265,7 @@ $current_user = wp_get_current_user();
 
             let tab = '<?=get_request_parameter('tab') ?>';
 
-            console.log(tab);
+            //console.log(tab);
             switch(tab) {
                 case 'myDefaults':
                     $('a.myDefaults').tab('show');

@@ -14,45 +14,32 @@ if (!function_exists('after_entry_updated')) :
         if ($form_id == 6) {
 
 
-
-// used to get my new posts ID
+            // used to get my new posts ID
             $my_entry = FrmEntry::getOne($entry_id);
 
 
-//  Get my slugs ////////////////////////
+            //  Get my slugs ////////////////////////
             $args = array();
 
             $council_form_id = sanitize_text_field($_POST['item_meta'][AAP_COUNCIL_FID]);
             $args['council_id'] = isset($council_form_id) ? $council_form_id : ''; // field IDs from your form
 
 
-            $lodge_form_id = sanitize_text_field($_POST['item_meta'][AAP_LODGE_FID]);
+            $lodge_form_id = sanitize_text_field($_POST['item_meta'][72]);
             $args['lodge_id'] = isset($lodge_form_id) ? $lodge_form_id : ''; // field IDs from your form
 
 
-            $camp_form_id = sanitize_text_field($_POST['item_meta'][AAP_CAMP_FID]);
+            $camp_form_id = sanitize_text_field($_POST['item_meta'][74]);
             $args['camp_id'] = isset($camp_form_id) ? $camp_form_id : ''; // field IDs from your form
 
 
-            $_state_form_ids = $_POST['item_meta'][AAP_STATES_FID];
-
-
-
-            //If numeric change to values
-
+            $_state_form_ids = $_POST['item_meta']['288'];
             if (isset($_state_form_ids)) {
-
                 foreach ($_state_form_ids as $state_form_id) :
                     $state_form_id = sanitize_text_field($state_form_id);
-
-                    if (is_numeric($state_form_id)) {
-                        $state_form_id = get_field_val(AASTATE_STATE_ACL_FID, $state_form_id);
-                    }
-
                     $args['state_ids'][] = isset($state_form_id) ? $state_form_id : '';
                 endforeach;
             }
-
 
 
             if ($council_form_id > 0) {
@@ -84,19 +71,24 @@ if (!function_exists('after_entry_updated')) :
 
 
             if (is_array($_state_form_ids)) {
-                foreach ($args['state_ids'] as $state_form_id) {
-
-                    $state_slugs[] = $state_form_id;
-
+                foreach ($args['state_ids'] as $state_form_id => $key) {
+                    if ((int)$key > 0) {
+                        $state_slugs[] = FrmProEntriesController::get_field_value_shortcode(array(
+                            'field_id' => 114,
+                            'entry' => $key
+                        ));
+                    }
                 }
             } else {
 
-                $state_slugs[] = $_state_form_ids;
+                $state_slugs[] = FrmProEntriesController::get_field_value_shortcode(array(
+                    'field_id' => 114,
+                    'entry' => $_state_form_ids
+                ));
 
             }
 
-
-
+//$state_slug = FrmProEntriesController::get_field_value_shortcode(array('field_id' => 114, 'entry' => '307'));
 
 
             $post_id = $my_entry->post_id;
@@ -184,16 +176,22 @@ if (!function_exists('after_entry_updated')) :
 
 endif;
 
-//if (!function_exists('frm_set_edit_val')) :
-//    add_filter('frm_setup_edit_fields_vars', 'frm_set_edit_val', 20, 3);
-//    function frm_set_edit_val($values, $field, $entry_id)
-//    {
-//
-//
-//
-//        return $values;
-//    }
-//endif;
+if (!function_exists('frm_set_edit_val')) :
+    add_filter('frm_setup_edit_fields_vars', 'frm_set_edit_val', 20, 3);
+    function frm_set_edit_val($values, $field, $entry_id)
+    {
+        if ( FrmAppHelper::is_admin() ) {
+            return $values;
+        }
+
+        if ($field->id == AAP_STATES_FID) { //Replace 171 with your field ID
+
+            $values['value'] = $values['dyn_default_value'] = $values['default_value'];
+
+        }
+        return $values;
+    }
+endif;
 
 
 
