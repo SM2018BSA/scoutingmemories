@@ -33,7 +33,7 @@ if (!function_exists('frm_edit_post_entry')) :
                         $values['value'] = isset($state_form_ids) ? sanitize_text_field($state_form_ids) : '';
                     }
                 }
-                
+
 
                 $values['dyn_default_value'] = $values['default_value'] = $values['value'];
                 return $values;

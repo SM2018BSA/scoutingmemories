@@ -93,12 +93,12 @@ if (!function_exists('get_state_name')) :
 
         if (is_array($state_acl) && count($state_acl) == 1) {
             $entry_id = get_field_id_from_key($state_acl);
-            $state_name = '<span class="small">' . get_field_val(S_NAME_FID, $entry_id) . '</span>';
+            $state_name = '<span class="small">' . get_field_val(AASTATE_NAME_FID, $entry_id) . '</span>';
         } elseif (is_array($state_acl) && count($state_acl) > 1) {
             $state_name = '<ul class="small">';
             foreach ($state_acl as $state) {
                 $entry_id = get_field_id_from_key($state);
-                $state_name .= '<li>' . get_field_val(S_NAME_FID, $entry_id) . '</li>';
+                $state_name .= '<li>' . get_field_val(AASTATE_NAME_FID, $entry_id) . '</li>';
             }
             $state_name .= '</ul>';
         }
@@ -229,11 +229,11 @@ endif;
 if (!function_exists('add_council_number')) :
     function add_council_number(&$values)
     {
-
-        foreach ($values['options'] as $key => $value) {
-            $val = get_field_val(AACOUNCIL_NUMBER_FID, $key);
-            $values['options'][$key] .= ' (#' . $val . ')';
-        }
+        if (isset($values['options']) && $values['options'] != '')
+            foreach ($values['options'] as $key => $value) {
+                $val = get_field_val(AACOUNCIL_NUMBER_FID, $key);
+                $values['options'][$key] .= ' (#' . $val . ')';
+            }
 
     }
 

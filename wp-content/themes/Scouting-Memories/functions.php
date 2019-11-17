@@ -271,8 +271,9 @@ function frm_add_council_number($values, $field)
         || $field->id == NUR_DEFAULT_COUNCIL_FID
     ) {
 
-        foreach ($values['options'] as $key => $value)
-            if ($key == '') unset($values['options'][$key]);
+        if (isset($values['options']) && $values['options'] != '')
+            foreach ($values['options'] as $key => $value)
+                if ($key == '') unset($values['options'][$key]);
 
         add_council_number($values);
     }
