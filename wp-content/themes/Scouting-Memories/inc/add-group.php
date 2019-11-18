@@ -6,7 +6,7 @@
  * */
 
 if (!function_exists('add_group')) :
-
+    add_action('frm_after_create_entry', 'add_group', 30, 2);
     function add_group($entry_id, $form_id)
     {
 
@@ -236,6 +236,6 @@ if (!function_exists('add_group')) :
         }
 
     } //end of frm_after_create_entry
-    add_action('frm_after_create_entry', 'add_group', 30, 2);
+
 
 endif;

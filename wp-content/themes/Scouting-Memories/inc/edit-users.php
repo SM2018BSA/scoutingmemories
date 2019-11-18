@@ -115,25 +115,25 @@ if (!function_exists('frm_edit_users')) :
 
             $current_user_id = get_current_user_id();
 
-            update_user_meta($current_user_id, 'user_state', $values['item_meta'][EAD_STATE_FID]);
-            update_user_meta($current_user_id, 'user_council', $values['item_meta'][EAD_COUNCIL_FID]);
-            update_user_meta($current_user_id, 'user_camp', $values['item_meta'][EAD_CAMP_FID]);
-            update_user_meta($current_user_id, 'user_lodge', $values['item_meta'][EAD_LODGE_FID]);
-            update_user_meta($current_user_id, 'user_category', $values['item_meta'][EAD_CATEGORY_FID]);
+            update_user_meta($current_user_id, 'user_state',         $values['item_meta'][EAD_STATE_FID]);
+            update_user_meta($current_user_id, 'user_council',       $values['item_meta'][EAD_COUNCIL_FID]);
+            update_user_meta($current_user_id, 'user_camp',          $values['item_meta'][EAD_CAMP_FID]);
+            update_user_meta($current_user_id, 'user_lodge',         $values['item_meta'][EAD_LODGE_FID]);
+            update_user_meta($current_user_id, 'user_category',      $values['item_meta'][EAD_CATEGORY_FID]);
             update_user_meta($current_user_id, 'user_credit_author', $values['item_meta'][EAD_AUTHOR_FID]);
-            update_user_meta($current_user_id, 'user_photographer', $values['item_meta'][EAD_PHOTOGRAPHER_FID]);
-            update_user_meta($current_user_id, 'user_contributors', $values['item_meta'][EAD_CONTRIBUTORS_FID]);
-            update_user_meta($current_user_id, 'date_original', $values['item_meta'][EAD_DATE_ORIGINAL_FID]);
-            update_user_meta($current_user_id, 'user_date_digital', $values['item_meta'][EAD_DATE_DIGITAL_FID]);
-            update_user_meta($current_user_id, 'user_pub_digital', $values['item_meta'][EAD_PUB_DIGITAL_FID]);
-            update_user_meta($current_user_id, 'user_subject', $values['item_meta'][EAD_SUBJECT_FID]);
-            update_user_meta($current_user_id, 'user_location', $values['item_meta'][EAD_LOCATION_FID]);
-            update_user_meta($current_user_id, 'user_identifier', $values['item_meta'][EAD_IDENTIFIER_FID]);
+            update_user_meta($current_user_id, 'user_photographer',  $values['item_meta'][EAD_PHOTOGRAPHER_FID]);
+            update_user_meta($current_user_id, 'user_contributors',  $values['item_meta'][EAD_CONTRIBUTORS_FID]);
+            update_user_meta($current_user_id, 'date_original',      $values['item_meta'][EAD_DATE_ORIGINAL_FID]);
+            update_user_meta($current_user_id, 'user_date_digital',  $values['item_meta'][EAD_DATE_DIGITAL_FID]);
+            update_user_meta($current_user_id, 'user_pub_digital',   $values['item_meta'][EAD_PUB_DIGITAL_FID]);
+            update_user_meta($current_user_id, 'user_subject',       $values['item_meta'][EAD_SUBJECT_FID]);
+            update_user_meta($current_user_id, 'user_location',      $values['item_meta'][EAD_LOCATION_FID]);
+            update_user_meta($current_user_id, 'user_identifier',    $values['item_meta'][EAD_IDENTIFIER_FID]);
             update_user_meta($current_user_id, 'user_physical_description', $values['item_meta'][EAD_PHY_DSC_FID]);
-            update_user_meta($current_user_id, 'user_state_slug', $values['item_meta'][EAD_STATE_SLUG_FID]);
-            update_user_meta($current_user_id, 'user_council_slug', $values['item_meta'][EAD_COUNCIL_SLUG_FID]);
-            update_user_meta($current_user_id, 'user_camp_slug', $values['item_meta'][EAD_CAMP_SLUG_FID]);
-            update_user_meta($current_user_id, 'user_lodge_slug', $values['item_meta'][EAD_LODGE_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_state_slug',    $values['item_meta'][EAD_STATE_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_council_slug',  $values['item_meta'][EAD_COUNCIL_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_camp_slug',     $values['item_meta'][EAD_CAMP_SLUG_FID]);
+            update_user_meta($current_user_id, 'user_lodge_slug',    $values['item_meta'][EAD_LODGE_SLUG_FID]);
 
 
         }
@@ -173,3 +173,19 @@ function conditionally_require_a_field($errors, $field, $value)
 
 
 
+add_filter('frm_setup_new_fields_vars', 'frm_reorder_userlist', 30, 2);
+function frm_reorder_userlist($values, $field)
+{
+    if ($field->id == 457) { // Field ID of assigned councils in new account form
+        asort($values['options']); // sort the values here
+
+        // Filter usernames that are not empty
+
+        foreach ($values['options'] as $key => $value) {
+            //$val = FrmProEntriesController::get_field_value_shortcode(array('field_id' => $council_active_fid, 'entry' => $key));
+            if ($value !== '')
+                unset($values['options'][$key]);
+        }
+    }
+    return $values;
+}

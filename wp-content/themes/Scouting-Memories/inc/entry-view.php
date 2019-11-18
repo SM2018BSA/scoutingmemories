@@ -3,7 +3,8 @@ if (!function_exists('frm_edit_post_entry')) :
     add_filter('frm_setup_edit_fields_vars', 'frm_edit_post_entry', 25, 3);
     function frm_edit_post_entry($values, $field, $entry_id)
     {
-
+        // bail early if is in admin
+        if (is_admin()) return $values;
 
         switch ($field->id) {
 
@@ -57,7 +58,14 @@ if (!function_exists('frm_new_post_defaults')) :
 
                 case AAP_STATES_FID:  // This is to change abbreviated states PA into its number 342
 
+
+
+
+
                     $state_form_ids = $values['value'];
+
+
+
 
                     // convert value to id
                     if (isset($state_form_ids)) {

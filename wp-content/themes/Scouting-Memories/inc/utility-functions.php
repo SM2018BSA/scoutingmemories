@@ -244,9 +244,12 @@ endif;
  *
  * */
 if (!function_exists('get_field_val')) :
-    function get_field_val($field_id, $entry_id)
+    function get_field_val($field_id, $entry_id, $user_id=null)
     {
-        return FrmProEntriesController::get_field_value_shortcode(array('field_id' => $field_id, 'entry' => $entry_id));
+        if (is_null($user_id))
+            return FrmProEntriesController::get_field_value_shortcode(array('field_id' => $field_id, 'entry' => $entry_id));
+        else
+            return FrmProEntriesController::get_field_value_shortcode(array('field_id' => $field_id, 'user_id' => $user_id));
     }
 endif;
 
@@ -288,3 +291,5 @@ if (!function_exists('show_view')) :
         return FrmProDisplaysController::get_shortcode(array('id' => $view_id, 'filter' => $filter));
     }
 endif;
+
+

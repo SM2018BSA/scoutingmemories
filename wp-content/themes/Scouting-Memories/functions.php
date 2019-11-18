@@ -206,7 +206,7 @@ function my_pre_get_posts($query)
     return $query;
 }
 
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////
 add_filter('pre_get_posts', 'limit_historian_posts');
 function limit_historian_posts($query)
 {
@@ -234,7 +234,23 @@ function limit_historian_posts($query)
 }
 
 
+//
+//add_filter('frm_where_filter', 'filter_test', 10, 2);
+//function filter_test( $where, $args ) {
+//    if ( $args['display']->ID == 1186) {
+//        var_dump($where);
+//
+//        var_dump($args);
+//
+//        //die();
+//
+//        return $where;
+//    }
+//
+//    return $where;
+//}
 
+/////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Adds council number to council name in drop downs
 // if a new form with council selection is made it should be added here
@@ -285,22 +301,6 @@ function frm_add_council_number($values, $field)
 
 
 
-add_filter('frm_setup_new_fields_vars', 'frm_reorder_userlist', 30, 2);
-function frm_reorder_userlist($values, $field)
-{
-    if ($field->id == 457) { // Field ID of assigned councils in new account form
-        asort($values['options']); // sort the values here
-
-        // Filter usernames that are not empty
-
-        foreach ($values['options'] as $key => $value) {
-            //$val = FrmProEntriesController::get_field_value_shortcode(array('field_id' => $council_active_fid, 'entry' => $key));
-            if ($value !== '')
-                unset($values['options'][$key]);
-        }
-    }
-    return $values;
-}
 
 
 
