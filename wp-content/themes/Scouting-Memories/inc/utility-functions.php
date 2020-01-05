@@ -293,3 +293,17 @@ if (!function_exists('show_view')) :
 endif;
 
 
+//  output entry with id
+//  example:  echo show_entry($id);
+function show_entry($entry_id) {
+    return FrmProEntriesController::show_entry_shortcode( array( 'id' => $entry_id, 'plain_text' => 0, 'format' => 'text' ) );
+}
+
+
+
+function update_usermeta_data($user_id,$meta_key, $meta_value, $unique=false) {
+    if (metadata_exists('user', $user_id,$meta_key))
+        add_user_meta($user_id,$meta_key,$meta_value,$unique);
+    else
+        add_user_meta($user_id,$meta_key,$meta_value,$unique);
+}

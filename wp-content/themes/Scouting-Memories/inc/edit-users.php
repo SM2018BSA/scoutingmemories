@@ -28,7 +28,7 @@
 
 
 if (!function_exists('frm_populate_user_dropdown')) :
-    add_filter('frm_setup_new_fields_vars', 'frm_populate_user_dropdown', 20, 2);
+    add_filter('frm_setup_new_fields_vars',  'frm_populate_user_dropdown', 20, 2);
     add_filter('frm_setup_edit_fields_vars', 'frm_populate_user_dropdown', 20, 2);
     function frm_populate_user_dropdown($values, $field)
     {
@@ -37,10 +37,13 @@ if (!function_exists('frm_populate_user_dropdown')) :
         if ($field->id == EU_CURRENT_ROLES_FID ||
             $field->id == EU_ASSIGNED_STATE_FID ||
             $field->id == EU_ASSIGNED_COUNCIL_FID ||
-            $field->id == EU_ASSIGNED_ACTIVE_COUNCIL_FID ) {
+            $field->id == EU_ASSIGNED_ACTIVE_COUNCIL_FID ||
+            $field->id == EU_ASSIGNED_REGION_FID ||
+            $field->id == EU_ASSIGNED_ACTIVE_REGION_FID
+        ){
             $entry_id = get_request_parameter('entry');
             $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
-            $user = get_user_by_email($user_email);
+            $user = get_user_by('email', $user_email);
             $roles = $user->roles;
         }
 
@@ -51,21 +54,30 @@ if (!function_exists('frm_populate_user_dropdown')) :
 
             case EU_ASSIGNED_STATE_FID:
                 $assigned_state = get_user_meta($user->ID, 'assigned_state', true);
-                // set default on dynamic drop down
                 $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_state;
             return $values;
 
             case EU_ASSIGNED_COUNCIL_FID:
                 $assigned_council = get_user_meta($user->ID, 'assigned_council', true);
-                // set default on dynamic drop down
                 $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_council;
             return $values;
 
             case EU_ASSIGNED_ACTIVE_COUNCIL_FID:
                 $assigned_active_council = get_user_meta($user->ID, 'active_assigned_council', true);
-                // set default on dynamic drop down
                 $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_active_council;
             return $values;
+
+            case EU_ASSIGNED_REGION_FID:
+                $assigned_region = get_user_meta($user->ID, 'assigned_region', true);
+                $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_region;
+            return $values;
+
+            case EU_ASSIGNED_ACTIVE_REGION_FID:
+                $assigned_active_region = get_user_meta($user->ID, 'active_assigned_council', true);
+                $values['value'] = $values['dyn_default_value'] = $values['default_value'] = $assigned_active_region;
+            return $values;
+
+
         }
 
 
@@ -89,18 +101,25 @@ if (!function_exists('frm_edit_users')) :
 
             $entry_id = get_request_parameter('entry');
             $user_email = get_field_val(NUR_EMAIL_FID, (int)$entry_id);
-            $user = get_user_by_email($user_email);
+            $user = get_user_by('email', $user_email);
             $roles = $user->roles;
 
             $set_roles = $values['item_meta'][EU_SET_ROLE_FID];
 
-            update_entry($entry_id, NUR_ASSIGNED_STATE_FID, $values['item_meta'][EU_ASSIGNED_STATE_FID]);
-            update_entry($entry_id, NUR_ASSIGNED_COUNCIL_FID, $values['item_meta'][EU_ASSIGNED_COUNCIL_FID]);
-            update_entry($entry_id, NUR_ASSIGNED_COUNCIL_ACTIVE_FID, $values['item_meta'][EU_ASSIGNED_ACTIVE_COUNCIL_FID]);
 
-            update_user_meta($user->ID, 'assigned_state', $values['item_meta'][EU_ASSIGNED_STATE_FID]);
-            update_user_meta($user->ID, 'assigned_council', $values['item_meta'][EU_ASSIGNED_COUNCIL_FID]);
-            update_user_meta($user->ID, 'active_assigned_council', $values['item_meta'][EU_ASSIGNED_ACTIVE_COUNCIL_FID]);
+
+            update_entry($entry_id, NUR_ASSIGNED_STATE_FID,              $values['item_meta'][EU_ASSIGNED_STATE_FID]);
+            update_entry($entry_id, NUR_ASSIGNED_COUNCIL_FID,            $values['item_meta'][EU_ASSIGNED_COUNCIL_FID]);
+            update_entry($entry_id, NUR_ASSIGNED_COUNCIL_ACTIVE_FID,     $values['item_meta'][EU_ASSIGNED_ACTIVE_COUNCIL_FID]);
+            update_entry($entry_id, NUR_ASSIGNED_REGION_SLUG_FID,        $values['item_meta'][EU_ASSIGNED_REGION_SLUG_FID]);
+            update_entry($entry_id, NUR_ASSIGNED_REGION_ACTIVE_FID,      $values['item_meta'][EU_ASSIGNED_ACTIVE_REGION_FID]);
+
+            update_usermeta_data($user->ID, 'assigned_state',           $values['item_meta'][EU_ASSIGNED_STATE_FID]);
+            update_usermeta_data($user->ID, 'assigned_council',         $values['item_meta'][EU_ASSIGNED_COUNCIL_FID]);
+            update_usermeta_data($user->ID, 'active_assigned_council',  $values['item_meta'][EU_ASSIGNED_ACTIVE_COUNCIL_FID]);
+            update_usermeta_data($user->ID, 'assigned_region_slug',     $values['item_meta'][EU_ASSIGNED_REGION_SLUG_FID]);
+            update_usermeta_data($user->ID, 'active_assigned_region',   $values['item_meta'][EU_ASSIGNED_ACTIVE_REGION_FID]);
+
 
             if ($set_roles != '') {
                 foreach ($roles as $role) $user->remove_role($role);

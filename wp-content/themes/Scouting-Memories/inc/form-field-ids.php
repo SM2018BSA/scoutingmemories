@@ -91,6 +91,11 @@ define('EU_ASSIGNED_COUNCIL_FID',          470);
 define('EU_ASSIGNED_ACTIVE_COUNCIL_FID',   471);
 define('EU_SET_ROLE_FID',                  475);
 define('EU_CURRENT_ROLES_FID',             484);
+define('EU_ASSIGNED_ACTIVE_REGION_FID',    551);
+define('EU_ASSIGNED_REGION_FID',           473);
+define('EU_ASSIGNED_REGION_SLUG_FID',      554);
+
+
 
 
 
@@ -100,6 +105,9 @@ define('NUR_ASSIGNED_STATE_FID',           437);
 define('NUR_ASSIGNED_COUNCIL_FID',         439);
 define('NUR_ASSIGNED_COUNCIL_ACTIVE_FID',  472);
 define('NUR_DEFAULT_COUNCIL_FID',          172);
+
+define('NUR_ASSIGNED_REGION_SLUG_FID',     546);
+define('NUR_ASSIGNED_REGION_ACTIVE_FID',   552);
 
 
 // Add a Post field IDs

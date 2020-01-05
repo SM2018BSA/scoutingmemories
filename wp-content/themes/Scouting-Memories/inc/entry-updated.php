@@ -24,7 +24,7 @@ if (!function_exists('after_entry_updated')) :
             $args = array();
             $slugs = array();
 
-            var_dump($my_entry);
+            //var_dump($my_entry);
 
             $state_form_ids   = $_POST['item_meta'][AAP_STATES_FID];
             $council_form_ids = $_POST['item_meta'][AAP_COUNCIL_FID];
@@ -99,6 +99,8 @@ if(!function_exists('update_meta_slugs')) :
             "camp_slugs"    => "camp",
             "lodge_slugs"   => "lodge"
         );
+
+
         if (metadata_exists('post', $post_id, $meta_key[$which_slug]))  // we have one lets updated it
             update_post_meta($post_id, $meta_key[$which_slug], $meta_value);
         else //we dont have one lets add a new one

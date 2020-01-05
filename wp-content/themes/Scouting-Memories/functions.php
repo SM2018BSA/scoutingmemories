@@ -234,7 +234,7 @@ function limit_historian_posts($query)
 }
 
 
-//
+
 //add_filter('frm_where_filter', 'filter_test', 10, 2);
 //function filter_test( $where, $args ) {
 //    if ( $args['display']->ID == 1186) {
@@ -262,6 +262,7 @@ function frm_add_council_number($values, $field)
 
 
     if ($field->id == NUR_ASSIGNED_COUNCIL_FID || $field->id == EU_ASSIGNED_COUNCIL_FID) {
+        if (!is_array($values['options'])) return $values;
         asort($values['options']); // sort the values here
 
         add_council_number($values);
