@@ -62,7 +62,7 @@ get_header(); ?>
 
                         <?php
 
-                        echo '<pre>';
+                       // echo '<pre>';
                         //var_dump(get_field('lodge', get_the_ID()) );
 
                         ?>
