@@ -90,148 +90,42 @@ if (!function_exists('add_group')) :
 
 
         // Add a Post
-        if ($form_id == 6) {
+        if ($form_id == ADD_A_POST_FORMID) {
+
 
             // used to get my new posts ID
             $my_entry = FrmEntry::getOne($entry_id);
+            $post_id = $my_entry->post_id;
+
 
 
             //  Get my slugs ////////////////////////
             $args = array();
+            $slugs = array();
 
-            $council_form_id = sanitize_text_field($_POST['item_meta'][70]);
-            $args['council_id'] = isset($council_form_id) ? $council_form_id : ''; // field IDs from your form
+            //var_dump($my_entry);
 
+            $state_form_ids   = $_POST['item_meta'][AAP_STATES_FID];
+            $council_form_ids = $_POST['item_meta'][AAP_COUNCIL_FID];
+            $lodge_form_ids   = $_POST['item_meta'][AAP_LODGE_FID];
+            $camp_form_ids    = $_POST['item_meta'][AAP_CAMP_FID];
 
-            $lodge_form_id = sanitize_text_field($_POST['item_meta'][72]);
-            $args['lodge_id'] = isset($lodge_form_id) ? $lodge_form_id : ''; // field IDs from your form
+            get_update_values('state_ids',  $state_form_ids,$args);
+            get_update_values('council_ids',$council_form_ids,$args);
+            get_update_values('camp_ids',   $camp_form_ids,$args);
+            get_update_values('lodge_ids',  $lodge_form_ids,$args);
 
+            $slugs['state_slugs']    = get_slugs_value('state_ids',$args);
+            $slugs['council_slugs']  = get_slugs_value('council_ids',$args);
+            $slugs['camp_slugs']     = get_slugs_value('camp_ids',$args);
+            $slugs['lodge_slugs']    = get_slugs_value('lodge_ids',$args);
 
-            $camp_form_id = sanitize_text_field($_POST['item_meta'][74]);
-            $args['camp_id'] = isset($camp_form_id) ? $camp_form_id : ''; // field IDs from your form
+            update_post_meta( $post_id, 'state', $state_form_ids  );
+            update_entry($entry_id, AAP_FRM_ENTRY_ID, (string)$entry_id );
 
-
-            $_state_form_ids = $_POST['item_meta']['288'];
-            if (isset($_state_form_ids)) {
-                foreach ($_state_form_ids as $state_form_id) :
-                    $state_form_id = sanitize_text_field($state_form_id);
-                    $args['state_ids'][] = isset($state_form_id) ? $state_form_id : '';
-                endforeach;
-            }
-
-
-            if ($council_form_id > 0) {
-                $council_slug = FrmProEntriesController::get_field_value_shortcode(array(
-                    'field_id' => 105,
-                    'entry' => $args['council_id']
-                ));
-            } else {
-                $council_slug = 'none';
-            }
-
-            if ($lodge_form_id > 0) {
-                $lodge_slug = FrmProEntriesController::get_field_value_shortcode(array(
-                    'field_id' => 97,
-                    'entry' => $args['lodge_id']
-                ));
-            } else {
-                $lodge_slug = 'none';
-            }
-
-            if ($camp_form_id > 0) {
-                $camp_slug = FrmProEntriesController::get_field_value_shortcode(array(
-                    'field_id' => 123,
-                    'entry' => $args['camp_id']
-                ));
-            } else {
-                $camp_slug = 'none';
-            }
+            foreach ($slugs as $key => $value) update_meta_slugs($key,$value,$post_id);
 
 
-            if (is_array($_state_form_ids)) {
-                foreach ($args['state_ids'] as $state_form_id => $key) {
-                    if ((int)$key > 0) {
-                        $state_slugs[] = FrmProEntriesController::get_field_value_shortcode(array(
-                            'field_id' => 114,
-                            'entry' => $key
-                        ));
-                    }
-                }
-            } else {
-
-                $state_slugs[] = FrmProEntriesController::get_field_value_shortcode(array(
-                    'field_id' => 114,
-                    'entry' => $_state_form_ids
-                ));
-
-            }
-
-            //$state_slug = FrmProEntriesController::get_field_value_shortcode(array('field_id' => 114, 'entry' => '307'));
-
-
-            //Your responses were successfully submitted. Thank you!
-
-
-            ///  if we have a council slug add it
-            ///
-
-            $post_id = $my_entry->post_id;
-
-
-            if (isset($council_slug)) {
-
-
-                $meta_key = 'council';
-                $meta_value = $council_slug;
-
-                add_post_meta($post_id, $meta_key, $meta_value);
-
-            }
-
-            ///  if we have a lodge slug add it
-            if (isset($lodge_slug)) {
-
-
-                $meta_key = 'lodge';
-                $meta_value = $lodge_slug;
-
-                add_post_meta($post_id, $meta_key, $meta_value);
-
-            }
-
-            /// if we have a camp slug add it
-            if (isset($camp_slug)) {
-
-
-                $meta_key = 'camp';
-                $meta_value = $camp_slug;
-
-                add_post_meta($post_id, $meta_key, $meta_value);
-
-            }
-
-
-            /// if we have an entry ID save it with the post
-            if (isset($entry_id)) {
-
-
-                $meta_key = 'frm_entry_id';
-                $meta_value = $entry_id;
-
-                add_post_meta($post_id, $meta_key, $meta_value);
-
-            }
-
-
-            // if we have states selected
-            if (isset($state_slugs)) {
-
-                $meta_key = 'state';
-                $meta_value = $state_slugs;
-
-                update_post_meta($post_id, $meta_key, $meta_value);
-
-            }
 
         }
 

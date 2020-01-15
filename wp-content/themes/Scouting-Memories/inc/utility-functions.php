@@ -116,7 +116,7 @@ if (!function_exists('get_council_name_number')) :
 
 
         if (is_string($council_slug)) {
-            if ($council_slug[0] == 'none') return '<span class="small">' . $council_name_number . '</span>';
+            if ($council_slug[0] == 'none' || $council_slug == 'none') return '<span class="small">' . $council_name_number . '</span>';
             $entry_id = get_field_id_from_key($council_slug);
             $council_name = get_field_val(AACOUNCIL_NAME_FID, $entry_id);
             $council_number = get_field_val(AACOUNCIL_NUMBER_FID, $entry_id);
@@ -143,7 +143,7 @@ if (!function_exists('get_camp_name')) :
         $camp_name = 'none';
 
         if (is_string($camp_slug)) {
-            if ($camp_slug[0] == 'none') return '<span class="small">' . $camp_name . '</span>';
+            if ($camp_slug[0] == 'none' || $camp_slug == 'none') return '<span class="small">' . $camp_name . '</span>';
             $entry_id = get_field_id_from_key($camp_slug);
             $camp_name = '<span class="small">' . get_field_val(AACAMP_NAME_FID, $entry_id) . '</span>';
         } elseif (is_array($camp_slug) && count($camp_slug) > 1) {
@@ -162,10 +162,11 @@ endif;
 if (!function_exists('get_lodge_name')) :
     function get_lodge_name($lodge_slug)
     {
+
         $lodge_name = 'none';
 
         if (is_string($lodge_slug)) {
-            if ($lodge_slug[0] == 'none') return '<span class="small">' . $lodge_name . '</span>';
+            if ($lodge_slug[0] == 'none' || $lodge_slug = 'none') return '<span class="small">' . $lodge_name . '</span>';
             $entry_id = get_field_id_from_key($lodge_slug);
             $lodge_name = '<span class="small">' . get_field_val(AALODGE_NAME_FID, $entry_id) . '</span>';
         } elseif (is_array($lodge_slug) && count($lodge_slug) > 1) {

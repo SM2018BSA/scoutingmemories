@@ -41,6 +41,9 @@ if (!function_exists('after_entry_updated')) :
             $slugs['camp_slugs']     = get_slugs_value('camp_ids',$args);
             $slugs['lodge_slugs']    = get_slugs_value('lodge_ids',$args);
 
+            update_post_meta( $post_id, 'state', $state_form_ids  );
+            update_entry($entry_id, AAP_FRM_ENTRY_ID, (string)$entry_id );
+
             foreach ($slugs as $key => $value) update_meta_slugs($key,$value,$post_id);
 
         }

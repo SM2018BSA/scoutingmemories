@@ -10,13 +10,17 @@ if (!function_exists('frm_edit_post_entry')) :
 
             case AAP_STATES_FID:
 
-                $state_form_ids = get_field_val(AAP_STATES_FID, $entry_id);
+                //$state_form_ids = get_field_val(AAP_STATES_FID, $entry_id);
+                $state_form_ids = $values['value'];
 
 
 
                 // convert value to id
                 if (isset($state_form_ids)) {
+
                     if (is_array($state_form_ids)) {
+
+
 
                         foreach ($state_form_ids as $key => $state_form_id) :
 
@@ -34,6 +38,9 @@ if (!function_exists('frm_edit_post_entry')) :
                         $values['value'] = isset($state_form_ids) ? sanitize_text_field($state_form_ids) : '';
                     }
                 }
+
+                //var_dump($values['value']);
+
 
 
                 $values['dyn_default_value'] = $values['default_value'] = $values['value'];
