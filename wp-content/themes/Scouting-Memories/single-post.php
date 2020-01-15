@@ -60,6 +60,12 @@ get_header(); ?>
                     </div>
                     <div class="col-4">
 
+                        <?php
+
+                        echo '<pre>';
+                        //var_dump(get_field('lodge', get_the_ID()) );
+
+                        ?>
 
                         <div class="container credits">
                             <ul class="list-group ">

@@ -113,8 +113,6 @@ if (!function_exists('get_council_name_number')) :
     function get_council_name_number($council_slug)
     {
         $council_name_number = 'none';
-
-
         if (is_string($council_slug)) {
             if ($council_slug[0] == 'none' || $council_slug == 'none') return '<span class="small">' . $council_name_number . '</span>';
             $entry_id = get_field_id_from_key($council_slug);
@@ -130,8 +128,14 @@ if (!function_exists('get_council_name_number')) :
                 $council_name_number .= '<li>' . $council_name . ' #' . $council_number . '</li>';
             }
             $council_name_number .= '</ul>';
+        } elseif (is_array($council_slug) && count($council_slug) == 1) {
+            $council_name_number = '<span class="small">';
+            $entry_id = get_field_id_from_key($council_slug[0]);
+            $council_name = get_field_val(AACOUNCIL_NAME_FID, $entry_id);
+            $council_number = get_field_val(AACOUNCIL_NUMBER_FID, $entry_id);
+            $council_name_number .= $council_name . ' #' . $council_number;
+            $council_name_number .= '</span>';
         }
-
         return $council_name_number;
     }
 endif;
@@ -141,7 +145,6 @@ if (!function_exists('get_camp_name')) :
     function get_camp_name($camp_slug)
     {
         $camp_name = 'none';
-
         if (is_string($camp_slug)) {
             if ($camp_slug[0] == 'none' || $camp_slug == 'none') return '<span class="small">' . $camp_name . '</span>';
             $entry_id = get_field_id_from_key($camp_slug);
@@ -153,6 +156,11 @@ if (!function_exists('get_camp_name')) :
                 $camp_name .= '<li>' . get_field_val(AACAMP_NAME_FID, $entry_id) . '</li>';
             }
             $camp_name .= '</ul>';
+        } elseif (is_array($camp_slug) && count($camp_slug) == 1) {
+            $camp_name = '<span class="small">';
+            $entry_id = get_field_id_from_key($camp_slug[0]);
+            $camp_name .= get_field_val(AACAMP_NAME_FID, $entry_id);
+            $camp_name .= '</span>';
         }
         return $camp_name;
     }
@@ -162,9 +170,7 @@ endif;
 if (!function_exists('get_lodge_name')) :
     function get_lodge_name($lodge_slug)
     {
-
         $lodge_name = 'none';
-
         if (is_string($lodge_slug)) {
             if ($lodge_slug[0] == 'none' || $lodge_slug = 'none') return '<span class="small">' . $lodge_name . '</span>';
             $entry_id = get_field_id_from_key($lodge_slug);
@@ -176,6 +182,11 @@ if (!function_exists('get_lodge_name')) :
                 $lodge_name .= '<li>' . get_field_val(AALODGE_NAME_FID, $entry_id) . '</li>';
             }
             $lodge_name .= '</ul>';
+        } elseif (is_array($lodge_slug) && count($lodge_slug) == 1) {
+            $lodge_name = '<span class="small">';
+            $entry_id = get_field_id_from_key($lodge_slug[0]);
+            $lodge_name .= get_field_val(AALODGE_NAME_FID, $entry_id);
+            $lodge_name .= '</span>';
         }
         return $lodge_name;
     }
