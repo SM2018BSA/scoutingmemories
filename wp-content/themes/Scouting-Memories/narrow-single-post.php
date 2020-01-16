@@ -1,6 +1,6 @@
 <?php
 /**
- * The template for displaying all single posts with meta on bottom
+ * The template for displaying all single posts
  *
  * @link https://developer.wordpress.org/themes/basics/template-hierarchy/#single-post
  *
@@ -24,7 +24,7 @@ get_header(); ?>
 
 
                 <div class="row">
-                    <div class="col">
+                    <div class="col-8">
                         <div class="row post-content"><?php get_template_part('template-parts/content', get_post_format()); ?></div>
                         <div class="row post-comments">
                             <div class="container">
@@ -35,29 +35,9 @@ get_header(); ?>
                                 endif ?>
                             </div>
                         </div>
-
-
-
-
                         <div class="row post-meta">
-
-
-
-
                             <div class="row container timeline mt-5 mb-5">
-
-                                <ul class="list-group col container">
-                                    <li class="list-group-item-dark text-white strong p-3 list-unstyled font-weight-bold" >Timeline</li>
-                                    <li class="list-group-item"><strong>State:</strong>   <?=get_state_name(         get_field('state'))  ?></li>
-                                    <li class="list-group-item"><strong>Council:</strong> <?=get_council_name_number(get_field('council'))?></li>
-                                    <li class="list-group-item"><strong>Camp:</strong>    <?=get_camp_name(          get_field('camp')) ?></li>
-                                    <li class="list-group-item"><strong>Lodge:</strong>   <?=get_lodge_name(         get_field('lodge'));  ?></li>
-                                    <li class="list-group-item"><strong>Start Date:</strong>  <span class="small"><?php the_field('start_date') ?></span> </li>
-                                    <li class="list-group-item"><strong>End Date:</strong>  <span class="small"><?php   the_field('end_date')   ?></span> </li>
-                                </ul>
-
-
-                                <ul class="list-group col container">
+                                <ul class="list-group col">
                                     <li class="list-group-item-dark text-white strong p-3 list-unstyled">META</li>
                                     <li class="list-group-item"><strong>Publisher of
                                             Digital:</strong> <?php the_field('publisher_of_digital') ?></li>
@@ -79,18 +59,27 @@ get_header(); ?>
                         </div>
 
                     </div>
-                    <?php /* <div class="col-4"> */?>
+                    <div class="col-4">
 
-                    <?php
+                        <?php
 
-                    //echo '<pre>';
-                    //var_dump(get_field('council'));
+                        //echo '<pre>';
+                        //var_dump(get_field('council'));
 
-                    ?>
+                        ?>
 
-
-                    <?php /*</div> */ ?>
-
+                        <div class="container credits">
+                            <ul class="list-group ">
+                                <li class="list-group-item-dark text-white strong p-3 list-unstyled font-weight-bold" >Timeline</li>
+                                <li class="list-group-item"><strong>State:</strong>   <?=get_state_name(         get_field('state'))  ?></li>
+                                <li class="list-group-item"><strong>Council:</strong> <?=get_council_name_number(get_field('council'))?></li>
+                                <li class="list-group-item"><strong>Camp:</strong>    <?=get_camp_name(          get_field('camp')) ?></li>
+                                <li class="list-group-item"><strong>Lodge:</strong>   <?=get_lodge_name(         get_field('lodge'));  ?></li>
+                                <li class="list-group-item"><strong>Start Date:</strong>  <span class="small"><?php the_field('start_date') ?></span> </li>
+                                <li class="list-group-item"><strong>End Date:</strong>  <span class="small"><?php   the_field('end_date')   ?></span> </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
 
             <?php endwhile; // End of the loop. ?>

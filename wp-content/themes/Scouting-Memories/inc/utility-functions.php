@@ -188,7 +188,7 @@ if (!function_exists('get_lodge_name')) :
     {
         if (strpos ($lodge_slug, ','))
             $lodge_slug = explode(', ', $lodge_slug);
-        
+
         $lodge_name = 'none';
         if (is_string($lodge_slug)) {
             if ($lodge_slug[0] == 'none' || $lodge_slug == 'none') return '<span class="small">' . $lodge_name . '</span>';
