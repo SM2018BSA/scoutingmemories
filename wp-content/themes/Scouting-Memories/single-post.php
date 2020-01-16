@@ -62,8 +62,8 @@ get_header(); ?>
 
                         <?php
 
-                       // echo '<pre>';
-                        //var_dump(get_field('lodge', get_the_ID()) );
+                        //echo '<pre>';
+                        //var_dump(get_field('council'));
 
                         ?>
 
@@ -75,7 +75,7 @@ get_header(); ?>
                                 <li class="list-group-item"><strong>Camp:</strong>    <?=get_camp_name(          get_field('camp')) ?></li>
                                 <li class="list-group-item"><strong>Lodge:</strong>   <?=get_lodge_name(         get_field('lodge'));  ?></li>
                                 <li class="list-group-item"><strong>Start Date:</strong>  <span class="small"><?php the_field('start_date') ?></span> </li>
-                                <li class="list-group-item"><strong>End Date:</strong>  <span class="small"><?php the_field('end_date')   ?></span> </li>
+                                <li class="list-group-item"><strong>End Date:</strong>  <span class="small"><?php   the_field('end_date')   ?></span> </li>
                             </ul>
                         </div>
                     </div>

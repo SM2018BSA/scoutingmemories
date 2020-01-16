@@ -83,14 +83,22 @@ if (!function_exists('get_field_id_from_key')) :
 endif;
 
 
+
+
+
+
+//////  ///  / / /////////  ///  / / /////////  ///  / / /////////  ///  / / /////////  ///  / / /////////  ///  / / ///
 //   $state_acl  Array from get_field ACL function
 //               is the state abreviation
 //   this function returns the full human readble name of the state
 if (!function_exists('get_state_name')) :
     function get_state_name($state_acl)
     {
-        $state_name = 'none';
 
+        if (strpos ($state_acl, ','))
+            $state_acl = explode(', ', $state_acl);
+
+        $state_name = 'none';
         if (is_array($state_acl) && count($state_acl) == 1) {
             $entry_id = get_field_id_from_key($state_acl);
             $state_name = '<span class="small">' . get_field_val(AASTATE_NAME_FID, $entry_id) . '</span>';
@@ -112,6 +120,10 @@ endif;
 if (!function_exists('get_council_name_number')) :
     function get_council_name_number($council_slug)
     {
+
+        if (strpos ($council_slug, ','))
+            $council_slug = explode(', ', $council_slug);
+
         $council_name_number = 'none';
         if (is_string($council_slug)) {
             if ($council_slug[0] == 'none' || $council_slug == 'none') return '<span class="small">' . $council_name_number . '</span>';
@@ -120,6 +132,7 @@ if (!function_exists('get_council_name_number')) :
             $council_number = get_field_val(AACOUNCIL_NUMBER_FID, $entry_id);
             $council_name_number = '<span class="small">' . $council_name . ' #' . $council_number . '</span>';
         } elseif (is_array($council_slug) && count($council_slug) > 1) {
+
             $council_name_number = '<ul class="small">';
             foreach ($council_slug as $council) {
                 $entry_id = get_field_id_from_key($council);
@@ -144,6 +157,9 @@ endif;
 if (!function_exists('get_camp_name')) :
     function get_camp_name($camp_slug)
     {
+        if (strpos ($camp_slug, ','))
+            $camp_slug = explode(', ', $camp_slug);
+
         $camp_name = 'none';
         if (is_string($camp_slug)) {
             if ($camp_slug[0] == 'none' || $camp_slug == 'none') return '<span class="small">' . $camp_name . '</span>';
@@ -170,9 +186,12 @@ endif;
 if (!function_exists('get_lodge_name')) :
     function get_lodge_name($lodge_slug)
     {
+        if (strpos ($lodge_slug, ','))
+            $lodge_slug = explode(', ', $lodge_slug);
+        
         $lodge_name = 'none';
         if (is_string($lodge_slug)) {
-            if ($lodge_slug[0] == 'none' || $lodge_slug = 'none') return '<span class="small">' . $lodge_name . '</span>';
+            if ($lodge_slug[0] == 'none' || $lodge_slug == 'none') return '<span class="small">' . $lodge_name . '</span>';
             $entry_id = get_field_id_from_key($lodge_slug);
             $lodge_name = '<span class="small">' . get_field_val(AALODGE_NAME_FID, $entry_id) . '</span>';
         } elseif (is_array($lodge_slug) && count($lodge_slug) > 1) {
@@ -192,6 +211,10 @@ if (!function_exists('get_lodge_name')) :
     }
 endif;
 
+
+
+
+///////    //////////////    //////////////    //////////////    //////////////    //////////////    //////////////    /
 /////////MY ACCOUNT UTILITY FUNCTIONS
 ///
 ///
