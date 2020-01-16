@@ -26,15 +26,7 @@ get_header(); ?>
                 <div class="row">
                     <div class="col">
                         <div class="row post-content"><?php get_template_part('template-parts/content', get_post_format()); ?></div>
-                        <div class="row post-comments">
-                            <div class="container">
-                                <?php
-                                // If comments are open or we have at least one comment, load up the comment template.
-                                if (comments_open() || get_comments_number()) :
-                                    comments_template();
-                                endif ?>
-                            </div>
-                        </div>
+
 
 
 
@@ -77,6 +69,18 @@ get_header(); ?>
                             </div>
 
                         </div>
+
+
+                        <div class="row mt-5 post-comments">
+                            <div class="container">
+                                <?php
+                                // If comments are open or we have at least one comment, load up the comment template.
+                                if (comments_open() || get_comments_number()) :
+                                    comments_template();
+                                endif ?>
+                            </div>
+                        </div>
+
 
                     </div>
                     <?php /* <div class="col-4"> */?>
