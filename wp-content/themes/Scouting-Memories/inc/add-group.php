@@ -10,7 +10,11 @@ if (!function_exists('add_group')) :
     function add_group($entry_id, $form_id)
     {
 
-        // Add a Council
+        // Add a Council //  [user_meta key=user_state]  [user_meta key=user_state]  [user_meta key=user_state] [user_meta key=user_council]
+        //
+        // Add a camp issue ( false warning coming up )
+        //
+
         if ($form_id == 8) {
 
             $field_id = 105; // hidden field form id for the council slug in the add a council form
