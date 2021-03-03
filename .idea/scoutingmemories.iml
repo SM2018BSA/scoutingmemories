@@ -12,6 +12,8 @@
       <excludeFolder url="file://$MODULE_DIR$/wp-content/uploads" />
       <excludeFolder url="file://$MODULE_DIR$/wp-includes" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/plugins/capability-manager-enhanced/common" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/mu-plugins" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/plugins" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

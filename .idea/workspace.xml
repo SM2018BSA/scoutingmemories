@@ -2,11 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="76e310e8-31fe-4b68-a67a-2cf8af160bbb" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/LICENSE" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/scoutingmemories.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/scoutingmemories.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

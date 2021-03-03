@@ -126,3 +126,8 @@ wp-content/mysql.sql
 /wp-content/uploads/
 .idea/scoutingmemories.iml
 .idea/workspace.xml
+/wp-content/mu-plugins__disabled/
+/wp-content/upgrade/
+/wp-content/mu-plugins__disabled/
+/wp-content/mu-plugins__disabled/
+/wp-content/upgrade/
