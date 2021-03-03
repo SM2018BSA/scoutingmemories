@@ -11,6 +11,7 @@
       <excludeFolder url="file://$MODULE_DIR$/wp-content/themes/twentysixteen" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/uploads" />
       <excludeFolder url="file://$MODULE_DIR$/wp-includes" />
+      <excludeFolder url="file://$MODULE_DIR$/wp-content/plugins/capability-manager-enhanced/common" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

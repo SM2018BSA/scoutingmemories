@@ -113,15 +113,16 @@ wp-content/mysql.sql
 *.avi
 
 .idea
+
+/wp-content/cache/
+/wp-content/custom-global-variables/
+/wp-content/logs/
+/wp-content/mu-plugins/
+/wp-content/mu-plugins__disabled/
+/wp-content/plugins/
+
+
+/wp-content/upgrade/
+/wp-content/uploads/
+.idea/scoutingmemories.iml
 .idea/workspace.xml
-.idea
-phpinfo.php
-wp-content/mu-plugins
-wp-content/themes/Scouting-Memories/temp.html
-README.md
-LICENSE
-wp-content/plugins
-wp-content/plugins
-wp-content/themes/StrapPress
-wp-content/themes/twentynineteen
-wp-content/themes/Scouting-Memories/temp.html
