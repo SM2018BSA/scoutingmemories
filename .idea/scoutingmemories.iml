@@ -2,6 +2,8 @@
 <module type="WEB_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/wp-content/themes/scoutingmemories" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wp-content/themes/scoutingmemories/Classes" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/wp-admin" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/mu-plugins/force-strong-passwords" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/mu-plugins/wpengine-common" />
@@ -10,10 +12,8 @@
       <excludeFolder url="file://$MODULE_DIR$/wp-content/themes/twentyseventeen" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/themes/twentysixteen" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/uploads" />
-      <excludeFolder url="file://$MODULE_DIR$/wp-includes" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/plugins/capability-manager-enhanced/common" />
       <excludeFolder url="file://$MODULE_DIR$/wp-content/mu-plugins" />
-      <excludeFolder url="file://$MODULE_DIR$/wp-content/plugins" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

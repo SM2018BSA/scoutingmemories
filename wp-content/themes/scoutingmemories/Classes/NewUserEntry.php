@@ -9,6 +9,10 @@ class NewUserEntry extends Entry {
 
 
 	public $assigned_region_slug;
+	public $assigned_state;
+	public array $assigned_state_slugs;
+	public $assigned_council;
+
 
 	private $wp_user;
 	public $wp_user_meta;
@@ -54,7 +58,7 @@ class NewUserEntry extends Entry {
 
 		if ( $entry_id && ! is_string( $entry_id ) ) {
 
-			$entry = new Entry( $entry_id );
+			//$entry = new Entry( $entry_id );
 
 
 			$this->user_id       = $this->entry_array['nur_user_id'];
@@ -67,9 +71,12 @@ class NewUserEntry extends Entry {
 
 
 			$this->assigned_region_slug = $this->wp_user_meta['assigned_region_slug'];
+			$this->assigned_state = $this->wp_user_meta['assigned_state'];
+			$this->assigned_council = $this->wp_user_meta['assigned_council'];
 
 
-			//var_dump($entry);
+			$this->get_state_slugs();
+
 		}
 
 
@@ -85,7 +92,22 @@ class NewUserEntry extends Entry {
 
 	}
 
+	private function get_state_slugs() {
+		if ( is_array( $this->assigned_state ) ) {
+			foreach ( $this->assigned_state as $state ) {
+				$state              = new Entry( $state );
+				$this->assigned_state_slugs[] = $state->entry_array['state_acl'];
+			}
+		} else {
+			$state            = new Entry( $this->assigned_state );
+			if (!is_null($state->entry_array)) { $this->assigned_state_slugs = $state->entry_array['state_acl'];}
+		}
+	}
+
+
+
 	public function frm_setup_new_fields_vars( $values, $field ) {
+
 
 		if ( $field->id == EU_ASSIGNED_REGION_FID ) {
 			$entry_id = get_request_parameter( 'entry' );
@@ -93,21 +115,35 @@ class NewUserEntry extends Entry {
 				return null;
 			}
 
-			$new_user = new NewUserEntry( (int) $entry_id );
-            $new_value = $new_user->assigned_region_slug;
+			$new_user  = new NewUserEntry( (int) $entry_id );
+			$new_value = $new_user->assigned_region_slug;
 
-			$values['dyn_default_value'] = $values['default_value'] = $values['value'] = Entry::get_field_id_from_key($new_value) ;
-
-
+			$values['dyn_default_value'] = $values['default_value'] = $values['value'] = Entry::get_field_id_from_key( $new_value );
 		}
+
+
+		if ( $field->id == EU_ASSIGNED_STATE_FID ) {
+			$entry_id = get_request_parameter( 'entry' );
+			if ( $entry_id == null ) {
+				return null;
+			}
+
+			$new_user  = new NewUserEntry( (int) $entry_id );
+			$new_value = $new_user->assigned_state_slugs;
+
+			$values['dyn_default_value'] = $values['default_value'] = $values['value'] = Entry::get_field_id_from_key( $new_value );
+		}
+
+
+
+
+
+
 		return $values;
 	}
 
 
-	public
-	function set_user_default_values(
-		$new_value, $field
-	) {
+	public function set_user_default_values( $new_value, $field ) {
 
 		if ( $field->id == EU_SET_ROLE_FID ) {
 			$entry_id = get_request_parameter( 'entry' );
@@ -127,26 +163,14 @@ class NewUserEntry extends Entry {
 		}
 
 
-		if ( $field->id == EU_ASSIGNED_STATE_FID ) {
-			$entry_id = get_request_parameter( 'entry' );
-			if ( $entry_id == null ) {
-				return null;
-			}
 
-			$new_user = new NewUserEntry( (int) $entry_id );
-
-
-		}
 
 
 		return $new_value;
 	}
 
 
-	public
-	function frm_edit_users(
-		$values
-	) {
+	public function frm_edit_users( $values ) {
 		if ( $values['form_id'] == EDIT_USERS_FORMID ) {
 
 			$entry_id = get_request_parameter( 'entry' );

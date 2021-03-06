@@ -14,8 +14,10 @@ $states_view_id = 2300; // local and live
 //$states_view_id = 1553; // online dev
 $states_view = new View( $states_view_id );
 
-
 get_header();
+
+
+
 ?>
 
     <div id="primary" class="content-area mt-5 h-100 ">

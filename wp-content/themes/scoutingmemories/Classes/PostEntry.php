@@ -31,7 +31,17 @@ class PostEntry extends Entry {
 		add_action( 'frm_after_update_entry',     array( &$this, 'frm_after_update_entry' ), 20, 2 );
 		add_filter( 'frm_setup_new_fields_vars',  array( &$this, 'frm_setup_new_fields_vars' ), 20, 2 );
 		add_filter( 'frm_setup_edit_fields_vars', array( &$this, 'frm_setup_edit_fields_vars' ), 30, 2 );
+		add_filter( 'frm_rte_options',            array( &$this, 'frm_rte_options' ), 10, 2 );
 	}
+
+
+	// Add "Add Media" button to TinyMCE editor
+	public function frm_rte_options($opts){
+		$opts['media_buttons'] = true;
+		return $opts;
+	}
+
+
 
 
 	public function frm_setup_new_fields_vars( $values, $field ) {

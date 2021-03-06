@@ -105,6 +105,7 @@ define('AALODGE_LINKED_COUNCIL_FID',       279);
 // Edit User field IDs
 define('EU_USERNAME_FID',                  478);
 define('EU_FIRST_NAME_FID',                481);
+//define('EU_ASSIGNED_STATE_FID',            561);
 define('EU_ASSIGNED_STATE_FID',            485);
 define('EU_ASSIGNED_COUNCIL_FID',          470);
 define('EU_ASSIGNED_ACTIVE_COUNCIL_FID',   471);

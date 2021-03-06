@@ -84,7 +84,7 @@ class CouncilEntry extends Entry {
 			CouncilEntry::add_council_number( $values );
 
 			foreach ( $values['options'] as $key => $value ) {
-				$val = get_field_val( AACOUNCIL_COUNCIL_ACTIVE_FID, $key );
+				$val = Entry::get_field_val( AACOUNCIL_COUNCIL_ACTIVE_FID, $key );
 				if ( $key == '' ) {
 					unset( $values['options'][ $key ] );
 				}

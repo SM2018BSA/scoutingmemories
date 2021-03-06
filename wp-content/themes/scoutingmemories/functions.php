@@ -132,7 +132,6 @@ endif;
 
 
 
-
  // load formidable field hooks
 $the_user      = new CurrentUser();
 
