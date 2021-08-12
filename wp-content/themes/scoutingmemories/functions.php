@@ -50,10 +50,11 @@ require_once get_template_directory() . '/Classes/PostEntry.php';
 require_once get_template_directory() . '/Classes/Post.php';
 
 
-
-//$FrmEntryMeta = new FrmEntryMeta;
-//$FrmAppHelper = new FrmAppHelper;
-//$FrmDb = new FrmDb;
+// commend out for localhost version
+//
+$FrmEntryMeta = new FrmEntryMeta;
+$FrmAppHelper = new FrmAppHelper;
+$FrmDb = new FrmDb;
 
 
 global $theme;

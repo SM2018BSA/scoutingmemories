@@ -1,50 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="AutoImportSettings">
-    <option name="autoReloadType" value="SELECTIVE" />
-  </component>
   <component name="ChangeListManager">
-    <list default="true" id="76e310e8-31fe-4b68-a67a-2cf8af160bbb" name="Default Changelist" comment="added media button to add post page and my admin tab">
-      <change afterPath="$PROJECT_DIR$/wp-content/plugins/wp-frontend-media-master/frontend-media.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.htaccess" beforeDir="false" afterPath="$PROJECT_DIR$/.htaccess" afterDir="false" />
+    <list default="true" id="76e310e8-31fe-4b68-a67a-2cf8af160bbb" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/scoutingmemories.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/scoutingmemories.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CouncilEntry.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CouncilEntry.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/NewUserEntry.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/NewUserEntry.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/PostEntry.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/PostEntry.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/SearchForm.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/SearchForm.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/frontpage.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/frontpage.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/¯¯¯www.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/¯¯¯www.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/LICENSE" beforeDir="false" afterPath="$PROJECT_DIR$/LICENSE" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/self-join NUR.sql" beforeDir="false" afterPath="$PROJECT_DIR$/self-join NUR.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/functions.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/functions.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/formidable_constants.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/formidable_constants.php" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ComposerSettings" synchronizationState="DONT_SYNCHRONIZE">
-    <pharConfigPath>$PROJECT_DIR$/wp-content/themes/scoutingmemories/composer.json</pharConfigPath>
-    <execution>
-      <executable path="composer" />
-    </execution>
-  </component>
-  <component name="DrupalConfiguration">
-    <drupalPath />
+  <component name="ComposerSettings">
+    <execution />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="JoomlaConfiguration">
-    <joomlaConfigPath />
-    <joomlaPath />
-  </component>
-  <component name="PhpDebugGeneral" listening_started="true" />
   <component name="PhpServers">
-    <servers>
-      <server host="127.0.0.1" id="2c14a809-8314-4b6b-8f35-9a7319956aaa" name="localhost" />
-    </servers>
+    <servers />
   </component>
-  <component name="PhpWorkspaceProjectConfiguration" interpreter_name="PHP7.4" />
   <component name="ProjectId" id="1N6zJ5vuitEhTWZJIX17nEU7sJR" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -59,37 +41,21 @@
     <property name="WebServerToolWindowPanel.toolwindow.show.date" value="false" />
     <property name="WebServerToolWindowPanel.toolwindow.show.permissions" value="false" />
     <property name="WebServerToolWindowPanel.toolwindow.show.size" value="false" />
-    <property name="credentialsType com.jetbrains.php.remote.interpreter.ui.PhpCreateRemoteSdkForm" value="WSL" />
-    <property name="credentialsType com.jetbrains.php.remote.interpreter.ui.PhpInplaceEditRemoteSdkForm" value="WSL" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../../../../../../xampp/php/php.exe" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="node.js.detected.package.eslint" value="true" />
-    <property name="node.js.detected.package.stylelint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.path.for.package.eslint" value="project" />
-    <property name="node.js.path.for.package.stylelint" value="project" />
     <property name="node.js.path.for.package.tslint" value="project" />
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
-    <property name="node.js.selected.package.stylelint" value="" />
     <property name="node.js.selected.package.tslint" value="(autodetect)" />
     <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
     <property name="nodejs_npm_path_reset_for_default_project" value="true" />
-    <property name="nodejs_package_manager_path" value="npm" />
-    <property name="settings.editor.selected.configurable" value="preferences.sourceCode.PHP" />
+    <property name="settings.editor.selected.configurable" value="preferences.lookFeel" />
     <property name="vue.rearranger.settings.migration" value="true" />
-  </component>
-  <component name="RunManager">
-    <configuration default="true" type="PhpLocalRunConfigurationType" factoryName="PHP Console">
-      <CommandLine>
-        <PhpTestInterpreterSettings>
-          <option name="interpreterName" value="Ubuntu 20.04" />
-        </PhpTestInterpreterSettings>
-      </CommandLine>
-      <method v="2" />
-    </configuration>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="SvnConfiguration">
-    <configuration>C:\Users\roger\AppData\Roaming\Subversion</configuration>
+    <configuration />
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
@@ -100,14 +66,40 @@
       <updated>1561337594507</updated>
       <workItem from="1561337595733" duration="1675000" />
       <workItem from="1561416262563" duration="2807000" />
-      <workItem from="1614813458079" duration="321000" />
-      <workItem from="1614817342654" duration="306000" />
-      <workItem from="1614817902787" duration="13893000" />
-      <workItem from="1614991540646" duration="6212000" />
-      <workItem from="1614998388554" duration="396000" />
-      <workItem from="1614998805787" duration="3884000" />
-      <workItem from="1615002797829" duration="122000" />
-      <workItem from="1615002934231" duration="18233000" />
+      <workItem from="1615419638115" duration="1211000" />
+      <workItem from="1615424403549" duration="143000" />
+      <workItem from="1615425869760" duration="1374000" />
+      <workItem from="1616029286431" duration="598000" />
+      <workItem from="1616943147217" duration="446000" />
+      <workItem from="1617227820198" duration="1226000" />
+      <workItem from="1617318125280" duration="772000" />
+      <workItem from="1618329618796" duration="606000" />
+      <workItem from="1618439997599" duration="5056000" />
+      <workItem from="1619181970024" duration="928000" />
+      <workItem from="1619647148593" duration="248000" />
+      <workItem from="1619647421161" duration="2478000" />
+      <workItem from="1620059967842" duration="606000" />
+      <workItem from="1620701541247" duration="1704000" />
+      <workItem from="1620860695632" duration="4952000" />
+      <workItem from="1621375237224" duration="2240000" />
+      <workItem from="1621889922581" duration="502000" />
+      <workItem from="1621890444028" duration="3121000" />
+      <workItem from="1621895041127" duration="11561000" />
+      <workItem from="1622650980447" duration="382000" />
+      <workItem from="1622918534741" duration="619000" />
+      <workItem from="1623189255653" duration="4183000" />
+      <workItem from="1623878898434" duration="1067000" />
+      <workItem from="1624214921707" duration="599000" />
+      <workItem from="1624509793608" duration="602000" />
+      <workItem from="1625008493528" duration="141000" />
+      <workItem from="1625161712147" duration="1888000" />
+      <workItem from="1625511603114" duration="492000" />
+      <workItem from="1625616525102" duration="618000" />
+      <workItem from="1625692345443" duration="608000" />
+      <workItem from="1625926733465" duration="29361000" />
+      <workItem from="1627422839774" duration="1269000" />
+      <workItem from="1627938904430" duration="8061000" />
+      <workItem from="1628717185587" duration="6820000" />
     </task>
     <task id="LOCAL-00001" summary="workspace update 6-24-19">
       <created>1561416443726</created>
@@ -123,30 +115,31 @@
       <option name="project" value="LOCAL" />
       <updated>1561423906455</updated>
     </task>
-    <task id="LOCAL-00003" summary="updating git ignore">
-      <created>1614815529216</created>
-      <option name="number" value="00003" />
-      <option name="presentableId" value="LOCAL-00003" />
-      <option name="project" value="LOCAL" />
-      <updated>1614815529216</updated>
-    </task>
-    <option name="localTasksCounter" value="4" />
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="updating git ignore" />
-    <MESSAGE value="added media button to add post page" />
-    <MESSAGE value="added media button to add post page and my admin tab" />
-    <option name="LAST_COMMIT_MESSAGE" value="added media button to add post page and my admin tab" />
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <option name="CHECK_NEW_TODO" value="false" />
+    <MESSAGE value="August 2021 Update" />
+    <option name="LAST_COMMIT_MESSAGE" value="August 2021 Update" />
+    <option name="OPTIMIZE_IMPORTS_BEFORE_PROJECT_COMMIT" value="true" />
   </component>
   <component name="WordPressConfiguration" enabled="true">
     <wordpressPath>C:\Users\roger\OneDrive\Documents\WEB\www\scoutingmemories</wordpressPath>
-  </component>
-  <component name="XSLT-Support.FileAssociations.UIState">
-    <expand />
-    <select />
   </component>
 </project>
