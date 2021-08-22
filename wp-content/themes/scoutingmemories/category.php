@@ -42,10 +42,13 @@ ini_set('xdebug.var_display_max_data', '1024');
 $paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
 
 
+
+
 $indexing = new Indexing($current_category->slug, $paged);
 
+//echo '<pre>';
 //var_dump($indexing);
-
+//die();
 
 
 
@@ -104,7 +107,7 @@ get_header();
 
 
 
-            <div id="accordion" role="tablist" aria-multiselectable="true">
+            <div id="accordion"  role="tablist" aria-multiselectable="true">
                 <div class="card">
                     <div class="card-header" id="headingOne">
                         <h5 class="mb-0">
@@ -121,7 +124,7 @@ get_header();
                         </h5>
                     </div>
 
-                    <div id="collapseOne" class="collapse hide" aria-labelledby="headingOne" data-parent="#accordion">
+                    <div id="collapseOne" class="collapse hide hidden" aria-labelledby="headingOne" data-parent="#accordion">
                         <div class="card-body">
 
 	                        <?php echo SearchForm::show_form2(); ?>
@@ -174,6 +177,10 @@ get_header();
 			endwhile;
 
             Theme::bootstrap_pagination($the_query);
+
+
+
+
 
 		else :
 

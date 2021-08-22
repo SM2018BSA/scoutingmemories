@@ -55,6 +55,8 @@ jQuery(document).ready(function () {
         let selected_states = jQuery(this).val();
         let nonce = jQuery('#search_nonce').attr("value");
 
+       // console.log(selected_states);
+
 
         jQuery('#select_council_loading').removeClass('hidden');
         jQuery.ajax({

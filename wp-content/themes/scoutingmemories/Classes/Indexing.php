@@ -26,7 +26,7 @@ class Indexing {
 
 	public function __construct( $category_slug, $paged = '1' ) {
 
-		$this->paged = '1';
+
 
 		$request['states']   = get_request_parameter( 'state' );
 		$request['councils'] = get_request_parameter( 'council' );
@@ -37,11 +37,15 @@ class Indexing {
 		$this->start_date    = get_request_parameter( 'start_date' );
 		$this->end_date      = get_request_parameter( 'end_date' );
 
-		if ( $paged > 1 ) {
-			$this->paged = $paged;
-		} elseif ($request['paged'] !== null )  {
-			$this->paged = $request['paged'];
-		}
+//		if ( $paged > 1 ) {
+//			$this->paged = $paged;
+//		} elseif ($request['paged'] !== null )  {
+//			$this->paged = $request['paged'];
+//		}
+
+		$this->paged = $paged;
+
+
 
 
 		if ( $request['states'] !== null ) {
@@ -61,11 +65,8 @@ class Indexing {
 
 
 		$this->camp_queries    = $this->get_queries( $this->unused_camps,    'camp' );
-
 		$this->lodge_queries   = $this->get_queries( $this->unused_lodges,   'lodge' );
-
 		$this->council_queries = $this->get_queries( $this->unused_councils, 'council' );
-
 		$this->state_queries   = $this->get_queries( $this->unused_states,   'state' );
 
 
@@ -89,7 +90,6 @@ class Indexing {
 
 
 		$this->create_final_query();
-
 
 
 	}
@@ -174,7 +174,9 @@ class Indexing {
 		//$this->query['meta_query'] =
 		$this->query['template'] = 'category';
 		$this->query['posts_per_page'] = 10;
-		$this->query['paged'] = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : 1;
+		//$this->query['paged'] = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : 1;
+		$this->query['paged'] = $this->paged;
+		$this->query['page'] = $this->paged;
 		//$this->query['paged'] = '2';
 
 

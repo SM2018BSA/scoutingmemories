@@ -40,9 +40,17 @@ class CouncilView extends View {
 	}
 
 
+
+
+
 	public static function show_static_view( $state_slug = '336', $selected = false ) {
 
-		$search_param = array( 'meta_value' => $state_slug, 'fi.form_id' => ADD_A_COUNCIL_FORMID );
+		//, 'fi.field_id'=> AACOUNCIL_STATE_FID
+		$search_param = array( 'meta_value like' => $state_slug, 'fi.form_id' => ADD_A_COUNCIL_FORMID );
+
+		//AND fi.field_id = " . AACOUNCIL_STATE_FID ;
+		//$search_param = "meta_value LIKE '{$state_slug}' and field_id=100" ;
+
 
 		 $entry_ids = FrmEntrymeta::getEntryIds( $search_param );
 
@@ -50,6 +58,21 @@ class CouncilView extends View {
 
 		if ( ! empty( $entry_ids ) ) {
 			$entries = FrmEntry::getAll( array( 'it.id' => $entry_ids ), '', '', true, false );
+
+			 foreach ($entries as $key => $entry){
+				$metas = $entry->metas[AACOUNCIL_STATE_FID];
+				if (!is_array($metas)) {
+					if ($metas != $state_slug) {
+						unset( $entries[$key] );
+					}
+				} else {
+					$found_one = false;
+					foreach($metas as $meta){
+						if ($meta == $state_slug) { $found_one = true; }
+					}
+					if (!$found_one) unset($entries[$key]);
+				}
+			 }
 
 
 			if ( $selected ) {

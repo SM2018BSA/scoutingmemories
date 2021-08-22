@@ -1,5 +1,6 @@
 <?php
 
+define('SSL_MODE',                      'http');
 
 define('SEARCH_MEMORIES_1_FORMID',           9);
 define('ADD_A_POST_FORMID',                  6);

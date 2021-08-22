@@ -37,6 +37,7 @@
                 <div class="col">
                     <div class=" nav justify-content-center  ">
                         <a class="nav-link  text-light border-right" href="<?= site_url() ?>/contact-us/" target="_self">Contact Us </a>
+                        <a class="nav-link  text-light border-right" href="https://scoutingmemories.org/publishing-guidelines/" target="_self">Publishing Guidelines </a>
                         <a class="nav-link  text-white" href="<?= site_url() ?>/privacy-policy/" target="_self">Privacy Policy </a></div>
                 </div>
                 <div class="col">

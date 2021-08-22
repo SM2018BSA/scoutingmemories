@@ -18,7 +18,6 @@ get_header();
 
 
 
-
 ?>
 
     <div id="primary" class="content-area mt-5 h-100 ">
@@ -32,7 +31,7 @@ get_header();
                 <div class="col  col-xl-7 col-lg-8 col-md-8 col-sm-12">
 
 
-					<?php /*
+					<?php /*   */ ?>
 
                     <div id="carouselFrontpage" class="carousel slide mb-3" data-bs-ride="carousel">
                         <div class="carousel-inner">
@@ -53,21 +52,21 @@ get_header();
 
 
 				    <?php
-				    while ( have_posts() ) :
+				 /*   while ( have_posts() ) :
 					    the_post();
 					    get_template_part( 'template-parts/content', get_post_type() );
 				    endwhile; // End of the loop.
-				    ?>
+				   */ ?>
 
 
 
- */ ?>
+
 
                 </div>
 
                 <div class="col col-xl-7 col-lg-8 col-md-8 col-sm-12  ">
                     
-                    <?php /*
+                    <?php /*   */ ?>
                     <div class="row  pt-3 ">
                         <div class="col d-flex justify-content-center">
                             <div class="card mb-3" style="width: 14em;">
@@ -101,22 +100,21 @@ get_header();
                         </div>
 
                     </div>
-                    */ ?>
+
 
                 </div>
 
 
                 <div class="col  col-xl-7 col-lg-8 col-md-8 col-sm-12">
 					<?php
-					echo SearchForm::show_form();
+					 echo SearchForm::show_form();
 					?>
                 </div>
             </div>
 
 
         </main><!-- #main -->
-		<?php /*
-*/ ?>
+		<?php /* */ ?>
 
     </div>
 

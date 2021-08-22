@@ -7,7 +7,7 @@ class SearchForm {
 
 	public function __construct() {
 
-		$this->ssl = 'https';
+		$this->ssl = SSL_MODE;
 
 
 
@@ -71,8 +71,8 @@ class SearchForm {
 
 			// localize the script to your domain name, so that you can reference the url to admin-ajax.php file easily
 			wp_localize_script( 'search_ajax', 'myCouncilAjax', array( 'ajaxurl' => admin_url( 'admin-ajax.php', $this->ssl ) ) );
-			wp_localize_script( 'search_ajax', 'myLodgeAjax', array( 'ajaxurl' => admin_url( 'admin-ajax.php', $this->ssl ) ) );
-			wp_localize_script( 'search_ajax', 'myCampAjax', array( 'ajaxurl' => admin_url( 'admin-ajax.php', $this->ssl ) ) );
+			wp_localize_script( 'search_ajax', 'myLodgeAjax',   array( 'ajaxurl' => admin_url( 'admin-ajax.php', $this->ssl ) ) );
+			wp_localize_script( 'search_ajax', 'myCampAjax',    array( 'ajaxurl' => admin_url( 'admin-ajax.php', $this->ssl ) ) );
 
 			// enqueue jQuery library and the script you registered above
 			wp_enqueue_script( 'jquery' );

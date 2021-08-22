@@ -11,6 +11,8 @@ class PostEntry extends Entry {
 	public $my_entry;
 	public $state_slugs;
 
+	public Post $the_post;
+
 	private $the_user;
 
 
@@ -19,16 +21,13 @@ class PostEntry extends Entry {
 		parent::__construct( $entry_id );
 
 		$this->entry_id = $entry_id;
-
 		$this->the_user = &$the_user;
 
-
-
-
-
 	}
+
+
 	public function setup_hooks() {
-		add_action( 'frm_after_update_entry',     array( &$this, 'frm_after_update_entry' ), 20, 2 );
+		add_action( 'frm_after_update_entry',     array( &$this, 'frm_after_update_entry' ), 10, 2 );
 		add_filter( 'frm_setup_new_fields_vars',  array( &$this, 'frm_setup_new_fields_vars' ), 20, 2 );
 		add_filter( 'frm_setup_edit_fields_vars', array( &$this, 'frm_setup_edit_fields_vars' ), 30, 2 );
 		add_filter( 'frm_rte_options',            array( &$this, 'frm_rte_options' ), 10, 2 );
@@ -65,6 +64,7 @@ class PostEntry extends Entry {
 
 		}
 
+
 		if ($field->id == AAP_CAMP_FID ) {
 			// set defaults from user_meta
 			foreach ( $this->the_user->all_user_meta['user_camp'] as $value )
@@ -86,7 +86,13 @@ class PostEntry extends Entry {
 
 	public function frm_setup_edit_fields_vars( $values, $field ) {
 		$frm_action = get_request_parameter( 'frm_action' );
-		if ( $this->entry_id && $frm_action === 'edit' ) {
+
+
+
+		if ( $frm_action === "edit3" ) {
+
+
+
 
 			$new_value = array();
 
@@ -114,7 +120,7 @@ class PostEntry extends Entry {
 		if ( ( $form_id == ADD_A_POST_FORMID ) && $entry_id ) {
 			// used to get my new posts ID
 			$this->my_entry = FrmEntry::getOne( $entry_id );
-			$this->post_id  = $this->my_entry->post_id;
+			$post_id  = $this->my_entry->post_id;
 
 
 			//  Get my slugs ////////////////////////

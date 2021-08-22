@@ -133,13 +133,16 @@ class LodgeView extends View {
 
 		if ( count( $selected_councils ) == 1 ) {
 
-			$results = LodgeView::show_static_view( $selected_councils );
+			$selected_councils_id = Entry::get_field_id_from_key($selected_councils);
+			$results = LodgeView::show_static_view($selected_councils_id);
+			$results .= LodgeView::show_static_view( $selected_councils );
 			$result['type'] = 'one';
 
 
 		} else {
 			foreach ( $selected_councils as $selected_council ) {
-
+				$selected_councils_id = Entry::get_field_id_from_key($selected_council);
+				$results .= LodgeView::show_static_view($selected_councils_id);
 				$results .= LodgeView::show_static_view( $selected_council );
 
 			}
