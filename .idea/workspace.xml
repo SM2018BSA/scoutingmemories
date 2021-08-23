@@ -1,151 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="76e310e8-31fe-4b68-a67a-2cf8af160bbb" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/.eslintrc" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/.eslintrc" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/.stylelintrc.json" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/.stylelintrc.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/404.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/404.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CampView.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CampView.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CouncilView.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CouncilView.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/Indexing.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/Indexing.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/LodgeView.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/LodgeView.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/PostEntry.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/PostEntry.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/SearchForm.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/SearchForm.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/LICENSE" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/LICENSE" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/add-post.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/add-post.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/archive.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/archive.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.min.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.min.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.rtl.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.rtl.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.rtl.min.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/css/bootstrap-reboot.rtl.min.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_accordion.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_accordion.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_alert.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_alert.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_badge.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_badge.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_breadcrumb.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_breadcrumb.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_button-group.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_button-group.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_buttons.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_buttons.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_card.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_card.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_carousel.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_carousel.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_close.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_close.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_containers.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_containers.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_dropdown.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_dropdown.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_forms.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_forms.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_functions.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_functions.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_grid.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_grid.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_helpers.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_helpers.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_images.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_images.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_list-group.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_list-group.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_mixins.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_mixins.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_modal.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_modal.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_nav.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_nav.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_navbar.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_navbar.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_pagination.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_pagination.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_popover.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_popover.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_progress.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_progress.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_reboot.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_reboot.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_root.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_root.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_spinners.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_spinners.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_tables.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_tables.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_toasts.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_toasts.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_tooltip.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_tooltip.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_transitions.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_transitions.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_type.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_type.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_utilities.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_utilities.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_variables.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/_variables.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap-grid.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap-grid.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap-reboot.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap-reboot.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap-utilities.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap-utilities.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/bootstrap.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_floating-labels.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_floating-labels.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-check.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-check.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-control.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-control.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-range.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-range.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-select.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-select.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-text.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_form-text.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_input-group.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_input-group.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_labels.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_labels.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_validation.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/forms/_validation.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_clearfix.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_clearfix.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_colored-links.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_colored-links.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_position.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_position.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_ratio.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_ratio.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_stretched-link.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_stretched-link.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_text-truncation.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_text-truncation.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_visually-hidden.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/helpers/_visually-hidden.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_alert.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_alert.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_border-radius.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_border-radius.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_box-shadow.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_box-shadow.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_breakpoints.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_breakpoints.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_buttons.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_buttons.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_caret.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_caret.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_clearfix.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_clearfix.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_container.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_container.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_deprecate.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_deprecate.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_forms.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_forms.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_gradients.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_gradients.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_grid.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_grid.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_image.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_image.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_list-group.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_list-group.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_lists.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_lists.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_pagination.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_pagination.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_reset-text.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_reset-text.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_resize.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_resize.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_table-variants.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_table-variants.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_text-truncate.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_text-truncate.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_transition.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_transition.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_utilities.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_utilities.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_visually-hidden.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/mixins/_visually-hidden.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/utilities/_api.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/utilities/_api.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/vendor/_rfs.scss" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/bootstrap/scss/vendor/_rfs.scss" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/category.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/category.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/comments - original.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/comments - original.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/comments.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/comments.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/composer.json" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/composer.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/css/select2-bootstrap4.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/css/select2-bootstrap4.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/css/select2.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/css/select2.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/css/select2.min.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/css/select2.min.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/footer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/footer.php" afterDir="false" />
+    <list default="true" id="76e310e8-31fe-4b68-a67a-2cf8af160bbb" name="Default Changelist" comment=" August 22nd Update 1">
+      <change afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/add-camp.php" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/add-council.php" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/add-lodge.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/phpinfo.php" beforeDir="false" afterPath="$PROJECT_DIR$/phpinfo.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CurrentUser.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/CurrentUser.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/Form.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/Classes/Form.php" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/frontpage.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/frontpage.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/functions.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/functions.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/header.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/header.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/class-wp-bootstrap-navwalker.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/class-wp-bootstrap-navwalker.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/formidable_constants.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/formidable_constants.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/template-functions.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/template-functions.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/template-tags.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/inc/template-tags.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/index.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/index.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/info-page.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/info-page.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/BsMultiSelect.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/BsMultiSelect.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/bootstrap-reboot.min.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/bootstrap-reboot.min.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/bootstrap.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/bootstrap.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/customizer.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/customizer.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/font-awesome.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/font-awesome.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/jquery-3.5.1.slim.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/jquery-3.5.1.slim.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/navigation.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/navigation.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/popper.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/popper.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/search_ajax.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/search_ajax.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.full.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.full.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.full.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.full.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.min.js" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/js/select2.min.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/languages/readme.txt" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/languages/readme.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/languages/scoutingmemories.pot" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/languages/scoutingmemories.pot" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/page.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/page.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/phpcs.xml.dist" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/phpcs.xml.dist" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/readme.txt" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/readme.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/scss/custom.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/scss/custom.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/search.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/search.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/short-centered-page.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/short-centered-page.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/sidebar.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/sidebar.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/single-post.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/single-post.php" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/single.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/single.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/style.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/style.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content-none.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content-none.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content-page.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content-page.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content-search.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content-search.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/template-parts/content.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/test-search.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp-content/themes/scoutingmemories/test-search.php" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -168,6 +33,8 @@
   </component>
   <component name="PropertiesComponent">
     <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="true" />
     <property name="WebServerToolWindowPanel.toolwindow.highlight.mappings" value="true" />
@@ -175,7 +42,7 @@
     <property name="WebServerToolWindowPanel.toolwindow.show.date" value="false" />
     <property name="WebServerToolWindowPanel.toolwindow.show.permissions" value="false" />
     <property name="WebServerToolWindowPanel.toolwindow.show.size" value="false" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/wp-content/themes/scoutingmemories" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.path.for.package.eslint" value="project" />
@@ -186,6 +53,11 @@
     <property name="nodejs_npm_path_reset_for_default_project" value="true" />
     <property name="settings.editor.selected.configurable" value="preferences.lookFeel" />
     <property name="vue.rearranger.settings.migration" value="true" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\WEB\www\wp-content\themes\scoutingmemories" />
+    </key>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="SvnConfiguration">
@@ -234,7 +106,10 @@
       <workItem from="1627422839774" duration="1269000" />
       <workItem from="1627938904430" duration="8061000" />
       <workItem from="1628717185587" duration="6820000" />
-      <workItem from="1629658215834" duration="458000" />
+      <workItem from="1629658215834" duration="4855000" />
+      <workItem from="1629671331776" duration="599000" />
+      <workItem from="1629676585313" duration="149000" />
+      <workItem from="1629678995973" duration="2111000" />
     </task>
     <task id="LOCAL-00001" summary="workspace update 6-24-19">
       <created>1561416443726</created>
@@ -257,7 +132,14 @@
       <option name="project" value="LOCAL" />
       <updated>1629658290098</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary=" August 22nd Update 1">
+      <created>1629658916750</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1629658916750</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -280,7 +162,8 @@
     <option name="CHECK_NEW_TODO" value="false" />
     <MESSAGE value="August 2021 Update" />
     <MESSAGE value=" Minor text update" />
-    <option name="LAST_COMMIT_MESSAGE" value=" Minor text update" />
+    <MESSAGE value=" August 22nd Update 1" />
+    <option name="LAST_COMMIT_MESSAGE" value=" August 22nd Update 1" />
     <option name="OPTIMIZE_IMPORTS_BEFORE_PROJECT_COMMIT" value="true" />
   </component>
   <component name="WordPressConfiguration" enabled="true">

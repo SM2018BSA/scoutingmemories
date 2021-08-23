@@ -53,7 +53,6 @@ class CurrentUser {
 
 
 
-
 	// caps:
 	//
 	// create_posts
