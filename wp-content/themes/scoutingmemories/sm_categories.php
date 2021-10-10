@@ -1,6 +1,6 @@
 <?php
 /**
- * The main template file
+/*  Template Name: SM Categories
  *
  * This is the most generic template file in a WordPress theme
  * and one of the two required files for a theme (the other being style.css).
@@ -81,7 +81,7 @@ $current_category = get_category( get_query_var( 'cat' ) );
 $paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
 
 $indexing = new Indexing($current_category->slug, $paged);
- 
+
 
 $the_query = new WP_Query( $indexing->query, array( 'paged' => $paged ) );
 //$the_query = new WP_Query( $args );
@@ -97,9 +97,6 @@ $wp_query   = $the_query;*/
 
 
 
-echo '<pre>';
-var_dump($the_query->found_posts);
-echo '</pre>';
 
 
 
@@ -126,20 +123,20 @@ get_header();
 
 
             <div class="card">
-                        <div class="card-header" id="headingOne">
-                            <h5 class="mb-0">
-                                <div class="title " >
-                                    <h1 class=" "> Category:
-                                        <?php
-                                        $cat = get_category_by_slug($current_category->slug) ;
-                                        echo $cat->name;
-                                        ?>
+                <div class="card-header" id="headingOne">
+                    <h5 class="mb-0">
+                        <div class="title " >
+                            <h1 class=" "> Category:
+                                <?php
+                                $cat = get_category_by_slug($current_category->slug) ;
+                                echo $cat->name;
+                                ?>
 
 
-                                    </h1>
-                                </div>
-                            </h5>
+                            </h1>
                         </div>
+                    </h5>
+                </div>
             </div>
             <?php /*
             <div id="accordion" class="hide hidden"  role="tablist" aria-multiselectable="true">
@@ -174,19 +171,19 @@ get_header();
 
 
 
-<script>
-    jQuery(document).ready( function() {
+            <script>
+                jQuery(document).ready( function() {
 
 
-        jQuery('.title').on("click", function(){
+                    jQuery('.title').on("click", function(){
 
-            jQuery('.fas.fa-angle-down').addClass('fa-angle-up').removeClass('fa-angle-down');
+                        jQuery('.fas.fa-angle-down').addClass('fa-angle-up').removeClass('fa-angle-down');
 
-        });
+                    });
 
 
-    });
-</script>
+                });
+            </script>
 
 
 
@@ -195,33 +192,33 @@ get_header();
 
 
         </div>
-		<?php
-		if ( $the_query->have_posts() ) :
+        <?php
+        if ( $the_query->have_posts() ) :
 
 
 
-			/* Start the Loop */
-			while ( $the_query->have_posts() ) :
-				$the_query->the_post();
+            /* Start the Loop */
+            while ( $the_query->have_posts() ) :
+                $the_query->the_post();
 
-				/*
-				 * Include the Post-Type-specific template for the content.
-				 * If you want to override this in a child theme, then include a file
-				 * called content-___.php (where ___ is the Post Type name) and that will be used instead.
-				 */
-				get_template_part( 'template-parts/content-search', get_post_type() );
+                /*
+                 * Include the Post-Type-specific template for the content.
+                 * If you want to override this in a child theme, then include a file
+                 * called content-___.php (where ___ is the Post Type name) and that will be used instead.
+                 */
+                get_template_part( 'template-parts/content-search', get_post_type() );
 
 
-			endwhile;
+            endwhile;
 
             Theme::bootstrap_pagination($the_query);
 
-			// Reset postdata
+            // Reset postdata
             wp_reset_postdata();
 
 
-/*            previous_posts_link( 'Older Posts' );
-            next_posts_link( 'Newer Posts', $the_query->max_num_pages );*/
+            /*            previous_posts_link( 'Older Posts' );
+                        next_posts_link( 'Newer Posts', $the_query->max_num_pages );*/
 
 
             // typically these functions will be enclosed
@@ -234,19 +231,19 @@ get_header();
             //the_posts_pagination();
 
             // Reset main query object
-/*            $wp_query = NULL;
-            $wp_query = $temp_query;*/
+            /*            $wp_query = NULL;
+                        $wp_query = $temp_query;*/
             wp_reset_query();
 
         else :
 
-			get_template_part( 'template-parts/content', 'none' );
+            get_template_part( 'template-parts/content', 'none' );
 
-		endif;
+        endif;
 
 
-		//wp_reset_query();     // Restore global post data stomped by the_post().
-		?>
+        //wp_reset_query();     // Restore global post data stomped by the_post().
+        ?>
 
     </main><!-- #main -->
 

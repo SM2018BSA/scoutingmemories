@@ -24,7 +24,7 @@ class Indexing {
 	public $paged;
 
 
-	public function __construct( $category_slug, $paged = '1' ) {
+	public function __construct( $category_slug = null, $paged = '1' ) {
 
 
 
@@ -175,12 +175,11 @@ class Indexing {
 		$this->query['template'] = 'category';
 		$this->query['posts_per_page'] = 10;
 		//$this->query['paged'] = ( get_query_var( 'paged' ) ) ? get_query_var( 'paged' ) : 1;
-		$this->query['paged'] = $this->paged;
-		$this->query['page'] = $this->paged;
-		//$this->query['paged'] = '2';
+        $this->query['paged'] = $this->paged;
+        $this->query['page'] = $this->paged;
 
 
-		$this->query['tax_query'] = [
+        $this->query['tax_query'] = [
 			[ 'relation' => 'OR',
 				( isset( $this->state_queries ) ? $this->state_queries     : null ),
 				( isset( $this->council_queries ) ? $this->council_queries : null ),

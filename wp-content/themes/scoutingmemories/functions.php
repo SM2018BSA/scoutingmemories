@@ -166,10 +166,24 @@ $search_form->setup_hooks();
 
 
 
+function set_custom_query( $query ) {
+    if ( ! is_admin() && $query->is_main_query() && is_category() ) {
+
+        $query->set('posts_per_page', 10);
+
+
+    }
+}
+add_action( 'pre_get_posts', 'set_custom_query' );
 
 
 
 
+add_filter( 'redirect_canonical', 'custom_disable_redirect_canonical' );
+function custom_disable_redirect_canonical( $redirect_url ) {
+    if ( is_paged() && is_singular() ) $redirect_url = false;
+    return $redirect_url;
+}
 
 
 
