@@ -66,14 +66,14 @@ get_header();
                 </div>
 
                 <div class="col col-xl-7 col-lg-8 col-md-8 col-sm-12  ">
-                    
+                    <div class="accordion">
                     <?php /*   */ ?>
                     <div class="row  pt-3 ">
                         <div class="col d-flex justify-content-center">
                             <div class="card mb-3" style="width: 14em;">
 
                                 <div class="card-body">
-                                    <h5 class="card-title text-center">What Are We</h5>
+                                    <h5  id="buttonOne"  class="card-title text-center">What Are We</h5>
                                     <p class="card-text"></p>
 
                                 </div>
@@ -83,7 +83,7 @@ get_header();
                             <div class="card text-light bg-primary mb-3" style="width: 14em;">
 
                                 <div class="card-body">
-                                    <h5 class="card-title text-center">Search Memories</h5>
+                                    <h5  id="buttonTwo"  class="card-title text-center" data-bs-toggle="collapse" data-bs-target="#collapseTwo">Search Memories</h5>
                                     <p class="card-text"></p>
 
                                 </div>
@@ -93,9 +93,8 @@ get_header();
                             <div class="card mb-3" style="width: 14em;">
 
                                 <div class="card-body">
-                                    <h5 class="card-title text-center">How To Guides</h5>
+                                    <h5 id="buttonThree" class="card-title text-center" data-bs-toggle="collapse" data-bs-target="#collapseThree"  >How To Guides</h5>
                                     <p class="card-text"></p>
-
                                 </div>
                             </div>
                         </div>
@@ -103,14 +102,44 @@ get_header();
                     </div>
 
 
-                </div>
+                        <div class="accordion-item">
+                            <div id="collapseOne" class="accordion-collapse collapse col  col-xl-7 col-lg-8 col-md-8 col-sm-12">
+                                <div class="accordion-body">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <div id="collapseTwo" class=" accordion-collapse collapse show col ">
+                                <div class="accordion-body">
+                                <?php
+                                echo SearchForm::show_form();
+                                ?>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <div id="collapseThree" class="accordion-collapse collapse col pb-3">
+                                <div class="accordion-body">
+                                <iframe width="100%" height="400" src="https://www.youtube.com/embed/a_lF5F-oeEY?rel=0&modestbranding=1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                </div>
+                            </div>
+                        </div>
 
 
-                <div class="col  col-xl-7 col-lg-8 col-md-8 col-sm-12">
-					<?php
-					 echo SearchForm::show_form();
-					?>
-                </div>
+                    </div>
+
+
+
+
+                </div> <?php /* End of Accordian */ ?>
+
+
+
+
+
+
+
+
             </div>
 
 
@@ -126,6 +155,24 @@ get_header();
             $('.carousel').carousel({
                 interval: 10000
             });
+
+            $('#buttonThree').on('click', function () {
+                if ($('#collapseTwo').hasClass('show')) {
+                    $('#collapseTwo').removeClass('show');
+                }else{
+                    $('#collapseTwo').addClass('show');
+                }
+            });
+
+            $('#buttonTwo').on('click', function () {
+                if ($('#collapseThree').hasClass('show')) {
+                    $('#collapseThree').removeClass('show');
+                }else{
+                    $('#collapseThree').addClass('show');
+                }
+            });
+
+
 
         });
 
