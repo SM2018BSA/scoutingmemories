@@ -45,7 +45,7 @@ class Theme {
 
 	    $this->addScript('font-awesome', '/js/font-awesome.min.js');
 	    //$this->addScript('bootstrap', '/js/bootstrap.min.js');
-	    $this->addScript('bootstrap', '//cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.min.js', array() ,false );
+	    $this->addScript('bootstrap', '//cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js', array() ,false );
 
 		//$theme->addScript('bs-multiselect', '/js/BsMultiSelect.min.js');
 	    $this->addScript('select2', '/js/select2.min.js');
@@ -53,7 +53,7 @@ class Theme {
 
 
 	    //$this->addStyle('bootstrap', '/css/bootstrap.min.css' );
-	    $this->addStyle('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css','outside' );
+	    $this->addStyle('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css','outside' );
 
 
 	    $this->addStyle('scouting-memories','/css/styles.css');
@@ -111,7 +111,7 @@ class Theme {
     private function addjQuery3() {
         $this->actionEnqueueScripts(function(){
             wp_deregister_script('jquery');
-            wp_register_script('jquery', "https://code.jquery.com/jquery-3.5.1.min.js", false, null);
+            wp_register_script('jquery', "https://code.jquery.com/jquery-3.6.0.min.js", false, null);
             wp_enqueue_script('jquery');
         });
     }
@@ -119,7 +119,7 @@ class Theme {
 
 
 	private function addPopper() {
-		$this->addScript('popper','//cdn.jsdelivr.net/npm/@popperjs/core@2.6.0/dist/umd/popper.min.js', array(), false);
+		$this->addScript('popper','//cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js', array(), false);
 	}
 
 	private function addReBoot() {
