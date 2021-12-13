@@ -65,7 +65,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
 
 									<?php
 
-
+/*
 									if ( get_request_parameter( 'runit' ) ) {
 
 										// If so echo the value
@@ -122,7 +122,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
 
 									}
 
-
+*/
 									?>
 
 
@@ -238,12 +238,13 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                                            role="tab"
                                                            href="#posts"
                                                            data-bs-toggle="tab">My Posts</a>
-
+                                                        <?php /*
                                                         <a id="camps-tab"
                                                            class="nav-item nav-link"
                                                            role="tab"
                                                            href="#pendingReview"
                                                            data-bs-toggle="tab">Pending Review</a>
+                                                        */?>
 
                                                     </div>
                                                 </nav>
@@ -254,11 +255,13 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
 
 														<?= $postsView->show_view(); ?>
                                                     </div>
+                                                    <?php /*
                                                     <div id="pendingReview"
                                                          class="tab-pane fade pt-3"
                                                          role="tabpanel">
 														<?= $postsPendingView->show_view(); ?>
                                                     </div>
+                                                    */?>
 
                                                 </div>
                                             </div>
@@ -403,7 +406,6 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
             let tab2 = '<?=get_request_parameter( 'tab2' ) ?>';
 
 
-            //console.log(tab);
             switch (tab) {
                 case 'myDefaults':
                     let myDefaultsTab = new bootstrap.Tab(document.querySelector('#myDefaults-tab')).show();
@@ -424,15 +426,14 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
 
             switch (tab2) {
                 case 'myCouncils':
-                    $('a#councils-tab').tab('show');
+                    let myCouncilsTab = new bootstrap.Tab(document.querySelector('a#councils-tab')).show();
                     break;
                 case 'myCamps':
-                    $('a#camps-tab').tab('show');
+                    let myCampsTab = new bootstrap.Tab(document.querySelector('a#camps-tab')).show();
                     break;
                 case 'myLodges':
-                    $('a#lodges-tab').tab('show');
+                    let myLodgesTab = new bootstrap.Tab(document.querySelector('a#lodges-tab')).show();
                     break;
-
 
                 default:
                 // code block
