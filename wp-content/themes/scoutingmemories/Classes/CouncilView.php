@@ -136,10 +136,11 @@ function search_councils() {
 
 	$selected_states = $_REQUEST['selected_states'];
 
-
-	if ( strpos( $selected_states, ',' ) ) {
-		$selected_states = explode( ', ', $selected_states );
-	}
+    if ( !is_array($selected_states)) {
+        if (strpos($selected_states, ',')) {
+            $selected_states = explode(', ', $selected_states);
+        }
+    }
 
 	$result['state'] = $results = '';
 

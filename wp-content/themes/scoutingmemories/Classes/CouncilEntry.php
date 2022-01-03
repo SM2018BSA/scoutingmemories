@@ -26,6 +26,10 @@ class CouncilEntry extends Entry {
 			$this->entry_id    = $entry_id;
 			$this->entry_array = $this->get_entry_array();
 
+			if (!is_array($this->entry_array)) {
+                $this->entry_array = array();
+            }
+
 			( array_key_exists( 'council_num',         $this->entry_array ) ? $this->number        = $this->entry_array['council_num']          : $this->number        = '' );
 			( array_key_exists( 'council_name',        $this->entry_array ) ? $this->name          = $this->entry_array['council_name']         : $this->name          = '' );
 			( array_key_exists( 'council_state',       $this->entry_array ) ? $this->state         = $this->entry_array['council_state']        : $this->state         = '' );
@@ -60,8 +64,7 @@ class CouncilEntry extends Entry {
 
 		}
 
-		return false;
-
+		return true;
 
 	}
 
@@ -231,13 +234,32 @@ class CouncilEntry extends Entry {
 
 
 
+	//// // //
+    ///
+    /// This funciton updates Council indexing. Anything marked as active will have it's end date updated to the current year
+    /// Echo the result to show how many indexes were updated.
+    //
+	public static function update_active() {
+        $council_entries  = FrmEntry::getAll(['form_id' => ADD_A_COUNCIL_FORMID ], '', '', true   );
+        $active_councils = array();
+        $current_year = date("Y");
+        foreach ($council_entries as $key => $value) {
+            if ($value->metas[AACOUNCIL_COUNCIL_ACTIVE_FID] == 'Yes') {
+                $active_council = new Entry($value->id);
+                $active_council->entry_array['council_end'] = (string)$current_year;
+                Entry::update_an_entry( AACOUNCIL_END_DATE_FID, 'council_end', (string)$current_year, $active_council->entry_id);
+                $active_councils[] = $active_council;
+            }
+        }
+        return count($active_councils);
+    }
 
 
-//	public function update_slug() {
-//		$updated_name = clean($this->name);
-//		$updated_name .= $updated_name . '_' . clean($this->number);
-//
-//	}
+
+
+
+
+
 
 
 }

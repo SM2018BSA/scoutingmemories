@@ -50,8 +50,15 @@ class Post {
 
 
 		if ( is_string( $council_keys ) ) {
+
+		    if (is_numeric($council_keys)) { echo' is numeric';}
+
 			$council_keys = explode( ', ', $council_keys );
 		}
+
+		if ( is_string($this->state_val)) {
+		    $this->state_val = explode(', ', $this->state_val);
+        }
 
 
 
@@ -63,12 +70,22 @@ class Post {
 				if ($council_key != 'none') {
 					$entry_id        = Entry::get_field_id_from_key( $council_key );
 					if (!is_null($entry_id)) {
-						$entry           = new CouncilEntry( $entry_id );
-						$this->council[] = [ "name" => $entry->name, "number" => $entry->number ];
-						$this->council_slug[] = $entry->council_slug;
+
+						$entry = new Entry( $entry_id );
+						//var_dump($entry);
+						//$this->council[] = [ "name" => $entry->name, "number" => $entry->number ];
+                        $this->council[] = [
+                            "name" => $entry->entry_array['council_name'],
+                            "number" => $entry->entry_array['council_num']
+                        ];
+
+						$this->council_slug[] = $entry->entry_array['council_slug'];
+
 					}
 				}
 			}
+
+
 		}
 
 
@@ -169,25 +186,20 @@ class Post {
 
 	public function say_states() {
 
-
-
 		if ( count( $this->state_val ) == 1 ) {
 			return $this->state_val[0];
 		} else {
 			$html = '<ul class="small">';
 			foreach ( $this->state_val as $state ) {
-
 				$myState = new Entry($state);
-
-
-
 				$html .= '<li>' . $myState->entry_array['state_acl'] . '</li>';
 			}
 			$html .= '</ul>';
-
 			return $html;
 		}
 	}
+
+
 
 	public function say_councils() {
 
@@ -225,8 +237,8 @@ class Post {
 		if (is_string($this->camp[0])){
 			$entry_id = Entry::get_field_id_from_key( $this->camp[0] );
 			if (!is_null($entry_id)) {
-				$entry = new CampEntry( $entry_id );
-				return $entry->name;
+				$entry = new Entry( $entry_id );
+				return $entry->entry_array['camp_name'];
 			}
 
 		}
@@ -238,8 +250,8 @@ class Post {
 				if ( count( $this->camp[0] ) > 1 ) {
 					$entry_id = Entry::get_field_id_from_key( $this->camp[0] );
 					if (!is_null($entry_id)) {
-						$entry = new CampEntry( $entry_id );
-						return $entry->name;
+						$entry = new Entry( $entry_id );
+						return $entry->entry_array['camp_name'];
 					}
 				}
 
@@ -249,8 +261,8 @@ class Post {
 
 					$entry_id = Entry::get_field_id_from_key( $camp );
 					if (!is_null($entry_id)) {
-						$entry = new CampEntry( $entry_id );
-						$html  .= '<li>' . $entry->name . '</li>';
+						$entry = new Entry( $entry_id );
+						$html  .= '<li>' . $entry->entry_array['camp_name'] . '</li>';
 					}
 
 
@@ -273,8 +285,8 @@ class Post {
 		if ( ( count( $this->lodge ) == 1 ) ) {
 			if ($this->lodge[0] != 'none') {
 				$entry_id = Entry::get_field_id_from_key($this->lodge[0]);
-				$entry = new LodgeEntry($entry_id);
-				return $entry->name ;
+				$entry = new Entry($entry_id);
+				return $entry->entry_array['lodge_name'] ;
 			}
 			return 'none';
 		} else {
@@ -282,8 +294,8 @@ class Post {
 			foreach ( $this->lodge as $lodge ) {
 
 				$entry_id = Entry::get_field_id_from_key($lodge);
-				$entry = new LodgeEntry($entry_id);
-				$html .= '<li>' . $entry->name . '</li>';
+				$entry = new Entry($entry_id);
+				$html .= '<li>' . $entry->entry_array['lodge_name'] . '</li>';
 			}
 			$html .= '</ul>';
 

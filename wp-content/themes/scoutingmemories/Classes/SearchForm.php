@@ -41,13 +41,14 @@ class SearchForm {
 			$end_date   = $this->clean_request( 'end_date' );
 
 
+
 			wp_redirect( esc_url_raw(
 				add_query_arg(
 					array(
 						'state'      => implode( ',', $state ),
-						'council'    => implode( ',', $council ),
-						'lodge'      => implode( ',', $lodge ),
-						'camp'       => implode( ',', $camp ),
+						'council'    => (is_array($council)) ? implode( ',', $council ) : $council ,
+						'lodge'      => (is_array($lodge)) ? implode( ',', $lodge ) : $lodge ,
+						'camp'       => (is_array($camp)) ? implode( ',', $camp ) : $camp,
 						'start_date' => $start_date,
 						'end_date'   => $end_date
 

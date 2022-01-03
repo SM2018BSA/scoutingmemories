@@ -105,9 +105,15 @@ function search_camps() {
 	//$selected_councils = ['general_herkimer_400','Ilion_Council_','Herkimer_County_Council_','Herkimer_County_Council_400'];
 
 
-	if ( strpos( $selected_councils, ',' ) ) {
-		$selected_councils = explode( ',', $selected_councils );
-	}
+//	if ( strpos( $selected_councils, ',' ) ) {
+//		$selected_councils = explode( ',', $selected_councils );
+//	}
+
+    if ( !is_array($selected_councils)) {
+        if (strpos($selected_councils, ',')) {
+            $selected_councils = explode(', ', $selected_councils);
+        }
+    }
 
 
 

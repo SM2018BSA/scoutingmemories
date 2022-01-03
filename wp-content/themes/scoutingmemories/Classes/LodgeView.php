@@ -117,9 +117,16 @@ class LodgeView extends View {
 		//$selected_councils =['general_herkimer_400'];
 
 
-		if ( strpos( $selected_councils, ',' ) ) {
-			$selected_councils = explode( ',', $selected_councils );
-		}
+//		if ( strpos( $selected_councils, ',' ) ) {
+//			$selected_councils = explode( ',', $selected_councils );
+//		}
+
+        if ( !is_array($selected_councils)) {
+            if (strpos($selected_councils, ',')) {
+                $selected_councils = explode(', ', $selected_councils);
+            }
+        }
+
 
 		if ( ! is_array( $selected_councils ) ) {
 			$selected_councils = (array) $selected_councils;
