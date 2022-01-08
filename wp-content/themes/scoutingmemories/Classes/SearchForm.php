@@ -162,7 +162,7 @@ class SearchForm {
                         </div>
                         <div class="mb-2 col-6 ">
                             <label class="form-label" for="end_date">End Date</label>
-                            <input name="end_date" class="form-control" id="end_date" value="2020"  />
+                            <input name="end_date" class="form-control" id="end_date" value="'. date('Y') .'" />
                         </div>
 						<div class="col w-100 clearfix mb-3"></div>
                         <div class="mb-2 col-3">
