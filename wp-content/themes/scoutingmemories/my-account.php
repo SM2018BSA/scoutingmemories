@@ -8,15 +8,15 @@
 get_header();
 
 
-$myAccountForm        = new Form( MY_ACCOUNT_FORMID );
-$editUsersForm        = new Form( EDIT_USERS_FORMID );
-$editUserDefaultsForm = new Form( EDIT_USER_DEFAULTS_FORMID );
-$councilsForm         = new Form( COUNCILS_FORMID );
+$myAccountForm = new Form(MY_ACCOUNT_FORMID);
+$editUsersForm = new Form(EDIT_USERS_FORMID);
+$editUserDefaultsForm = new Form(EDIT_USER_DEFAULTS_FORMID);
+$councilsForm = new Form(COUNCILS_FORMID);
 
 
-$postsView        = new View( POSTS_VIEWID );
-$postsPendingView = new View( POSTS_PENDING_VIEWID );
-$editUsersView    = new View( EDIT_USERS_VIEWID );
+$postsView = new View(POSTS_VIEWID);
+$postsPendingView = new View(POSTS_PENDING_VIEWID);
+$editUsersView = new View(EDIT_USERS_VIEWID);
 
 
 /** @var $the_user CurrentUser */
@@ -24,20 +24,8 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
 /** @var $lodgesView CurrentUser */
 /** @var $campsView CurrentUser */
 
+$smp_action = get_request_parameter('smp_action', 'none');
 
-
-
-//$councilsView = new View (ALL_COUNCILS_VIEWID);
-//$lodgesView   = new View (ALL_LODGES_VIEWID);
-//$campsView    = new View (ALL_CAMPS_VIEWID);
-
-//$newuser = new NewUserEntry(565);
-
-
-//var_dump($newuser);
-
-//echo 'finished';
-//die();
 
 ?>
 
@@ -54,7 +42,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                             <div class="d-flex flex-column ">
                                 <div>
 
-									<?= $the_user->show_avatar(); ?>
+                                    <?= $the_user->show_avatar(); ?>
 
 
                                 </div>
@@ -63,75 +51,75 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                     <p class="font-weight-bold">User Roles:</p>
                                     <p><?= $the_user->show_user_roles(); ?></p>
 
-									<?php
+                                    <?php
 
-/*
-									if ( get_request_parameter( 'runit' ) ) {
+                                    /*
+                                                                        if ( get_request_parameter( 'runit' ) ) {
 
-										// If so echo the value
-										$runit = get_request_parameter( 'runit' );
-
-
-										if ( $runit === 'yes_' ) {
-											echo 'lets do this';
-
-											//											$post_ids = get_posts(array(
-											//												'fields'          => 'ids', // Only get post IDs
-											//												'posts_per_page'  => -1
-											//											));
-											//
-											//											$post = array();
-											//
-											//											$i  = 0;
-											//											foreach($post_ids as $post_id) {
-											//											    $post[] = new Post ($post_id);
-											//                                                //if ( $i >= 25) break;
-											//
-											//
-											//
-											//                                                $i++;
-											//                                            }
-											//
-											//											var_dump ($post);
-
-											//											// make this a  admin function to update meta for lodges council slugs
-											////											//
-											//											$camp_entries  = FrmEntry::getAll([	'form_id' => ADD_A_CAMP_FORMID  ]);
-											////											$lodge_entries = FrmEntry::getAll([ 'form_id' => ADD_A_LODGE_FORMID ]);
-											////
-											////
-											//////
-											////											foreach ($lodge_entries as $entries) {
-											////												$lodges[] = new LodgeEntry($entries->id);
-											////
-											////											}
-											//////
-											//											foreach ($camp_entries as $entries) {
-											//												$camps[] = new CampEntry($entries->id);
-											//
-											//											}
-											//
-											////                                            var_dump($lodges);
-											//                                            var_dump($camps);
-											echo 'no no, already ran!';
-											die();
+                                                                            // If so echo the value
+                                                                            $runit = get_request_parameter( 'runit' );
 
 
-										}
+                                                                            if ( $runit === 'yes_' ) {
+                                                                                echo 'lets do this';
+
+                                                                                //											$post_ids = get_posts(array(
+                                                                                //												'fields'          => 'ids', // Only get post IDs
+                                                                                //												'posts_per_page'  => -1
+                                                                                //											));
+                                                                                //
+                                                                                //											$post = array();
+                                                                                //
+                                                                                //											$i  = 0;
+                                                                                //											foreach($post_ids as $post_id) {
+                                                                                //											    $post[] = new Post ($post_id);
+                                                                                //                                                //if ( $i >= 25) break;
+                                                                                //
+                                                                                //
+                                                                                //
+                                                                                //                                                $i++;
+                                                                                //                                            }
+                                                                                //
+                                                                                //											var_dump ($post);
+
+                                                                                //											// make this a  admin function to update meta for lodges council slugs
+                                                                                ////											//
+                                                                                //											$camp_entries  = FrmEntry::getAll([	'form_id' => ADD_A_CAMP_FORMID  ]);
+                                                                                ////											$lodge_entries = FrmEntry::getAll([ 'form_id' => ADD_A_LODGE_FORMID ]);
+                                                                                ////
+                                                                                ////
+                                                                                //////
+                                                                                ////											foreach ($lodge_entries as $entries) {
+                                                                                ////												$lodges[] = new LodgeEntry($entries->id);
+                                                                                ////
+                                                                                ////											}
+                                                                                //////
+                                                                                //											foreach ($camp_entries as $entries) {
+                                                                                //												$camps[] = new CampEntry($entries->id);
+                                                                                //
+                                                                                //											}
+                                                                                //
+                                                                                ////                                            var_dump($lodges);
+                                                                                //                                            var_dump($camps);
+                                                                                echo 'no no, already ran!';
+                                                                                die();
 
 
-									}
-
-*/
-									?>
+                                                                            }
 
 
-									<?php if ( $the_user->role_allowed( 'administrator' ) ) { ?>
+                                                                        }
+
+                                    */
+                                    ?>
+
+
+                                    <?php if ($the_user->role_allowed('administrator')) { ?>
 
                                         <p><a class="btn btn-danger hidden"
                                               href="<?= get_site_url() ?>/my-account/?runit=yes">Process Data</a></p>
 
-									<?php } ?>
+                                    <?php } ?>
                                 </div>
 
 
@@ -157,8 +145,8 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                             </li><?php
 
 
-							if ( $the_user->cap_allowed( 'create_posts' ) ) {
-								?>
+                            if ($the_user->cap_allowed('create_posts')) {
+                                ?>
                                 <li class="nav-item">
                                     <button class="myPosts nav-link"
                                             id="myPosts-tab"
@@ -166,7 +154,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                             data-bs-toggle="tab">Posts
                                     </button>
                                 </li>
-							<?php } ?>
+                            <?php } ?>
 
 
                             <li class="nav-item">
@@ -185,9 +173,9 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                 </button>
                             </li>
 
-							<?php
+                            <?php
 
-							if ( $the_user->role_allowed( 'index_contributor' ) ) { ?>
+                            if ($the_user->role_allowed('index_contributor')) { ?>
                                 <li class="nav-item">
                                     <button class="myIndexing nav-link"
                                             id="myIndexing-tab"
@@ -195,8 +183,8 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                             data-bs-toggle="tab">Indexing
                                     </button>
                                 </li>
-							<?php } ?>
-							<?php if ( $the_user->role_allowed( 'administrator' ) ) { ?>
+                            <?php } ?>
+                            <?php if ($the_user->role_allowed('administrator')) { ?>
                                 <li class="nav-item">
                                     <button class="myAdmin nav-link"
                                             id="myAdmin-tab"
@@ -204,7 +192,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                             data-bs-toggle="tab">Admin
                                     </button>
                                 </li>
-                                <li class="nav-item "  >
+                                <li class="nav-item ">
                                     <button class="myAdmin2 hidden nav-link"
                                             id="myAdmin2-tab"
                                             data-bs-target="#myAdmin2"
@@ -213,19 +201,19 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                 </li>
 
 
-							<?php } ?>
+                            <?php } ?>
 
 
                         </ul>
                         <div id="main-tabs" class="tab-content">
                             <div id="myAccount" class="tab-pane active" role="tabpanel" aria-labelledby="myAccount-tab">
                                 <div class="container">
-									<?= $myAccountForm->show_form(); ?>
+                                    <?= $myAccountForm->show_form(); ?>
                                 </div>
                             </div>
                             <!--/tab-pane-->
                             <div id="myPosts" class="tab-pane  fade" role="tabpanel" aria-labelledby="myPosts-tab">
-								<?php if ( $the_user->cap_allowed( 'create_posts' ) ) { ?>
+                                <?php if ($the_user->cap_allowed('create_posts')) { ?>
 
                                     <div class="container">
                                         <div class="row ">
@@ -244,7 +232,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                                            role="tab"
                                                            href="#pendingReview"
                                                            data-bs-toggle="tab">Pending Review</a>
-                                                        */?>
+                                                        */ ?>
 
                                                     </div>
                                                 </nav>
@@ -253,7 +241,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                                          class="tab-pane fade pt-3 show active"
                                                          role="tabpanel">
 
-														<?= $postsView->show_view(); ?>
+                                                        <?= $postsView->show_view(); ?>
                                                     </div>
                                                     <?php /*
                                                     <div id="pendingReview"
@@ -261,23 +249,23 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                                          role="tabpanel">
 														<?= $postsPendingView->show_view(); ?>
                                                     </div>
-                                                    */?>
+                                                    */ ?>
 
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
-								<?php } else { ?>
+                                <?php } else { ?>
                                     <p>You do not have permission to upload content.</p>
-								<?php } ?>
+                                <?php } ?>
                             </div>
                             <!--/tab-pane-->
                             <div id="myMedia" class="tab-pane  fade" role="tabpanel" aria-labelledby="myMedia-tab">
                                 <div class="container">
                                     <div class="row ">
                                         <div class="col p-5">
-                                            <p><?= do_shortcode( '[frontend-button]' ); ?></p>
+                                            <p><?= do_shortcode('[frontend-button]'); ?></p>
                                         </div>
                                     </div>
                                 </div>
@@ -285,7 +273,7 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                             <!--/tab-pane-->
                             <div id="myDefaults" class="tab-pane  fade" role="tabpanel"
                                  aria-labelledby="myDefaults-tab">
-								<?php if ( $the_user->cap_allowed( 'create_posts' ) ) { ?>
+                                <?php if ($the_user->cap_allowed('create_posts')) { ?>
                                     <div class="container">
                                         <div class="row ">
                                             <div class="col p-3">
@@ -294,14 +282,14 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                         </div>
                                     </div>
 
-								<?php } else { ?>
+                                <?php } else { ?>
                                     <p>You do not have permission to upload content.</p>
-								<?php } ?>
+                                <?php } ?>
                             </div>
                             <!--/tab-pane-->
                             <div id="myIndexing" class="tab-pane -fluid fade">
                                 <div class="container">
-									<?php if ( $the_user->role_allowed( 'index_contributor' ) ) { ?>
+                                    <?php if ($the_user->role_allowed('index_contributor')) { ?>
                                         <div class="row ">
                                             <div class="col p-3">
                                                 <nav>
@@ -324,6 +312,11 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                                            role="tab"
                                                            href="#lodges"
                                                            data-bs-toggle="tab">Lodges</a>
+                                                        <a id="tools-tab"
+                                                           class="nav-item nav-link"
+                                                           role="tab"
+                                                           href="#tools"
+                                                           data-bs-toggle="tab">Tools</a>
                                                     </div>
                                                 </nav>
                                                 <div id="indexing-tabs" class="tab-content">
@@ -331,43 +324,72 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
                                                          class="tab-pane fade pt-3 show active"
                                                          role="tabpanel">
 
-														<?= $councilsView->show_view(); ?>
+                                                        <?= $councilsView->show_view(); ?>
                                                     </div>
                                                     <div id="camps"
                                                          class="tab-pane fade pt-3"
                                                          role="tabpanel">
-														<?= $campsView->show_view(); ?>
+                                                        <?= $campsView->show_view(); ?>
                                                     </div>
                                                     <div id="lodges"
                                                          class="tab-pane fade pt-3"
                                                          role="tabpanel">
-														<?= $lodgesView->show_view(); ?>
+                                                        <?= $lodgesView->show_view(); ?>
+                                                    </div>
+                                                    <div id="tools"
+                                                         class="tab-pane fade pt-3"
+                                                         role="tabpanel">
+
+                                                        <div class="container">
+                                                            <div class="col">
+
+
+
+                                                                <div class="card w-50 ">
+                                                                    <div class="card-body">
+                                                                        <h5 class="card-title">Update Active End Dates</h5>
+                                                                        <p class="card-text">Click below to update the End Date values for
+                                                                            indexing marked as "Active" with the current
+                                                                            year.</p>
+                                                                        <p class="card-text">
+                                                                            This indexing includes Councils, Lodges and
+                                                                            Camps.</p>
+                                                                        <a href="?smp_action=update_end_dates" class="btn btn-primary">Update</a>
+                                                                    </div>
+                                                                </div>
+
+
+                                                            </div>
+
+
+                                                        </div>
+
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
 
 
-									<?php } else { ?>
+                                    <?php } else { ?>
                                         <p>You do not have permission to upload content.</p>
-									<?php } ?>
+                                    <?php } ?>
                                 </div>
                             </div>
                             <!--/tab-pane-->
-							<?php if ( $the_user->role_allowed( 'administrator' ) ) { ?>
+                            <?php if ($the_user->role_allowed('administrator')) { ?>
                                 <div id="myAdmin" class="tab-pane  fade pt-5" role="tabpanel"
                                      aria-labelledby="myAdmin-tab">
                                     <div class="container">
-										<?= $editUsersView->show_view(); ?>
+                                        <?= $editUsersView->show_view(); ?>
                                     </div>
                                 </div>
-                                <div id="myAdmin2" class="tab-pane fade pt-5"  role="tabpanel"
+                                <div id="myAdmin2" class="tab-pane fade pt-5" role="tabpanel"
                                      aria-labelledby="myAdmin2-tab">
                                     <div class="container">
-										<?= $editUsersForm->show_form(); ?>
+                                        <?= $editUsersForm->show_form(); ?>
                                     </div>
                                 </div>
-							<?php } ?>
+                            <?php } ?>
                         </div>
                         <!--/tab-pane-->
 
@@ -380,19 +402,70 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
             <!--/row-->
 
 
-			<?php if ( $the_user->role_allowed( 'administrator' ) ) { ?>
+            <?php if ($the_user->role_allowed('administrator')) { ?>
                 <style>
                     .show_only_for_admin {
                         display: none !important;
                     }
                 </style>
-			<?php } ?>
+            <?php } ?>
         </main><!-- #main -->
     </section><!-- #primary -->
+
+
+<?php  if ($smp_action === "update_end_dates") :   ?>
+
+    <!-- Modal -->
+    <div class="modal fade" id="sysMessageModal" tabindex="-1" aria-labelledby="sysMessageModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sysMessageModalLabel">Updating Entries</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                <?php
+                echo '<p>';
+                echo "Council Entries updated: " . CouncilEntry::update_active();
+                echo '</p><p>';
+                echo "Camp Entries updated: " . CampEntry::update_active();
+                echo '</p><p>';
+                echo "Lodge Entries updated: " . LodgeEntry::update_active();
+                echo '</p>';
+                ?>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        (function ($) {
+
+            console.log('hello world');
+
+            var myModal = new bootstrap.Modal(document.getElementById('sysMessageModal'));
+
+            myModal.show();
+
+        })(jQuery);
+    </script>
+<?php endif; ?>
+
+
+<?php /*
+    <script type="text/javascript">
+        (function ($) {
+
+        })(jQuery);
+    </script>
+*/ ?>
+
     <script type="text/javascript">
 
         (function ($) {
-
 
             $("ul.pagination").wrap('<nav></nav>').removeClass("frm_pagination");
 
@@ -402,8 +475,8 @@ $editUsersView    = new View( EDIT_USERS_VIEWID );
             });
 
 
-            let tab = '<?=get_request_parameter( 'tab' ) ?>';
-            let tab2 = '<?=get_request_parameter( 'tab2' ) ?>';
+            let tab = '<?=get_request_parameter('tab') ?>';
+            let tab2 = '<?=get_request_parameter('tab2') ?>';
 
 
             switch (tab) {

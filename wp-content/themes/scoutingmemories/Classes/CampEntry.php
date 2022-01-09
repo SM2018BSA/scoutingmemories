@@ -212,4 +212,27 @@ class CampEntry extends Entry {
 	}
 
 
+
+
+    //// // //
+    ///
+    /// This function updates Camp indexing. Anything marked as active will have it's end date updated to the current year
+    /// Echo the result to show how many indexes were updated.
+    //
+    public static function update_active() {
+        $camp_entries  = FrmEntry::getAll(['form_id' => ADD_A_CAMP_FORMID ], '', '', true   );
+        $active_camps = array();
+        $current_year = date("Y");
+        foreach ($camp_entries as $key => $value) {
+            if ($value->metas[AACAMP_CAMP_ACTIVE_FID] == 'Yes') {
+                $active_camp = new Entry($value->id);
+                $active_camp->entry_array['ac_camp_end'] = (string)$current_year;
+                Entry::update_an_entry( AACAMP_END_DATE_FID, 'ac_camp_end', (string)$current_year, $active_camp->entry_id);
+                $active_camps[] = $active_camp;
+            }
+        }
+        return count($active_camps);
+    }
+
+
 }
