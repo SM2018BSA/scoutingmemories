@@ -1,6 +1,6 @@
 <?php
 /**
-/*  Template Name: SM Categories
+ * /*  Template Name: SM Categories
  *
  * This is the most generic template file in a WordPress theme
  * and one of the two required files for a theme (the other being style.css).
@@ -13,77 +13,21 @@
  */
 
 
-
-
-
-//category/history/?state=PA&council=Cradle_of_Liberty_525&lodge=&camp=&start_date=1900&end_date=2020&pass_entry=
-
-//$req['states'] = get_request_parameter('state');
-//$req['councils'] = get_request_parameter('council');
-//$req['lodges'] = get_request_parameter('lodge');
-//$req['camps'] = get_request_parameter('camp');
-//$req['start'] = get_request_parameter('start_date');
-//$req['end'] = get_request_parameter('end_date');
-//
-//
-////var_dump($req );die();
-//
-//$unused_states   = explode(',', $req['states']);
-//$unused_councils = explode(',', $req['councils']);
-//$unused_lodges   = explode(',', $req['lodges']);
-//$unused_camps    = explode(',', $req['camps']);
-
-
-
 ini_set('xdebug.var_display_max_depth', '10');
 ini_set('xdebug.var_display_max_children', '256');
 ini_set('xdebug.var_display_max_data', '1024');
 
 
-$current_category = get_category( get_query_var( 'cat' ) );
-/*$paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;*/
+$current_category = get_category(get_query_var('cat'));
 
 
-
-
-
-
-
-/*$indexing = new Indexing($current_category->slug, $paged);*/
-
-//echo '<pre>';
-//var_dump($indexing);
-//die();
-
-
-
-//$post = new Post('3131');
-
-
-/*$args = array(
-
-    'category_name' => $current_category->slug,
-	'posts_per_page' => 10,
-	'paged' => 4,
-	'meta_query' =>
-		array('relation' => 'OR',
-			array(
-				'key'     => 'state',
-				'value'   => 'NY',
-				'compare' => 'LIKE'
-			)
-
-        )
-
-);*/
-
-$current_category = get_category( get_query_var( 'cat' ) );
-$paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
+$current_category = get_category(get_query_var('cat'));
+$paged = get_query_var('paged') ? absint(get_query_var('paged')) : 1;
 
 $indexing = new Indexing($current_category->slug, $paged);
 
 
-$the_query = new WP_Query( $indexing->query, array( 'paged' => $paged ) );
+$the_query = new WP_Query($indexing->query, array('paged' => $paged));
 //$the_query = new WP_Query( $args );
 
 
@@ -94,15 +38,6 @@ $the_query = new WP_Query( $indexing->query, array( 'paged' => $paged ) );
 $temp_query = $wp_query;
 $wp_query   = NULL;
 $wp_query   = $the_query;*/
-
-
-
-
-
-
-
-
-
 
 
 //foreach ($the_query->posts as $post) {
@@ -120,15 +55,13 @@ get_header();
         <div class="page-header mb-5 border-bottom">
 
 
-
-
             <div class="card">
                 <div class="card-header" id="headingOne">
                     <h5 class="mb-0">
-                        <div class="title " >
+                        <div class="title ">
                             <h1 class=" "> Category:
                                 <?php
-                                $cat = get_category_by_slug($current_category->slug) ;
+                                $cat = get_category_by_slug($current_category->slug);
                                 echo $cat->name;
                                 ?>
 
@@ -138,6 +71,26 @@ get_header();
                     </h5>
                 </div>
             </div>
+            <?php if ($cat->name == "Museums") : ?>
+
+                <div class="alert alert-info alert-dismissible fade show">
+
+
+                    <div class="row">
+                        <div class="col"><p>National List of Scout Museums: </p></div>
+                        <div class="col"><a
+                                    href="http://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf"
+                                    data-type="URL"
+                                    data-id="http://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf"
+                                    target="_blank">Searchable PDF</a></div>
+                        <div class="col"><a href="scouting-memories-museum-list"> View Online</a></div>
+                    </div>
+
+
+                </div>
+
+            <?php endif; ?>
+
             <?php /*
             <div id="accordion" class="hide hidden"  role="tablist" aria-multiselectable="true">
                 <div class="card">
@@ -167,15 +120,14 @@ get_header();
 
             </div>
 
- */?>
-
+ */ ?>
 
 
             <script>
-                jQuery(document).ready( function() {
+                jQuery(document).ready(function () {
 
 
-                    jQuery('.title').on("click", function(){
+                    jQuery('.title').on("click", function () {
 
                         jQuery('.fas.fa-angle-down').addClass('fa-angle-up').removeClass('fa-angle-down');
 
@@ -186,19 +138,13 @@ get_header();
             </script>
 
 
-
-
-
-
-
         </div>
         <?php
-        if ( $the_query->have_posts() ) :
-
+        if ($the_query->have_posts()) :
 
 
             /* Start the Loop */
-            while ( $the_query->have_posts() ) :
+            while ($the_query->have_posts()) :
                 $the_query->the_post();
 
                 /*
@@ -206,7 +152,7 @@ get_header();
                  * If you want to override this in a child theme, then include a file
                  * called content-___.php (where ___ is the Post Type name) and that will be used instead.
                  */
-                get_template_part( 'template-parts/content-search', get_post_type() );
+                get_template_part('template-parts/content-search', get_post_type());
 
 
             endwhile;
@@ -227,7 +173,6 @@ get_header();
             //next_posts_link( 'Newer Posts', $the_query->max_num_pages );
 
 
-
             //the_posts_pagination();
 
             // Reset main query object
@@ -237,7 +182,7 @@ get_header();
 
         else :
 
-            get_template_part( 'template-parts/content', 'none' );
+            get_template_part('template-parts/content', 'none');
 
         endif;
 
@@ -251,7 +196,6 @@ get_header();
 
 
 echo SearchForm::search_form_js();
-
 
 
 //get_sidebar();
