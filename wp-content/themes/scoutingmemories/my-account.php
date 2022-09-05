@@ -2,11 +2,12 @@
 /*
   Template Name: My Account Page
 
-
  */
+
 
 get_header();
 
+$helper = new Helpers();
 
 $myAccountForm = new Form(MY_ACCOUNT_FORMID);
 $editUsersForm = new Form(EDIT_USERS_FORMID);
@@ -19,12 +20,31 @@ $postsPendingView = new View(POSTS_PENDING_VIEWID);
 $editUsersView = new View(EDIT_USERS_VIEWID);
 
 
-/** @var $the_user CurrentUser */
-/** @var $councilsView CurrentUser */
-/** @var $lodgesView CurrentUser */
-/** @var $campsView CurrentUser */
+$the_user = new CurrentUser();
+$councilsView = new CouncilView();
+$lodgesView = new LodgeView();
+$campsView = new CampView();
 
-$smp_action = get_request_parameter('smp_action', 'none');
+
+//set_query_var('adm_posts_paged','3');
+//set_query_var('smp_action','yoo');
+
+
+$adm_posts_paged = Helpers::get_request_parameter('adm_posts_paged', '1');
+$smp_action      = Helpers::get_request_parameter('smp_action', 'none');
+
+
+//var_dump( get_query_var('adm_posts_paged') );
+//var_dump( get_query_var('smp_action') );
+
+
+
+
+var_dump ( 'adm_posts_paged: ' . $adm_posts_paged );
+var_dump ( 'smp_action: ' . $smp_action );
+
+
+
 
 
 ?>
@@ -50,69 +70,6 @@ $smp_action = get_request_parameter('smp_action', 'none');
                                     <p><?= $the_user->show_first_name(); ?> <?= $the_user->show_last_name(); ?></p>
                                     <p class="font-weight-bold">User Roles:</p>
                                     <p><?= $the_user->show_user_roles(); ?></p>
-
-                                    <?php
-
-                                    /*
-                                                                        if ( get_request_parameter( 'runit' ) ) {
-
-                                                                            // If so echo the value
-                                                                            $runit = get_request_parameter( 'runit' );
-
-
-                                                                            if ( $runit === 'yes_' ) {
-                                                                                echo 'lets do this';
-
-                                                                                //											$post_ids = get_posts(array(
-                                                                                //												'fields'          => 'ids', // Only get post IDs
-                                                                                //												'posts_per_page'  => -1
-                                                                                //											));
-                                                                                //
-                                                                                //											$post = array();
-                                                                                //
-                                                                                //											$i  = 0;
-                                                                                //											foreach($post_ids as $post_id) {
-                                                                                //											    $post[] = new Post ($post_id);
-                                                                                //                                                //if ( $i >= 25) break;
-                                                                                //
-                                                                                //
-                                                                                //
-                                                                                //                                                $i++;
-                                                                                //                                            }
-                                                                                //
-                                                                                //											var_dump ($post);
-
-                                                                                //											// make this a  admin function to update meta for lodges council slugs
-                                                                                ////											//
-                                                                                //											$camp_entries  = FrmEntry::getAll([	'form_id' => ADD_A_CAMP_FORMID  ]);
-                                                                                ////											$lodge_entries = FrmEntry::getAll([ 'form_id' => ADD_A_LODGE_FORMID ]);
-                                                                                ////
-                                                                                ////
-                                                                                //////
-                                                                                ////											foreach ($lodge_entries as $entries) {
-                                                                                ////												$lodges[] = new LodgeEntry($entries->id);
-                                                                                ////
-                                                                                ////											}
-                                                                                //////
-                                                                                //											foreach ($camp_entries as $entries) {
-                                                                                //												$camps[] = new CampEntry($entries->id);
-                                                                                //
-                                                                                //											}
-                                                                                //
-                                                                                ////                                            var_dump($lodges);
-                                                                                //                                            var_dump($camps);
-                                                                                echo 'no no, already ran!';
-                                                                                die();
-
-
-                                                                            }
-
-
-                                                                        }
-
-                                    */
-                                    ?>
-
 
                                     <?php if ($the_user->role_allowed('administrator')) { ?>
 
@@ -294,7 +251,6 @@ $smp_action = get_request_parameter('smp_action', 'none');
                                             <div class="col p-3">
                                                 <nav>
                                                     <div id="indexing-nav-tabs" class="nav nav-pills" role="tablist">
-
                                                         <a id="councils-tab"
                                                            class="nav-item nav-link active"
                                                            role="tab"
@@ -344,17 +300,19 @@ $smp_action = get_request_parameter('smp_action', 'none');
                                                             <div class="col">
 
 
-
                                                                 <div class="card w-50 ">
                                                                     <div class="card-body">
-                                                                        <h5 class="card-title">Update Active End Dates</h5>
-                                                                        <p class="card-text">Click below to update the End Date values for
+                                                                        <h5 class="card-title">Update Active End
+                                                                            Dates</h5>
+                                                                        <p class="card-text">Click below to update the
+                                                                            End Date values for
                                                                             indexing marked as "Active" with the current
                                                                             year.</p>
                                                                         <p class="card-text">
                                                                             This indexing includes Councils, Lodges and
                                                                             Camps.</p>
-                                                                        <a href="?smp_action=update_end_dates" class="btn btn-primary">Update</a>
+                                                                        <a href="?smp_action=update_end_dates"
+                                                                           class="btn btn-primary">Update</a>
                                                                     </div>
                                                                 </div>
 
@@ -377,10 +335,165 @@ $smp_action = get_request_parameter('smp_action', 'none');
                             </div>
                             <!--/tab-pane-->
                             <?php if ($the_user->role_allowed('administrator')) { ?>
-                                <div id="myAdmin" class="tab-pane  fade pt-5" role="tabpanel"
-                                     aria-labelledby="myAdmin-tab">
-                                    <div class="container">
-                                        <?= $editUsersView->show_view(); ?>
+                            <div id="myAdmin" class="tab-pane  fade pt-5" role="tabpanel"
+                                 aria-labelledby="myAdmin-tab">
+                                <div class="container">
+
+                                    <div class="row ">
+                                        <div class="col p-3">
+                                            <nav>
+                                                <div id="admin-nav-tabs" class="nav nav-pills" role="tablist">
+                                                    <a class="navbar-brand" href="#">Class Object Tools</a>
+                                                    <a id="councils-tab"
+                                                       class="nav-item nav-link active"
+                                                       role="tab"
+                                                       href="#admin-users"
+                                                       data-bs-toggle="tab">Users</a>
+                                                    <a id="councils-tab"
+                                                       class="nav-item nav-link "
+                                                       role="tab"
+                                                       href="#admin-posts"
+                                                       data-bs-toggle="tab">Posts</a>
+                                                    <a id="councils-tab"
+                                                       class="nav-item nav-link "
+                                                       role="tab"
+                                                       href="#admin-states"
+                                                       data-bs-toggle="tab">States</a>
+                                                    <a id="councils-tab"
+                                                       class="nav-item nav-link "
+                                                       role="tab"
+                                                       href="#admin-councils"
+                                                       data-bs-toggle="tab">Councils</a>
+                                                    <a id="camps-tab"
+                                                       class="nav-item nav-link"
+                                                       role="tab"
+                                                       href="#admin-camps"
+                                                       data-bs-toggle="tab">Camps</a>
+                                                    <a id="lodges-tab"
+                                                       class="nav-item nav-link"
+                                                       role="tab"
+                                                       href="#admin-lodges"
+                                                       data-bs-toggle="tab">Lodges</a>
+                                                    <a id="tools-tab"
+                                                       class="nav-item nav-link"
+                                                       role="tab"
+                                                       href="#admin-tools"
+                                                       data-bs-toggle="tab">Tools</a>
+                                                </div>
+                                            </nav>
+                                            <div id="admin-tabs" class="tab-content">
+                                                <div id="admin-users"
+                                                     class="tab-pane fade pt-3 show active"
+                                                     role="tabpanel">
+                                                    <h2>Users</h2>
+                                                    <?= $editUsersView->show_view(); ?>
+                                                </div>
+                                                <div id="admin-posts"
+                                                     class="tab-pane fade pt-3  "
+                                                     role="tabpanel">
+                                                    <h2>Posts</h2>
+                                                    <div class="container">
+                                                        <?php
+                                                        $object = PostEntry::get_one(); // for the header
+                                                        $objects = PostEntry::get_all(); // for the body
+
+                                                        $object_columns = array("id", "item_key", "name", "post_id");
+
+                                                        $table_html = Templates::show_object_table($object, $objects, $object_columns, $adm_posts_paged);
+                                                        $raw_html   = Templates::show_object_table($object, $objects, null, $adm_posts_paged);
+
+
+                                                        $postsAcc = array(
+                                                            array("Table Data", $table_html),
+                                                            array("Object Data", $table_html),
+                                                            array("Raw Data", $raw_html)
+                                                        );
+
+                                                        echo Templates::accordion('posts', $postsAcc);
+
+                                                        ?>
+                                                    </div>
+                                                </div>
+                                                <div id="admin-states"
+                                                     class="tab-pane fade pt-3  "
+                                                     role="tabpanel">
+                                                    <h2>States</h2>
+                                                    <div class="container">
+                                                        <?php
+                                                        $object = StateEntry::get_one(); // for the header
+                                                        $objects = StateEntry::get_all(); // for the body
+
+                                                        $object_columns = array("id", "item_key", "name");
+
+                                                        $table_html = Templates::show_object_table($object, $objects, $object_columns);
+                                                        $raw_html = Templates::show_object_table($object, $objects);
+
+                                                        foreach ($objects as $object) {
+                                                            $states[] = new StateEntry($object->id);
+                                                        }
+
+                                                        $object_html = Templates::show_object_table($states[0], $states);
+
+                                                        $statesAcc = array(
+                                                            array("Table Data",  $table_html),
+                                                            array("Object Data", $object_html),
+                                                            array("Raw Data",    $raw_html)
+                                                        );
+
+                                                        echo Templates::accordion('states', $statesAcc);
+
+                                                        ?>
+
+
+                                                    </div>
+                                                </div>
+                                                    <div id="admin-camps"
+                                                         class="tab-pane fade pt-3"
+                                                         role="tabpanel">
+                                                        Camps
+                                                    </div>
+                                                    <div id="admin-lodges"
+                                                         class="tab-pane fade pt-3"
+                                                         role="tabpanel">
+                                                        Lodges
+                                                    </div>
+                                                    <div id="admin-tools"
+                                                         class="tab-pane fade pt-3"
+                                                         role="tabpanel">
+                                                        <div class="container">
+                                                            <div class="col">
+
+
+                                                                <div class="card w-50 ">
+                                                                    <div class="card-body">
+                                                                        <h5 class="card-title">Update Active End
+                                                                            Dates</h5>
+                                                                        <p class="card-text">Click below to update the
+                                                                            End Date values for
+                                                                            indexing marked as "Active" with the current
+                                                                            year.</p>
+                                                                        <p class="card-text">
+                                                                            This indexing includes Councils, Lodges and
+                                                                            Camps.</p>
+                                                                        <a href="?smp_action=update_end_dates"
+                                                                           class="btn btn-primary">Update</a>
+                                                                    </div>
+                                                                </div>
+
+
+                                                            </div>
+
+
+                                                        </div>
+
+                                                    </div>
+                                                </div>
+
+
+                                            </div>
+                                        </div>
+
+
                                     </div>
                                 </div>
                                 <div id="myAdmin2" class="tab-pane fade pt-5" role="tabpanel"
@@ -389,31 +502,31 @@ $smp_action = get_request_parameter('smp_action', 'none');
                                         <?= $editUsersForm->show_form(); ?>
                                     </div>
                                 </div>
-                            <?php } ?>
+                                <?php } ?>
+                            </div>
+                            <!--/tab-pane-->
+
+
                         </div>
-                        <!--/tab-pane-->
-
-
+                        <!--/tab-content-->
                     </div>
-                    <!--/tab-content-->
+                    <!--/col-9-->
                 </div>
-                <!--/col-9-->
-            </div>
-            <!--/row-->
+                <!--/row-->
 
 
-            <?php if ($the_user->role_allowed('administrator')) { ?>
-                <style>
-                    .show_only_for_admin {
-                        display: none !important;
-                    }
-                </style>
-            <?php } ?>
+                <?php if ($the_user->role_allowed('administrator')) { ?>
+                    <style>
+                        .show_only_for_admin {
+                            display: none !important;
+                        }
+                    </style>
+                <?php } ?>
         </main><!-- #main -->
     </section><!-- #primary -->
 
 
-<?php  if ($smp_action === "update_end_dates") :   ?>
+    <?php if ($smp_action === "update_end_dates") : ?>
 
     <!-- Modal -->
     <div class="modal fade" id="sysMessageModal" tabindex="-1" aria-labelledby="sysMessageModalLabel"
@@ -425,15 +538,15 @@ $smp_action = get_request_parameter('smp_action', 'none');
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                <?php
-                echo '<p>';
-                echo "Council Entries updated: " . CouncilEntry::update_active();
-                echo '</p><p>';
-                echo "Camp Entries updated: " . CampEntry::update_active();
-                echo '</p><p>';
-                echo "Lodge Entries updated: " . LodgeEntry::update_active();
-                echo '</p>';
-                ?>
+                    <?php
+                    echo '<p>';
+                    echo "Council Entries updated: " . CouncilEntry::update_active();
+                    echo '</p><p>';
+                    echo "Camp Entries updated: " . CampEntry::update_active();
+                    echo '</p><p>';
+                    echo "Lodge Entries updated: " . LodgeEntry::update_active();
+                    echo '</p>';
+                    ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -444,7 +557,6 @@ $smp_action = get_request_parameter('smp_action', 'none');
     <script type="text/javascript">
         (function ($) {
 
-            console.log('hello world');
 
             var myModal = new bootstrap.Modal(document.getElementById('sysMessageModal'));
 
@@ -455,7 +567,7 @@ $smp_action = get_request_parameter('smp_action', 'none');
 <?php endif; ?>
 
 
-<?php /*
+    <?php /*
     <script type="text/javascript">
         (function ($) {
 
@@ -526,5 +638,5 @@ $smp_action = get_request_parameter('smp_action', 'none');
         })(jQuery);
     </script>
 
-<?php
+    <?php
 get_footer();

@@ -1,5 +1,7 @@
 <?php
 
+Helpers::check_file_access();
+
 //  $entries is an array of entry ids
 //  $views is an array of view ids
 //

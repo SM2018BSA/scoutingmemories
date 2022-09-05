@@ -194,6 +194,20 @@ class CampEntry extends Entry {
 		return false;
 	}
 
+    public static function get_camp_name( $camp_slug)  {
+        $entry_id = Entry::get_field_id_from_key($camp_slug);
+        $entry = new Entry($entry_id);
+        if (!is_null($entry->entry_array)) {
+            if (array_key_exists('ac_camp_name', $entry->entry_array)) {
+                return $entry->entry_array['ac_camp_name'];
+            }
+        }
+
+        return null;
+    }
+
+
+
 
 	private function get_state_slugs() {
 

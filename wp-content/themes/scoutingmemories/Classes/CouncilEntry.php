@@ -1,6 +1,7 @@
 <?php
 
 
+
 class CouncilEntry extends Entry {
 
 	public $active;
@@ -73,6 +74,7 @@ class CouncilEntry extends Entry {
 		add_action( 'frm_after_create_entry', array( &$this, 'frm_after_create_entry' ), 30, 2 );
 		add_filter( 'frm_setup_new_fields_vars', array( &$this, 'frm_add_council_number' ), 30, 2 );
 		add_filter( 'frm_setup_edit_fields_vars', array( &$this, 'frm_add_council_number' ), 30, 2 );
+
 	}
 
 
@@ -125,6 +127,24 @@ class CouncilEntry extends Entry {
 
 		return $values;
 	}
+
+    public static function get_council_name( $council_slug)  {
+        $entry_id = Entry::get_field_id_from_key($council_slug);
+        $entry = new Entry($entry_id);
+        if (array_key_exists('council_name', $entry->entry_array )) {
+            return $entry->entry_array['council_name'];
+        }
+        return null;
+    }
+    public static function get_council_number( $council_slug)  {
+        $entry_id = Entry::get_field_id_from_key($council_slug);
+        $entry = new Entry($entry_id);
+        if (array_key_exists('council_num', $entry->entry_array )) {
+            return $entry->entry_array['council_num'];
+        }
+        return null;
+    }
+
 
 
 	private static function add_council_number( &$values ) {
@@ -219,7 +239,7 @@ class CouncilEntry extends Entry {
 			$council_num         = sanitize_text_field( $_POST['item_meta'][ AACOUNCIL_NUMBER_FID ] );
 			$args['council_num'] = isset( $council_num ) ? $council_num : '';
 
-			$council_name = clean( $council_name );
+			$council_name = Helpers::clean( $council_name );
 			$council_name = $council_name . '_' . $args['council_num'];
 
 			// add the council_name to the hidden field for the cat slug

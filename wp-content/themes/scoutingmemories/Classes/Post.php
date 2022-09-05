@@ -1,4 +1,6 @@
 <?php
+require_once(get_template_directory() . '/Classes/Helpers.php');
+Helpers::check_file_access();
 
 
 class Post
@@ -6,12 +8,12 @@ class Post
 
     public $post_id;
 
-    public Taxonomy $state_tax;
-    public Taxonomy $council_tax;
-    public Taxonomy $lodge_tax;
-    public Taxonomy $camp_tax;
-    public Taxonomy $start_date_tax;
-    public Taxonomy $end_date_tax;
+//    public Taxonomy $state_tax;
+//    public Taxonomy $council_tax;
+//    public Taxonomy $lodge_tax;
+//    public Taxonomy $camp_tax;
+//    public Taxonomy $start_date_tax;
+//    public Taxonomy $end_date_tax;
 
 
     public $the_post;
@@ -34,11 +36,18 @@ class Post
 
     public function __construct($post_id)
     {
+
+        if ($post_id === null) {
+            return false;
+        }
+
         $this->post_id = $post_id;
         $this->the_post = get_post($this->post_id);
         $this->the_post_meta = get_post_meta($this->post_id);
 
         $this->title = $this->the_post->post_title;
+
+        $council_keys = null;
 
 
         if (array_key_exists('state', $this->the_post_meta)) {
@@ -55,11 +64,7 @@ class Post
         }
 
 
-        if (is_string($council_keys)) {
-
-            if (is_numeric($council_keys)) {
-                echo ' is numeric';
-            }
+        if (!is_null($council_keys) && is_string($council_keys)) {
 
             $council_keys = explode(', ', $council_keys);
         }
@@ -68,29 +73,26 @@ class Post
             $this->state_val = explode(', ', $this->state_val);
         }
 
+        if (is_numeric($this->state_val)) {
+            $this->state_val = PostEntry::get_state_slugs_from($this->state_val);
+        }
 
-        if (is_array($council_keys)) {
+
+        if (!is_null($council_keys) && is_array($council_keys)) {
 
             foreach ($council_keys as $council_key) {
-                if ($council_key != 'none') {
-                    $entry_id = Entry::get_field_id_from_key($council_key);
-                    if (!is_null($entry_id)) {
 
-                        $entry = new Entry($entry_id);
-                        //var_dump($entry);
-                        //$this->council[] = [ "name" => $entry->name, "number" => $entry->number ];
-                        $this->council[] = [
-                            "name" => $entry->entry_array['council_name'],
-                            "number" => $entry->entry_array['council_num']
-                        ];
+                $council_name = CouncilEntry::get_council_name($council_key);
+                $council_number = CouncilEntry::get_council_number($council_key);
 
-                        $this->council_slug[] = $entry->entry_array['council_slug'];
+                $this->council[] = [
+                    "name" => $council_name,
+                    "number" => $council_number
+                ];
+                $this->council_slug[] = $council_key;
 
-                    }
-                }
+
             }
-
-
         }
 
 
@@ -107,63 +109,22 @@ class Post
         $this->end_date = $this->the_post_meta['end_date'][0];
 
 
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // get taxonomy
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// get taxonomy
 
-        $this->terms[] = wp_get_post_terms($this->post_id, 'state');
-        $this->terms[] = wp_get_post_terms($this->post_id, 'council');
-        $this->terms[] = wp_get_post_terms($this->post_id, 'lodge');
-        $this->terms[] = wp_get_post_terms($this->post_id, 'camp');
-        $this->terms[] = wp_get_post_terms($this->post_id, 'start_date');
-        $this->terms[] = wp_get_post_terms($this->post_id, 'end_date');
-
-
-        $is_numeric = false;
-        foreach ($this->state_val as $state) {
-            if (is_numeric($state)) {
-                //echo 'found another one';
-                $is_numeric = true;
-            }
-        }
-
-        if ($is_numeric) {
-
-            $this->get_state_slugs();
-
-
-            $this->state_tax = new Taxonomy('state', $this->post_id, $this->state_slugs);
-
-
-        } else {
-
-            $this->state_tax = new Taxonomy('state', $this->post_id, $this->state_val);
-
-
-        }
-
-
-        $this->council_tax = new Taxonomy('council', $this->post_id, $this->council_slug);
-        $this->lodge_tax = new Taxonomy('lodge', $this->post_id, $this->lodge);
-        $this->camp_tax = new Taxonomy('camp', $this->post_id, $this->camp);
-        $this->start_date_tax = new Taxonomy('start_date', $this->post_id, (string)$this->start_date);
-        $this->end_date_tax = new Taxonomy('end_date', $this->post_id, (string)$this->end_date);
-
-
-        //if (empty($terms)) {
-
-        $this->state_tax->update_tax();
-        $this->council_tax->update_tax();
-        $this->lodge_tax->update_tax();
-        $this->camp_tax->update_tax();
-        $this->start_date_tax->update_tax();
-        $this->end_date_tax->update_tax();
-        //}
+        $this->terms['state'] = wp_get_post_terms($this->post_id, 'state');
+        $this->terms['council'] = wp_get_post_terms($this->post_id, 'council');
+        $this->terms['lodge'] = wp_get_post_terms($this->post_id, 'lodge');
+        $this->terms['camp'] = wp_get_post_terms($this->post_id, 'camp');
+        $this->terms['start_date'] = wp_get_post_terms($this->post_id, 'start_date');
+        $this->terms['end_date'] = wp_get_post_terms($this->post_id, 'end_date');
 
 
     }
 
 
-    private function get_state_slugs()
+    private
+    function get_state_slugs()
     {
 
         if (is_array($this->state_val)) {
@@ -180,16 +141,38 @@ class Post
     }
 
 
-    public function say_states()
+    public
+    function say_states()
     {
+        $html = '';
 
-        if (count($this->state_val) == 1) {
-            return $this->state_val[0];
+        if (count($this->state_val) == 1 && !is_null($this->state_val)) {
+
+
+            if (ctype_digit($this->state_val[0])) {
+                $myState = new StateEntry($this->state_val[0]);
+                $html .= $myState->name;
+            } else {
+
+                $myState = StateEntry::get_state_name($this->state_val[0]);
+                $html .= $this->state_val[0];
+            }
+
+            return $html;
+
         } else {
+
             $html = '<ul class="small">';
             foreach ($this->state_val as $state) {
-                $myState = new Entry($state);
-                $html .= '<li>' . $myState->entry_array['state_acl'] . '</li>';
+
+                if (ctype_digit($state)) {
+                    $myState = new StateEntry($state);
+                    $html .= '<li class="name">' . $myState->name . '</li>';
+                } elseif (is_string($state)) {
+                    $html .= '<li>' . $state . '</li>';
+                }
+
+
             }
             $html .= '</ul>';
             return $html;
@@ -200,7 +183,14 @@ class Post
     public function say_councils()
     {
         $html = '';
+
+        if (is_null($this->council)) {
+            return "";
+        }
+
         $check_councils = is_countable($this->council);
+
+
 
         if (is_string($this->council[0])) return false;
 
@@ -230,45 +220,33 @@ class Post
     public function say_camps()
     {
         $html = '';
+        if (is_null($this->camp)) {
+            return "";
+        }
 
         $check_camps = is_countable($this->camp[0]);
 
-
         if (is_string($this->camp[0])) {
-            $entry_id = Entry::get_field_id_from_key($this->camp[0]);
-            if (!is_null($entry_id)) {
-                $entry = new Entry($entry_id);
-                return $entry->entry_array['camp_name'];
-            }
+
+            return CampEntry::get_camp_name($this->camp[0]);
 
         }
 
         if ($check_camps) {
             if ((count($this->camp) == 1)) {
-
-
                 if (count($this->camp[0]) > 1) {
-                    $entry_id = Entry::get_field_id_from_key($this->camp[0]);
-                    if (!is_null($entry_id)) {
-                        $entry = new Entry($entry_id);
-                        return $entry->entry_array['camp_name'];
-                    }
+                    return CampEntry::get_camp_name($this->camp[0]);
                 }
 
             } else {
                 $html = '<ul class="small">';
-                foreach ($this->camp as $camp) {
-
-                    $entry_id = Entry::get_field_id_from_key($camp);
-                    if (!is_null($entry_id)) {
-                        $entry = new Entry($entry_id);
-                        $html .= '<li>' . $entry->entry_array['camp_name'] . '</li>';
+                foreach ($this->camp as $camp_slug) {
+                    if (!is_null($camp_slug)) {
+                        $camp_name = CampEntry::get_camp_name($camp_slug);
+                        $html .= '<li>' . $camp_name . '</li>';
                     }
-
-
                 }
                 $html .= '</ul>';
-
                 return $html;
             }
         }
@@ -277,28 +255,32 @@ class Post
     }
 
 
-    public function say_lodges()
+    public
+    function say_lodges()
     {
-
         $html = '';
+        if (is_null($this->lodge)) {
+            return "";
+        }
 
         $check_lodges = is_countable($this->lodge);
+
 
         if ($check_lodges) {
             if ((count($this->lodge) == 1)) {
                 if ($this->lodge[0] != 'none') {
-                    $entry_id = Entry::get_field_id_from_key($this->lodge[0]);
-                    $entry = new Entry($entry_id);
-                    return $entry->entry_array['lodge_name'];
+
+
+                    return LodgeEntry::get_lodge_name($this->lodge[0]);
+
                 }
                 return 'none';
             } else {
                 $html = '<ul class="small">';
-                foreach ($this->lodge as $lodge) {
+                foreach ($this->lodge as $lodge_slug) {
 
-                    $entry_id = Entry::get_field_id_from_key($lodge);
-                    $entry = new Entry($entry_id);
-                    $html .= '<li>' . $entry->entry_array['lodge_name'] . '</li>';
+                    $lodge_name = LodgeEntry::get_lodge_name($lodge_slug);
+                    $html .= '<li>' . $lodge_name . '</li>';
                 }
                 $html .= '</ul>';
 

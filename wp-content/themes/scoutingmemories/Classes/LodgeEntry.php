@@ -189,7 +189,14 @@ class LodgeEntry extends Entry {
 	}
 
 
-
+    public static function get_lodge_name( $lodge_slug)  {
+        $entry_id = Entry::get_field_id_from_key($lodge_slug);
+        $entry = new Entry($entry_id);
+        if (array_key_exists('al_lodge_name', $entry->entry_array )) {
+            return $entry->entry_array['al_lodge_name'];
+        }
+        return null;
+    }
 
     //// // //
     ///
