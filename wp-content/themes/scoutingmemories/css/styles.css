@@ -1,0 +1,107 @@
+/*
+
+
+Custom Styles
+
+
+
+
+
+ */
+
+html, body { height: 100%; opacity: 1;  }
+
+/*
+Nav bar colors
+*/
+#masthead .dropdown-menu,
+.sm_green_bkg_color { background-color: #025600; }
+.sm_green_color { color:  #025600; }
+
+.text-light a { color: white!important;}
+
+.dropdown-item:focus, .dropdown-item:hover { background-color: rgba(0,0,0,0.1); }
+.dropdown-item { color:#DFDFDF; }
+.dropdown-item:hover {color:#FFFFFF;}
+
+.dropdown-item.active, .dropdown-item:active {
+    color: #fff;
+    text-decoration: none;
+    background-color: #155507;
+}
+
+.with_frm_style select { padding: 1px 5px 5px 1px !important;    }
+
+
+/* Utility  */
+.pointer {cursor: pointer; }
+
+
+
+
+
+#sm_logo img {
+    width: 40% ;
+}
+
+
+/* Small devices (landscape phones, 576px and up) */
+@media (min-width: 576px) {
+    #sm_logo img {
+        width: 45% !important;
+    }
+}
+
+/* Medium devices (tablets, 768px and up) The navbar toggle appears at this breakpoint */
+@media (min-width: 768px) {
+    #sm_logo img {
+        width: 50% !important;
+    }
+
+
+}
+
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+    #sm_logo img {
+        width: 75% !important;
+    }
+}
+
+@media (min-width: 1200px) {
+    #sm_logo img {
+        width: 85% !important;
+    }
+}
+
+/* Extra large devices (large desktops, 1200px and up) */
+@media (min-width: 1600px) {
+    #sm_logo img {
+        width: 100% !important;
+    }
+}
+
+
+
+
+
+.frm_pro_form .select2-container  { max-height:189px; overflow: auto; }
+
+    /* Utility helpers */
+.hidden { visibility: hidden;  opacity: 0; transition: opacity 1s, visibility 1s; display: none !important;}
+
+.dropdown-menu {
+    max-height: 400px;
+    overflow-y: auto;
+}
+.cursor { cursor: pointer; }
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+    font-family: 'Roboto Slab', serif !important
+}
+
+
+.divi-form .form-control {
+    border-radius: 0 ;
+    padding: 0.875rem;
+}
