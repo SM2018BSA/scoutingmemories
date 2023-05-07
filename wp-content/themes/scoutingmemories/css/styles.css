@@ -88,7 +88,7 @@ Nav bar colors
 .frm_pro_form .select2-container  { max-height:189px; overflow: auto; }
 
     /* Utility helpers */
-.hidden { visibility: hidden;  opacity: 0; transition: opacity 1s, visibility 1s; display: none !important;}
+.hidden, .sr-only { visibility: hidden;  opacity: 0; transition: opacity 1s, visibility 1s; display: none !important;}
 
 .dropdown-menu {
     max-height: 400px;

@@ -71,6 +71,7 @@ class CurrentUser {
 		return in_array( $role, $this->roles );
 	}
 
+    
 
 	public function show_user_roles() {
 

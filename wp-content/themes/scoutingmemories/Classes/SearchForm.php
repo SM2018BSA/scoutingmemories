@@ -19,6 +19,11 @@ class SearchForm
         add_action('init', array(&$this, 'load_ajax'));
         add_action('admin_post_search_form', array(&$this, 'search_form'));
         add_action('admin_post_nopriv_search_form', array(&$this, 'search_form'));
+
+        add_action('admin_post_search_category_form', array(&$this, 'search_category_form'));
+        add_action('admin_post_nopriv_search_category_form', array(&$this, 'search_category_form'));
+
+
     }
 
     private function clean_request($value)
@@ -43,6 +48,47 @@ class SearchForm
             wp_redirect(esc_url_raw(
                 add_query_arg(
                     array(
+                        'state' => (is_array($state)) ? implode(',', $state) : $state,
+                        'council' => (is_array($council)) ? implode(',', $council) : $council,
+                        'lodge' => (is_array($lodge)) ? implode(',', $lodge) : $lodge,
+                        'camp' => (is_array($camp)) ? implode(',', $camp) : $camp,
+                        'start_date' => $start_date,
+                        'end_date' => $end_date
+
+                    ), $form_url)
+            ));
+
+
+        }
+
+
+    }
+
+    public function search_category_form()
+    {
+
+        if (wp_verify_nonce($_REQUEST['search_nonce'], 'search_form')) {
+
+
+            $cat_term_id = $this->clean_request('cat');
+            $state = $this->clean_request('select_state');
+            $council = $this->clean_request('select_council');
+            $lodge = $this->clean_request('select_lodge');
+            $camp = $this->clean_request('select_camp');
+            $start_date = $this->clean_request('start_date');
+            $end_date = $this->clean_request('end_date');
+
+            $category = get_category( $cat_term_id );
+
+
+
+            $form_url = home_url('/' . $category->slug);
+
+
+            wp_redirect(esc_url_raw(
+                add_query_arg(
+                    array(
+                        'cat' => $category->term_id,
                         'state' => (is_array($state)) ? implode(',', $state) : $state,
                         'council' => (is_array($council)) ? implode(',', $council) : $council,
                         'lodge' => (is_array($lodge)) ? implode(',', $lodge) : $lodge,
@@ -91,8 +137,8 @@ class SearchForm
 
         $html = '
 		     <div class="card-body w-100 w-md-100 w-lg-75 w-xl-50   ">
-                    <form method="post" enctype="multipart/form-data" class="row container-fluid frm-show-form  frm_pro_form " action="' . esc_url(admin_url('admin-post.php')) . '" >' .
-            wp_nonce_field('search_form', 'search_nonce') . ' 
+                    <form method="post" enctype="multipart/form-data" class="row container-fluid frm-show-form  frm_pro_form " action="' . esc_url(admin_url('admin-post.php')) . '" >
+                    ' . wp_nonce_field('search_form', 'search_nonce') . ' 
 						
                         <input type="hidden" name="action" value="search_form">
                         <input type="hidden" name="page" value="info-page">
@@ -278,6 +324,137 @@ class SearchForm
                         	<div class="form-check-inline">
 							    <label class="form-check-label">
 							        <input type="checkbox" class="form-control form-check-input" id="show_merged" value="">Show Merged Councils?
+							    </label>
+						    </div>
+                        </div>
+
+
+
+                    </form>
+
+
+
+
+                </div>';
+
+
+        return $html;
+
+    }
+
+    static function show_category_form()
+    {
+
+        $category = get_category( get_query_var( 'cat' ) );
+
+        $states_view_id = 2300; // local and live
+        //$states_view_id = 1553; // online dev
+        $states_view = new View($states_view_id);
+
+
+        $html = '
+		     <div class="card-body w-100 w-md-100 w-lg-75 w-xl-50   ">
+                    <form method="post" enctype="multipart/form-data" class="row container-fluid frm-show-form  frm_pro_form " action="' . esc_url(admin_url('admin-post.php')) . '" >
+                    ' . wp_nonce_field('search_form', 'search_nonce') . ' 
+						
+                        <input type="hidden" name="action" value="search_category_form">
+                        <input type="hidden" name="page" value="' . $category->slug . '">
+
+
+
+						<div class="mb-2 col-12" >
+							<label class="form-label" >Select the following optional fields to search memories.</label>						
+						</div>
+
+                        <div id="select_category_loading" class="d-flex justify-content-center form-group col-3">
+					    	<div class="spinner-border sm_green_color" role="status">
+					    		<span class="sr-only">Loading...</span>
+					    	</div>
+					    </div>
+					    
+                        <div class="mb-2 col-3 hidden" >
+                            <label class="form-label" for="select_state">Select Category</label>
+                            <select  name="cat" class="form-select" id="cat" multiple="multiple"  >
+                                <option class="dropdown-item" value="3">History</option>
+                                <option class="dropdown-item" value="4">Memorabilia</option>
+                                <option class="dropdown-item" value="5">Photographs</option>
+                                <option class="dropdown-item" value="6">Oral History</option>
+                                <option class="dropdown-item" value="7">Museums</option>
+                                <option class="dropdown-item" value="8">Movies</option>
+                            </select>
+                        </div>
+
+
+
+                        <div id="select_states_loading" class="d-flex justify-content-center form-group col-3">
+					    	<div class="spinner-border sm_green_color" role="status">
+					    		<span class="sr-only">Loading...</span>
+					    	</div>
+					    </div>
+                        <div class="mb-2 col-3 hidden" >
+                            <label class="form-label" for="select_state">Select State</label>
+                            <select name="select_state[]" class="form-control " id="select_state" multiple="multiple" >
+                                ' . $states_view->show_view() . '
+                            </select>
+                        </div>
+                        
+                        <div class="mb-2 col-3 ">
+                            <label class="form-label" for="start_date">Start Date</label>
+                            <input name="start_date" class="form-control" id="start_date" value="1900"  />
+                        </div>
+                        <div class="mb-2 col-3 ">
+                            <label class="form-label" for="end_date">End Date</label>
+                            <input name="end_date" class="form-control" id="end_date" value="2020"  />
+                        </div>
+                        
+                        
+                        <div id="select_council_loading" class="d-flex justify-content-center form-group col-4 hidden">
+					    	<div class="spinner-border sm_green_color" role="status">
+					    		<span class="sr-only">Loading...</span>
+					    	</div>
+					    </div>
+                        <div class="mb-2 col-4 hidden">
+                            <label class="form-label" for="select_council">Select Council</label>
+                            <select name="select_council[]" class="form-control" id="select_council" multiple="multiple" ></select>
+                        </div>
+                        <div id="select_merged_council_loading" class="d-flex justify-content-center form-group col-4 hidden">
+					    	<div class="spinner-border sm_green_color" role="status">
+					    		<span class="sr-only">Loading...</span>
+					    	</div>
+					    </div>
+                        <div class="form-group col-8 hidden mr-0 pr-0">
+                            <label class="form-label" for="select_council">Selected Merged Council</label>
+                            <select name="select_merged_council[]" class="form-control" id="select_merged_council" multiple="multiple" ></select>
+                        </div>
+                        <div id="select_lodge_loading" class="d-flex justify-content-center form-group col-4 hidden">
+					    	<div class="spinner-border sm_green_color" role="status">
+					    		<span class="sr-only">Loading...</span>
+					    	</div>
+					    </div>
+                        <div class="form-group col-4 hidden">
+                            <label class="form-label" for="select_lodge">Select Lodge</label>
+                            <select name="select_lodge[]" class="form-control" id="select_lodge" multiple="multiple" ></select>
+                        </div>
+                        <div id="select_camp_loading" class="d-flex justify-content-center form-group col-4 hidden">
+					    	<div class="spinner-border sm_green_color" role="status">
+					    		<span class="sr-only">Loading...</span>
+					    	</div>
+					    </div>
+                        <div class="form-group col-4 hidden">
+                            <label class="form-label" for="select_camp">Select Camp</label>
+                            <select name="select_camp[]" class="form-control" id="select_camp" multiple="multiple" ></select>
+                        </div>
+                        
+                        
+						<div class="col-12 w-100 clearfix mb-3"></div>
+						
+                        <div class="mb-2 col-3">
+                            <button type="submit" class="btn btn-primary">Submit</button>
+                        </div>
+                        <div class="mb-2 col-9">
+                        	<div class="form-check-inline">
+							    <label class="form-check-label">
+							        <input type="checkbox" class="form-label form-check-input " id="show_merged" value=""> Show Merged Councils? 
 							    </label>
 						    </div>
                         </div>

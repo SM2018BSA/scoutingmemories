@@ -25,6 +25,7 @@ class Helpers
     public function setup_hooks()
     {
         add_action('query_vars', array(&$this, 'add_query_vars_filter'));
+        add_filter('frm_include_meta_keys', '__return_true');
     }
 
     public function add_query_vars_filter($qvars)
@@ -150,6 +151,27 @@ class Helpers
     {
         return do_shortcode($short_code);
     }
+
+    public static function multiKeyExists($key, array $arr) {
+
+        // is in base array?
+        if (array_key_exists($key, $arr)) {
+            return true;
+        }
+
+        // check arrays contained in this array
+        foreach ($arr as $element) {
+            if (is_array($element)) {
+                if (multiKeyExists($element, $key)) {
+                    return true;
+                }
+            }
+
+        }
+
+        return false;
+    }
+
 
 
 }

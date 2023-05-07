@@ -42,22 +42,24 @@ class Theme {
 
 
 	    $this->removeStyle('bootstrap-css');
+	    $this->removeStyle('buttons-css');
 
-	    $this->addScript('font-awesome', '/js/font-awesome.min.js');
+	    //$this->addScript('font-awesome', '/js/font-awesome.min.js');
 	    //$this->addScript('bootstrap', '/js/bootstrap.min.js');
-	    $this->addScript('bootstrap', '//cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js', array() ,false );
+	    $this->addScript('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js', array() ,false );
 
 		//$theme->addScript('bs-multiselect', '/js/BsMultiSelect.min.js');
-	    $this->addScript('select2', '/js/select2.min.js');
+	    $this->addScript('select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js', '', false);
 
 
 
 	    //$this->addStyle('bootstrap', '/css/bootstrap.min.css' );
-	    $this->addStyle('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css','outside' );
+	    $this->addStyle('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css','outside' );
+	    $this->addStyle('bootstrap-icons', 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css','outside' );
 
 
 	    $this->addStyle('scouting-memories','/css/styles.css');
-	    $this->addStyle('select2', '/css/select2.min.css' );
+	    $this->addStyle('select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css', 'outside' );
 	    $this->addStyle('select2-bootstrap', '/css/select2-bootstrap4.min.css' );
 	    $this->addStyle('roboto', '//fonts.googleapis.com/css?family=Roboto+Slab&#038;ver=5.6', 'outside');
 

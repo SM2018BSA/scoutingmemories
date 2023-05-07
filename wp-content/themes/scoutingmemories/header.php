@@ -34,6 +34,7 @@
                         <img src="//storage.scoutingmemories.org/2021/02/b5564491-scouting_memories_project-e1613015799300.png"
                              class="img-fluid  d-block"
                              alt="Scouting Memories">
+
                     </div>
                 </a>
             </div>
@@ -42,7 +43,9 @@
             <div class="col-4 text-center">
                 <a class="col-4" href="http://www.scoutingalumni.org/" target="_blank">
                     <img class="img-fluid" style="max-height:60px;"
-                         src="//storage.scoutingmemories.org/2019/03/e52d5880-scouting-alumni-banner.png"/>
+                         src="//storage.scoutingmemories.org/2023/03/6e4408b7-scoutingalumni_2023.jpg"/>
+                    <?php /*<img class="img-fluid" style="max-height:60px;"
+                         src="//storage.scoutingmemories.org/2019/03/e52d5880-scouting-alumni-banner.png"/>*/ ?>
                 </a>
             </div>
 

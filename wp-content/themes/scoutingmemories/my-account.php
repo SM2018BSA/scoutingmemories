@@ -5,6 +5,7 @@
  */
 
 
+
 get_header();
 
 $helper = new Helpers();
@@ -21,9 +22,9 @@ $editUsersView = new View(EDIT_USERS_VIEWID);
 
 
 $the_user = new CurrentUser();
-$councilsView = new CouncilView();
-$lodgesView = new LodgeView();
-$campsView = new CampView();
+$councilsView = new CouncilView(ALL_COUNCILS_VIEWID);
+$lodgesView = new LodgeView(ALL_LODGES_VIEWID);
+$campsView = new CampView(ALL_CAMPS_VIEWID);
 
 
 //set_query_var('adm_posts_paged','3');
@@ -40,8 +41,8 @@ $smp_action      = Helpers::get_request_parameter('smp_action', 'none');
 
 
 
-var_dump ( 'adm_posts_paged: ' . $adm_posts_paged );
-var_dump ( 'smp_action: ' . $smp_action );
+//var_dump ( 'adm_posts_paged: ' . $adm_posts_paged );
+//var_dump ( 'smp_action: ' . $smp_action );
 
 
 
@@ -394,22 +395,22 @@ var_dump ( 'smp_action: ' . $smp_action );
                                                     <h2>Posts</h2>
                                                     <div class="container">
                                                         <?php
-                                                        $object = PostEntry::get_one(); // for the header
-                                                        $objects = PostEntry::get_all(); // for the body
+                                                        //$object = PostEntry::get_one(); // for the header
+                                                        //$objects = PostEntry::get_all(); // for the body
 
-                                                        $object_columns = array("id", "item_key", "name", "post_id");
+                                                        //$object_columns = array("id", "item_key", "name", "post_id");
 
-                                                        $table_html = Templates::show_object_table($object, $objects, $object_columns, $adm_posts_paged);
-                                                        $raw_html   = Templates::show_object_table($object, $objects, null, $adm_posts_paged);
+                                                        //$table_html = Templates::show_object_table($object, $objects, $object_columns, $adm_posts_paged);
+                                                        //$raw_html   = Templates::show_object_table($object, $objects, null, $adm_posts_paged);
 
 
-                                                        $postsAcc = array(
-                                                            array("Table Data", $table_html),
-                                                            array("Object Data", $table_html),
-                                                            array("Raw Data", $raw_html)
-                                                        );
-
-                                                        echo Templates::accordion('posts', $postsAcc);
+//                                                        $postsAcc = array(
+//                                                            array("Table Data", $table_html),
+//                                                            array("Object Data", $table_html),
+//                                                            array("Raw Data", $raw_html)
+//                                                        );
+//
+//                                                        echo Templates::accordion('posts', $postsAcc);
 
                                                         ?>
                                                     </div>
@@ -420,27 +421,27 @@ var_dump ( 'smp_action: ' . $smp_action );
                                                     <h2>States</h2>
                                                     <div class="container">
                                                         <?php
-                                                        $object = StateEntry::get_one(); // for the header
-                                                        $objects = StateEntry::get_all(); // for the body
-
-                                                        $object_columns = array("id", "item_key", "name");
-
-                                                        $table_html = Templates::show_object_table($object, $objects, $object_columns);
-                                                        $raw_html = Templates::show_object_table($object, $objects);
-
-                                                        foreach ($objects as $object) {
-                                                            $states[] = new StateEntry($object->id);
-                                                        }
-
-                                                        $object_html = Templates::show_object_table($states[0], $states);
-
-                                                        $statesAcc = array(
-                                                            array("Table Data",  $table_html),
-                                                            array("Object Data", $object_html),
-                                                            array("Raw Data",    $raw_html)
-                                                        );
-
-                                                        echo Templates::accordion('states', $statesAcc);
+//                                                        $object = StateEntry::get_one(); // for the header
+//                                                        $objects = StateEntry::get_all(); // for the body
+//
+//                                                        $object_columns = array("id", "item_key", "name");
+//
+//                                                        $table_html = Templates::show_object_table($object, $objects, $object_columns);
+//                                                        $raw_html = Templates::show_object_table($object, $objects);
+//
+//                                                        foreach ($objects as $object) {
+//                                                            $states[] = new StateEntry($object->id);
+//                                                        }
+//
+//                                                        $object_html = Templates::show_object_table($states[0], $states);
+//
+//                                                        $statesAcc = array(
+//                                                            array("Table Data",  $table_html),
+//                                                            array("Object Data", $object_html),
+//                                                            array("Raw Data",    $raw_html)
+//                                                        );
+//
+//                                                        echo Templates::accordion('states', $statesAcc);
 
                                                         ?>
 
@@ -499,7 +500,9 @@ var_dump ( 'smp_action: ' . $smp_action );
                                 <div id="myAdmin2" class="tab-pane fade pt-5" role="tabpanel"
                                      aria-labelledby="myAdmin2-tab">
                                     <div class="container">
-                                        <?= $editUsersForm->show_form(); ?>
+                                        <?php
+
+                                        echo $editUsersForm->show_form(); ?>
                                     </div>
                                 </div>
                                 <?php } ?>

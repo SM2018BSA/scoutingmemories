@@ -20,9 +20,23 @@ jQuery(document).ready(function () {
     let end_date = urlParams.get('end_date');
 
 
+    let cat = urlParams.get('cat');
+    jQuery('#cat').select2({
+        maximumSelectionLength: 1,
+        width: '100%'
+    });
+
+
+    jQuery('#cat').val(cat);
+    jQuery('#cat').trigger('change');
 
 
 
+    if (jQuery('#cat').hasClass("select2-hidden-accessible")) {
+        // Select2 has been initialized
+        jQuery('#select_category_loading').addClass('hidden');
+        jQuery('#cat').parent().removeClass('hidden');
+    }
 
 
 
@@ -30,6 +44,12 @@ jQuery(document).ready(function () {
         maximumSelectionLength: 3,
         width: '100%'
     });
+
+    if (jQuery('#select_state').hasClass("select2-hidden-accessible")) {
+        // Select2 has been initialized
+        jQuery('#select_states_loading').addClass('hidden');
+        jQuery('#select_state').parent().removeClass('hidden');
+    }
 
 
 
@@ -55,10 +75,16 @@ jQuery(document).ready(function () {
         let selected_states = jQuery(this).val();
         let nonce = jQuery('#search_nonce').attr("value");
 
-       // console.log(selected_states);
+        //console.log(selected_states);
+
+        jQuery('#select_council').parent().addClass('hidden');
+        jQuery('#select_lodge').parent().addClass('hidden');
+        jQuery('#select_camp').parent().addClass('hidden');
+        jQuery('#select_council_loading').addClass('hidden');
+        jQuery('#select_lodge_loading').addClass('hidden');
+        jQuery('#select_camp_loading').addClass('hidden');
 
 
-        jQuery('#select_council_loading').removeClass('hidden');
         jQuery.ajax({
             type: "post",
             dataType: "json",

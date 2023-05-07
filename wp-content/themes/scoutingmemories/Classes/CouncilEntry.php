@@ -75,7 +75,19 @@ class CouncilEntry extends Entry {
 		add_filter( 'frm_setup_new_fields_vars', array( &$this, 'frm_add_council_number' ), 30, 2 );
 		add_filter( 'frm_setup_edit_fields_vars', array( &$this, 'frm_add_council_number' ), 30, 2 );
 
+		add_filter( 'frm_include_meta_keys', array( &$this, 'frm_include_meta_keys' ), 10, 2 );
+
 	}
+
+
+
+    public static function frm_include_meta_keys( $include_keys, $args ) {
+        if ( $args['form_id'] == COUNCILS_FORMID ) { //replace 364 with Form ID
+            $include_keys = true;
+        }
+        return $include_keys;
+    }
+
 
 
 	public static function frm_add_council_number( $values, $field ) {
@@ -260,17 +272,47 @@ class CouncilEntry extends Entry {
     /// Echo the result to show how many indexes were updated.
     //
 	public static function update_active() {
-        $council_entries  = FrmEntry::getAll(['form_id' => ADD_A_COUNCIL_FORMID ], '', '', true   );
+        $council_entries  = FrmEntry::getAll(['form_id' => ADD_A_COUNCIL_FORMID ], '','',true   );
+
         $active_councils = array();
         $current_year = date("Y");
-        foreach ($council_entries as $key => $value) {
-            if ($value->metas[AACOUNCIL_COUNCIL_ACTIVE_FID] == 'Yes') {
-                $active_council = new Entry($value->id);
-                $active_council->entry_array['council_end'] = (string)$current_year;
-                Entry::update_an_entry( AACOUNCIL_END_DATE_FID, 'council_end', (string)$current_year, $active_council->entry_id);
-                $active_councils[] = $active_council;
+
+
+
+        if ( !Helpers::multiKeyExists("metas", $council_entries )) {
+            foreach ($council_entries as $key => $value) {
+                $metas = FrmEntry::get_meta( $value );
+                $metas = Helpers::object_to_array($metas);
+
+
+                if (array_key_exists("metas", $metas)) {
+                    if ($metas["metas"][AACOUNCIL_COUNCIL_ACTIVE_FID] == 'Yes') {
+                        $active_council = new Entry($value->id);
+                        $active_council->entry_array['council_end'] = (string)$current_year;
+                        Entry::update_an_entry(AACOUNCIL_END_DATE_FID, 'council_end', (string)$current_year, $active_council->entry_id);
+                        $active_councils[] = $active_council;
+                    }
+                }
             }
+
+
+        } else {
+
+            // if the getAll does it's job and gets all with the mets use this
+
+            foreach ($council_entries as $key => $value) {
+                if ($value->metas[AACOUNCIL_COUNCIL_ACTIVE_FID] == 'Yes') {
+                    $active_council = new Entry($value->id);
+                    $active_council->entry_array['council_end'] = (string)$current_year;
+                    Entry::update_an_entry( AACOUNCIL_END_DATE_FID, 'council_end', (string)$current_year, $active_council->entry_id);
+                    $active_councils[] = $active_council;
+                }
+            }
+
+
         }
+
+
         return count($active_councils);
     }
 

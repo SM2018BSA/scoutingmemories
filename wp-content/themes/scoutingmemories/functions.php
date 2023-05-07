@@ -133,6 +133,8 @@ endif;
 
 
 
+$helpers = new Helpers();
+$helpers->setup_hooks();
 
 
  // load formidable field hooks

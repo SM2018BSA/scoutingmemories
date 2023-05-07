@@ -207,14 +207,38 @@ class LodgeEntry extends Entry {
         $lodge_entries  = FrmEntry::getAll(['form_id' => ADD_A_LODGE_FORMID ], '', '', true   );
         $active_lodges = array();
         $current_year = date("Y");
-        foreach ($lodge_entries as $key => $value) {
-            if ($value->metas[AALODGE_LODGE_ACTIVE_FID] == 'Yes') {
-                $active_lodge = new Entry($value->id);
-                $active_lodge->entry_array['al_lodge_end'] = (string)$current_year;
-                Entry::update_an_entry( AALODGE_END_DATE_FID, 'ac_lodge_end', (string)$current_year, $active_lodge->entry_id);
-                $active_lodges[] = $active_lodge;
+
+        if (!Helpers::multiKeyExists("metas", $lodge_entries)) {
+            foreach ($lodge_entries as $key => $value) {
+                $metas = FrmEntry::get_meta($value);
+                $metas = Helpers::object_to_array($metas);
+
+                if (array_key_exists("metas", $metas)) {
+                    if ($metas["metas"][AALODGE_LODGE_ACTIVE_FID] == 'Yes') {
+                        $active_lodge = new Entry($value->id);
+                        $active_lodge->entry_array['al_lodge_end'] = (string)$current_year;
+                        Entry::update_an_entry(AALODGE_END_DATE_FID, 'ac_lodge_end', (string)$current_year, $active_lodge->entry_id);
+                        $active_lodges[] = $active_lodge;
+                    }
+                }
+
+            }
+
+        } else {
+
+
+            foreach ($lodge_entries as $key => $value) {
+                if ($value->metas[AALODGE_LODGE_ACTIVE_FID] == 'Yes') {
+                    $active_lodge = new Entry($value->id);
+                    $active_lodge->entry_array['al_lodge_end'] = (string)$current_year;
+                    Entry::update_an_entry(AALODGE_END_DATE_FID, 'ac_lodge_end', (string)$current_year, $active_lodge->entry_id);
+                    $active_lodges[] = $active_lodge;
+                }
             }
         }
+
+
+
         return count($active_lodges);
     }
 }

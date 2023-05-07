@@ -48,7 +48,7 @@ $wp_query   = $the_query;*/
 //die();
 
 
-get_header();
+ get_header();
 ?>
 
     <main id="primary" class="site-main container mt-5 mb-5">
@@ -58,18 +58,30 @@ get_header();
             <div class="card">
                 <div class="card-header" id="headingOne">
                     <h5 class="mb-0">
-                        <div class="title ">
-                            <h1 class=" "> Category:
+                        <div class="title cursor"  data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                            <h1> Category:
+                                <strong>
                                 <?php
                                 $cat = get_category_by_slug($current_category->slug);
                                 echo $cat->name;
                                 ?>
+                                </strong>
 
+                                <i class="bi bi-plus-lg float-end"></i>
 
                             </h1>
                         </div>
                     </h5>
                 </div>
+
+                <div id="collapseOne" class="collapse " aria-labelledby="headingOne" data-parent="#accordion">
+                    <div class="card-body">
+
+                        <?php echo SearchForm::show_category_form(); ?>
+
+                    </div>
+                </div>
+
             </div>
             <?php if ($cat->name == "Museums") : ?>
 
@@ -81,7 +93,6 @@ get_header();
                         <div class="col"><a
                                     class="btn btn-secondary"
                                     href="http://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf"
-
                                     target="_blank">Searchable PDF</a></div>
                         <div class="col"><a class="btn btn-secondary" href="scouting-memories-museum-list"> View Online</a>
                         </div>
@@ -127,13 +138,11 @@ get_header();
             <script>
                 jQuery(document).ready(function () {
 
-
                     jQuery('.title').on("click", function () {
 
-                        jQuery('.fas.fa-angle-down').addClass('fa-angle-up').removeClass('fa-angle-down');
+                        jQuery('.bi-dash-lg, .bi-plus-lg').toggleClass('bi-dash-lg bi-plus-lg');
 
                     });
-
 
                 });
             </script>
