@@ -48,7 +48,7 @@ class View {
             $input = (array) $input;
         }
         if (!is_null($input) ) {
-            $selected_councils = array_filter(array_unique($input));
+            $input = array_filter(array_unique($input));
         }
         return $input;
     }

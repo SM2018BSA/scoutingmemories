@@ -264,20 +264,30 @@ jQuery(document).ready(function () {
                     select.html(select.find('option').sort(function (x, y) {
                         // to change to descending order switch "<" for ">"
                         return $(x).text() > $(y).text() ? 1 : -1;
-                    }));
+                    })).promise().done(function () {
+                        //your callback logic / code here
+                        const options = []
+                        document.querySelectorAll('#select_lodge > option').forEach((option) => {
+                            if (options.includes(option.value)) option.remove()
+                            else options.push(option.value)
+                        });
 
-                    if (jQuery('#select_lodge option').length > 0) {
-                        if (lodge.length > 0 ) {
-                            jQuery('#select_lodge').val(lodge);
+                        if (jQuery('#select_lodge option').length > 0) {
+                            if (lodge.length > 0) {
+                                jQuery('#select_lodge').val(lodge);
+                            }
+                            jQuery('#select_lodge').select2({
+                                maximumSelectionLength: 5,
+                                width: '100%'
+                            }).parent().removeClass('hidden');
+                            jQuery('#select_lodge_loading').addClass('hidden');
+                        } else {
+                            jQuery('#select_lodge').parent().addClass('hidden');
+                            jQuery('#select_lodge_loading').addClass('hidden');
                         }
-                        jQuery('#select_lodge').select2({ maximumSelectionLength: 5, width: '100%' }).parent().removeClass('hidden');
-                        jQuery('#select_lodge_loading').addClass('hidden');
-                    } else {
-                        jQuery('#select_lodge').parent().addClass('hidden');
-                        jQuery('#select_lodge_loading').addClass('hidden');
-                    }
 
 
+                    });
                 }
             }).fail(function (jqXHR, textStatus, errorThrown) {
                 console.log(jqXHR);
@@ -309,7 +319,7 @@ jQuery(document).ready(function () {
                         document.querySelectorAll('#select_camp > option').forEach((option) => {
                             if (options.includes(option.value)) option.remove()
                             else options.push(option.value)
-                        })
+                        });
 
 
                         if (jQuery('#select_camp option').length > 0) {
