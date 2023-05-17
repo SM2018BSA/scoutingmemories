@@ -1,119 +1,137 @@
 <?php
 
 
+class CouncilView extends View
+{
 
-class CouncilView extends View {
+    public $view_id;
+    public $args;
 
-	public $view_id;
-	public $args;
+    public function __construct(int $view_id = 0)
+    {
+        parent::__construct($view_id);
 
-	public function __construct( int $view_id = 0 ) {
-		parent::__construct( $view_id );
-
-		$this->args = '&tab=myIndexing&tab2=myCouncil';
-
-
-	}
+        $this->args = '&tab=myIndexing&tab2=myCouncil';
 
 
-	public function change_pagination_link( $link, $atts ) {
+    }
 
 
-		if ( $atts['view']->ID === $this->view_id ) { // set the ID of the view to modify
-
-			if ( strpos( $link, '&tab=myIndexing&tab2=myCamps' ) ) {
-				str_replace( '&tab=myIndexing&tab2=myCamps', '', $link );
-			}
-			if ( strpos( $link, '&tab=myIndexing&tab2=myLodges' ) ) {
-				str_replace( '&tab=myIndexing&tab2=myLodges', '', $link );
-			}
+    public function change_pagination_link($link, $atts)
+    {
 
 
-			if ( ! strpos( $link, '&tab=myIndexing&tab2=myCouncils' ) ) {
-				$link .= '&tab=myIndexing&tab2=myCouncils';
-			} // change this to the ID of the HTML container to go to
+        if ($atts['view']->ID === $this->view_id) { // set the ID of the view to modify
 
-		}
-
-
-		return $link;
-	}
-
+            if (strpos($link, '&tab=myIndexing&tab2=myCamps')) {
+                str_replace('&tab=myIndexing&tab2=myCamps', '', $link);
+            }
+            if (strpos($link, '&tab=myIndexing&tab2=myLodges')) {
+                str_replace('&tab=myIndexing&tab2=myLodges', '', $link);
+            }
 
 
+            if (!strpos($link, '&tab=myIndexing&tab2=myCouncils')) {
+                $link .= '&tab=myIndexing&tab2=myCouncils';
+            } // change this to the ID of the HTML container to go to
+
+        }
 
 
-	public static function show_static_view( $state_slug = '336', $selected = false ) {
-
-		//, 'fi.field_id'=> AACOUNCIL_STATE_FID
-		$search_param = array( 'meta_value like' => $state_slug, 'fi.form_id' => ADD_A_COUNCIL_FORMID );
-
-		//AND fi.field_id = " . AACOUNCIL_STATE_FID ;
-		//$search_param = "meta_value LIKE '{$state_slug}' and field_id=100" ;
+        return $link;
+    }
 
 
-		 $entry_ids = FrmEntrymeta::getEntryIds( $search_param );
+    public static function show_static_view($state_slug = '336', $selected = false)
+    {
+
+        //, 'fi.field_id'=> AACOUNCIL_STATE_FID
+        $search_param = array('meta_value like' => $state_slug, 'fi.form_id' => ADD_A_COUNCIL_FORMID);
+
+        //AND fi.field_id = " . AACOUNCIL_STATE_FID ;
+        //$search_param = "meta_value LIKE '{$state_slug}' and field_id=100" ;
 
 
-
-		if ( ! empty( $entry_ids ) ) {
-			$entries = FrmEntry::getAll( array( 'it.id' => $entry_ids ), '', '', true, false );
-
-			 foreach ($entries as $key => $entry){
-				$metas = $entry->metas[AACOUNCIL_STATE_FID];
-				if (!is_array($metas)) {
-					if ($metas != $state_slug) {
-						unset( $entries[$key] );
-					}
-				} else {
-					$found_one = false;
-					foreach($metas as $meta){
-						if ($meta == $state_slug) { $found_one = true; }
-					}
-					if (!$found_one) unset($entries[$key]);
-				}
-			 }
+        $entry_ids = FrmEntrymeta::getEntryIds($search_param);
 
 
-			if ( $selected ) {
-				return CouncilView::show_mview( $entries, true );
-			} else {
-				return CouncilView::show_mview( $entries );
-			}
-		} else {
-			return '';
-		}
-	}
+        if (!empty($entry_ids)) {
+            $entries = FrmEntry::getAll(array('it.id' => $entry_ids), '', '', true, false);
 
-	public static function show_mview( $entries, $selected = false ) {
-		$output = '';
-		$council_slug = '';
-
-		foreach ( $entries as $key => $entry ) {
-
-			if ( ! is_null( $key ) ) {
-				$council_slug = $entry->metas[ AACOUNCIL_COUNCIL_SLUG_FID ];
-				$council_name = $entry->metas[ AACOUNCIL_NAME_FID ];
-				if ( array_key_exists(AACOUNCIL_NUMBER_FID, $entry->metas ) ) {
-					$council_name .= ' ' . $entry->metas[ AACOUNCIL_NUMBER_FID ];
-				}
-
-				if ( $selected ) {
-					$output .= '<option value="' . $council_slug . '" selected="selected">' . $council_name . '</option>';
-				} else {
-					$output .= '<option value="' . $council_slug . '" >' . $council_name . '</option>';
-				}
-			}
-
-		}
-
-		return $output;
-	}
+            foreach ($entries as $key => $entry) {
+                $metas = $entry->metas[AACOUNCIL_STATE_FID];
+                if (!is_array($metas)) {
+                    if ($metas != $state_slug) {
+                        unset($entries[$key]);
+                    }
+                } else {
+                    $found_one = false;
+                    foreach ($metas as $meta) {
+                        if ($meta == $state_slug) {
+                            $found_one = true;
+                        }
+                    }
+                    if (!$found_one) unset($entries[$key]);
+                }
+            }
 
 
-	public function show_view( $args = array(), $filter = 'limited' ) {
-		return parent::show_view( $args, $filter ); // TODO: Change the autogenerated stub
-	}
+            if ($selected) {
+                return CouncilView::show_mview($entries, true);
+            } else {
+                return CouncilView::show_mview($entries);
+            }
+        } else {
+            return '';
+        }
+    }
+
+    public static function show_dview($council_slug, $selected = false)
+    {
+
+        $entry = new Entry(Entry::get_field_id_from_key($council_slug));
+        $council_name = $entry->entry_array['council_name'];
+
+        if ($selected) {
+            return '<option value="' . $council_slug . '" selected="selected">' . $council_name . '</option>';
+        } else {
+            return '<option value="' . $council_slug . '" >' . $council_name . '</option>';
+        }
+
+    }
+
+
+    public static function show_mview($entries, $selected = false)
+    {
+        $output = '';
+        $council_slug = '';
+
+        foreach ($entries as $key => $entry) {
+
+            if (!is_null($key)) {
+                $council_slug = $entry->metas[AACOUNCIL_COUNCIL_SLUG_FID];
+                $council_name = $entry->metas[AACOUNCIL_NAME_FID];
+                if (array_key_exists(AACOUNCIL_NUMBER_FID, $entry->metas)) {
+                    $council_name .= ' ' . $entry->metas[AACOUNCIL_NUMBER_FID];
+                }
+
+                if ($selected) {
+                    $output .= '<option value="' . $council_slug . '" selected="selected">' . $council_name . '</option>';
+                } else {
+                    $output .= '<option value="' . $council_slug . '" >' . $council_name . '</option>';
+                }
+            }
+
+        }
+
+        return $output;
+    }
+
+
+    public function show_view($args = array(), $filter = 'limited')
+    {
+        return parent::show_view($args, $filter); // TODO: Change the autogenerated stub
+    }
 
 
 }
@@ -123,180 +141,174 @@ class CouncilView extends View {
 
 
 // define the actions for the two hooks created, first for logged in users and the next for logged out users
-add_action( "wp_ajax_search_councils", "search_councils" );
-add_action( "wp_ajax_nopriv_search_councils", "search_councils" );
+add_action("wp_ajax_search_councils", "search_councils");
+add_action("wp_ajax_nopriv_search_councils", "search_councils");
 
 // define the function to be fired for logged in users
-function search_councils() {
+function search_councils()
+{
 
-	// nonce check for an extra layer of security, the function will exit if it fails
-	if ( ! wp_verify_nonce( $_REQUEST['nonce'], "search_form" ) ) {
-		exit( "Woof Woof Woof" );
-	}
+    // nonce check for an extra layer of security, the function will exit if it fails
+    if (!wp_verify_nonce($_REQUEST['nonce'], "search_form")) {
+        exit("Woof Woof Woof");
+    }
 
-	$selected_states = $_REQUEST['selected_states'];
+    $selected_states = $_REQUEST['selected_states'];
 
-    if ( !is_array($selected_states)) {
+    if (!is_array($selected_states)) {
         if (strpos($selected_states, ',')) {
             $selected_states = explode(', ', $selected_states);
         }
     }
 
-	$result['state'] = $results = '';
+    $result['state'] = $results = '';
 
 
-	if ( is_array( $selected_states ) && count( $selected_states ) == 1 ) {
-		$selected_states = Entry::get_field_id_from_key($selected_states);
-		$results        = CouncilView::show_static_view( $selected_states );
-		$result['type'] = 'one';
-	} else {
+    if (is_array($selected_states) && count($selected_states) == 1) {
+        $selected_states = Entry::get_field_id_from_key($selected_states);
+        $results = CouncilView::show_static_view($selected_states);
+        $result['type'] = 'one';
+    } else {
 
-		foreach ( $selected_states as $selected_state ) {
-			$selected_state = Entry::get_field_id_from_key($selected_state);
-			$results        .= CouncilView::show_static_view( $selected_state );
-			$result['type'] = 'many';
-		}
-
-
-	}
+        foreach ($selected_states as $selected_state) {
+            $selected_state = Entry::get_field_id_from_key($selected_state);
+            $results .= CouncilView::show_static_view($selected_state);
+            $result['type'] = 'many';
+        }
 
 
-	$results = explode( '<br />', $results );
-
-	$results = array_diff( $results, array( '<div class="frm_no_entries">No Entries Found</div>' ) );
-
-	$results = array_unique( $results );
-
-	$results = implode( $results );
-
-	$result['state'] = $results;
+    }
 
 
+    $results = explode('<br />', $results);
 
-	// Check if action was fired via Ajax call. If yes, JS code will be triggered, else the user is redirected to the post page
-	if ( ! empty( $_SERVER['HTTP_X_REQUESTED_WITH'] ) && strtolower( $_SERVER['HTTP_X_REQUESTED_WITH'] ) == 'xmlhttprequest' ) {
-		$result = json_encode( $result );
-		echo $result;
-	} else {
-		header( "Location: " . $_SERVER["HTTP_REFERER"] );
-	}
+    $results = array_diff($results, array('<div class="frm_no_entries">No Entries Found</div>'));
 
-	// don't forget to end your scripts with a die() function - very important
-	die();
+    $results = array_unique($results);
+
+    $results = implode($results);
+
+    $result['state'] = $results;
+
+
+    // Check if action was fired via Ajax call. If yes, JS code will be triggered, else the user is redirected to the post page
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+        $result = json_encode($result);
+        echo $result;
+    } else {
+        header("Location: " . $_SERVER["HTTP_REFERER"]);
+    }
+
+    // don't forget to end your scripts with a die() function - very important
+    die();
 
 
 }
 
 
 // define the actions for the two hooks created, first for logged in users and the next for logged out users
-add_action( "wp_ajax_search_merged_councils", "search_merged_councils" );
-add_action( "wp_ajax_nopriv_search_merged_councils", "search_merged_councils" );
+add_action("wp_ajax_search_merged_councils", "search_merged_councils");
+add_action("wp_ajax_nopriv_search_merged_councils", "search_merged_councils");
 
-function search_merged_councils() {
+function search_merged_councils()
+{
 
-	// nonce check for an extra layer of security, the function will exit if it fails
-	if ( ! wp_verify_nonce( $_REQUEST['nonce'], "search_form" ) ) {
-		exit( "Woof Woof Woof" );
-	}
+    // nonce check for an extra layer of security, the function will exit if it fails
+    if (!wp_verify_nonce($_REQUEST['nonce'], "search_form")) {
+        exit("Woof Woof Woof");
+    }
 
 
-	//$lodge_view_id = 1556;
-	//$lodge_view        = new LodgeView( ALL_LODGES_SEARCH_VIEWID );
-	$selected_councils = $_REQUEST['selected_councils'];
-
-	if ( strpos( $selected_councils, ',' ) ) {
-		$selected_councils = explode( ', ', $selected_councils );
-	}
-
-	if (!is_array( $selected_councils )) {
-		$selected_councils = (array)$selected_councils;
-	}
+    //$lodge_view_id = 1556;
+    //$lodge_view        = new LodgeView( ALL_LODGES_SEARCH_VIEWID );
+    $selected_councils = $_REQUEST['selected_councils'];
+    $selected_councils = View::clean_request($selected_councils);
 
 
 
-	$selected_councils = array_unique($selected_councils);
+
+    $result['state'] = $results = '';
 
 
-	$result['state'] = $results = '';
+    if (count($selected_councils) == 0) {
+        $result['type'] = 'none';
+    } elseif (count($selected_councils) == 1) {
+        $council_entry_id = Entry::get_field_id_from_key($selected_councils[0]);
+        $council_entry = new CouncilEntry($council_entry_id);
+
+        if ($council_entry->has_merged) {
+
+            $council_slugs = array();
+
+            foreach ($council_entry->merged_councils as $item) {
+                $council_slugs[] = $item['cm_old_council_slug'];
+            }
+
+            $council_slugs = array_filter(array_unique($council_slugs));
+
+            foreach ($council_slugs as $council_slug) {
+                $results .= CouncilView::show_dview($council_slug, false);
+            }
+
+        }
+
+        $result['type'] = 'one';
 
 
-	if ( count( $selected_councils ) == 1 ) {
-		$council_entry_id = Entry::get_field_id_from_key( $selected_councils[0] );
-		$council_entry    = new CouncilEntry( $council_entry_id );
-
-		if ( $council_entry->has_merged ) {
-
-			$council_slugs = array();
-
-			foreach ( $council_entry->merged_councils as $item ) {
-				$council_slugs[] = $item['cm_old_council_slug'];
-			}
-
-			$council_slugs = array_unique($council_slugs);
-
-			foreach ($council_slugs  as $council_slug) {
-				$results  .= CouncilView::show_static_view( $council_slug, true );
-			}
-
-		}
-
-		$result['type'] = 'one';
+    } else {
 
 
-	} else {
+        foreach ($selected_councils as $selected_council) {
+            $council_entry_id = Entry::get_field_id_from_key($selected_council);
+            $council_entry = new CouncilEntry($council_entry_id);
+
+            if ($council_entry->has_merged) {
+
+                $council_slugs = array();
+
+                foreach ($council_entry->merged_councils as $item) {
+                    $council_slugs[] = $item['cm_old_council_slug'];
+                }
+
+                $council_slugs = array_filter(array_unique($council_slugs));
+
+                foreach ($council_slugs as $council_slug) {
+                    $results .= CouncilView::show_dview($council_slug, false);
+                }
+            }
+
+            $result['type'] = 'many';
+        }
 
 
-		foreach ( $selected_councils as $selected_council ) {
-			$council_entry_id = Entry::get_field_id_from_key( $selected_council );
-			$council_entry    = new CouncilEntry( $council_entry_id );
-
-			if ( $council_entry->has_merged ) {
-
-				$council_slugs = array();
-
-				foreach ( $council_entry->merged_councils as $item ) {
-					$council_slugs[] = $item['cm_old_council_slug'];
-				}
-
-				$council_slugs = array_unique($council_slugs);
-
-				foreach ($council_slugs  as $council_slug) {
-					$results  .= CouncilView::show_static_view( $council_slug, true );
-				}
-			}
-
-			$result['type'] = 'many';
-		}
+    }
 
 
-	}
+    $results = strip_tags($results, '<option><div>');
 
+    $results = explode(PHP_EOL, $results);
 
-	$results = strip_tags( $results, '<option><div>' );
+    $results = str_replace('<div class="frm_no_entries">No Entries Found</div>', '', $results);
 
-	$results = explode( PHP_EOL, $results );
+    $results = array_unique($results);
 
-	$results = str_replace( '<div class="frm_no_entries">No Entries Found</div>', '', $results );
+    $results = implode($results);
 
-	$results = array_unique( $results );
-
-	$results = implode( $results );
-
-	$result['state'] = $results;
+    $result['state'] = $results;
 
 //$result['state'] = $_REQUEST['selected_councils'];
 
 
-	// Check if action was fired via Ajax call. If yes, JS code will be triggered, else the user is redirected to the post page
-	if ( ! empty( $_SERVER['HTTP_X_REQUESTED_WITH'] ) && strtolower( $_SERVER['HTTP_X_REQUESTED_WITH'] ) == 'xmlhttprequest' ) {
-		$result = json_encode( $result );
-		echo $result;
-	} else {
-		header( "Location: " . $_SERVER["HTTP_REFERER"] );
-	}
+    // Check if action was fired via Ajax call. If yes, JS code will be triggered, else the user is redirected to the post page
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+        $result = json_encode($result);
+        echo $result;
+    } else {
+        header("Location: " . $_SERVER["HTTP_REFERER"]);
+    }
 
-	// don't forget to end your scripts with a die() function - very important
-	die();
+    // don't forget to end your scripts with a die() function - very important
+    die();
 }
 
 

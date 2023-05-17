@@ -38,7 +38,20 @@ class View {
 	}
 
 
-
+    public static function clean_request($input = '') : array {
+        if (!is_array($input)) {
+            if (strpos($input, ',')) {
+                $input = explode(',', trim($input, ' '));
+            }
+        }
+        if ( ! is_array( $input ) ) {
+            $input = (array) $input;
+        }
+        if (!is_null($input) ) {
+            $selected_councils = array_filter(array_unique($input));
+        }
+        return $input;
+    }
 
 
 }

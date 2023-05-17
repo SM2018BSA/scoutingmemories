@@ -102,30 +102,20 @@ function search_camps() {
 	}
 
 	$selected_councils = $_REQUEST['selected_councils'];
-	//$selected_councils = ['general_herkimer_400','Ilion_Council_','Herkimer_County_Council_','Herkimer_County_Council_400'];
-
-
-//	if ( strpos( $selected_councils, ',' ) ) {
-//		$selected_councils = explode( ',', $selected_councils );
-//	}
-
-    if ( !is_array($selected_councils)) {
-        if (strpos($selected_councils, ',')) {
-            $selected_councils = explode(', ', $selected_councils);
-        }
-    }
-
+    $selected_councils = View::clean_request($selected_councils);
 
 
 	$results = $result['state'] = '';
 	$result['type'] = 'none';
 
-	if ( is_array( $selected_councils ) && count( $selected_councils ) == 1 ) {
+    if (count($selected_councils) == 0) {
+        $result['type'] = 'none';
+    } elseif ( is_array( $selected_councils ) && count( $selected_councils ) == 1 ) {
 
 		if (strlen($selected_councils[0]) >  0) {
 			$selected_councils_id = Entry::get_field_id_from_key($selected_councils);
 			$results = CampView::show_static_view($selected_councils_id);
-			$results .= CampView::show_static_view( $selected_councils );
+//			$results = CampView::show_static_view( $selected_councils );
 		}
 
 		$result['type']  = 'one';
@@ -135,7 +125,7 @@ function search_camps() {
 			if (strlen($selected_council)  > 1 ) {
 				$selected_councils_id = Entry::get_field_id_from_key($selected_council);
 				$results          .= CampView::show_static_view($selected_councils_id);
-				$results          .= CampView::show_static_view( $selected_council );
+//				$results          .= CampView::show_static_view( $selected_council );
 			}
 		}
 		$result['type']  = 'many';

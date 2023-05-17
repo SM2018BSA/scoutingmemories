@@ -147,8 +147,11 @@ jQuery(document).ready(function () {
 
         let show_merged = jQuery('#show_merged').is(':checked');
 
+        //console.log('in selecte council change');
 
         if (show_merged) {
+
+            //console.log ('show merge is true');
 
             if (selected_councils.length > 0) {
                 jQuery('#select_merged_council_loading').removeClass('hidden');
@@ -213,6 +216,9 @@ jQuery(document).ready(function () {
 
     jQuery('#select_merged_council').on('change', function () {
 
+        //console.log('selected_merge_council changed');
+
+
         let show_merged = jQuery('#show_merged').is(':checked');
 
         jQuery('#select_lodge').val(null).parent().addClass('hidden').change();
@@ -227,16 +233,22 @@ jQuery(document).ready(function () {
         if (show_merged) {
             if (Boolean(jQuery(this).val())) {
                 selected_councils += ',' + jQuery(this).val();
+
             }
         }
+
         let nonce = jQuery('#search_nonce').attr("value");
 
-        if (selected_councils.length  > 0) {
+
+
+        if (selected_councils.length  > 1) {
 
 
 
 
             jQuery('#select_lodge_loading').removeClass('hidden');
+
+            //console.log('selected_councils: '+selected_councils);
 
             jQuery.ajax({
                 type: "post",
@@ -246,9 +258,6 @@ jQuery(document).ready(function () {
                 success: function (response) {
 
                     jQuery('#select_lodge').html(response.state);
-
-
-
 
 
                     let select = jQuery('#select_lodge');
@@ -271,7 +280,6 @@ jQuery(document).ready(function () {
 
                 }
             }).fail(function (jqXHR, textStatus, errorThrown) {
-                console.log('fail selected_councils: ' + selected_councils);
                 console.log(jqXHR);
                 console.log(textStatus);
                 console.log(errorThrown);

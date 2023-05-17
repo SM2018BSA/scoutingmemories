@@ -118,12 +118,17 @@ class Helpers
     /**
      * @param $data
      */
-    public static function debug_to_console($data)
+    public static function debug_to_console($data, $in_script = false)
     {
         $output = $data;
         if (is_array($output))
             $output = implode(',', $output);
-        echo "<script>console.log( 'Debug Objects: " . $output . "' );</script>";
+        if ($in_script) {
+            echo "console.log( 'Debug Objects: " . $output . "' ); ";
+        } else {
+            echo "<script>console.log( 'Debug Objects: " . $output . "' );</script>";
+        }
+
     }
 
 
@@ -152,7 +157,8 @@ class Helpers
         return do_shortcode($short_code);
     }
 
-    public static function multiKeyExists($key, array $arr) {
+    public static function multiKeyExists($key, array $arr)
+    {
 
         // is in base array?
         if (array_key_exists($key, $arr)) {
@@ -171,7 +177,6 @@ class Helpers
 
         return false;
     }
-
 
 
 }

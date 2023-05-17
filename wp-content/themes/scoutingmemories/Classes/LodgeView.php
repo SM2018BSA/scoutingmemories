@@ -114,35 +114,20 @@ class LodgeView extends View {
 		}
 
 		$selected_councils = $_REQUEST['selected_councils'];
-		//$selected_councils =['general_herkimer_400'];
+        $selected_councils = View::clean_request($selected_councils);
 
-
-//		if ( strpos( $selected_councils, ',' ) ) {
-//			$selected_councils = explode( ',', $selected_councils );
-//		}
-
-        if ( !is_array($selected_councils)) {
-            if (strpos($selected_councils, ',')) {
-                $selected_councils = explode(', ', $selected_councils);
-            }
-        }
-
-
-		if ( ! is_array( $selected_councils ) ) {
-			$selected_councils = (array) $selected_councils;
-		}
-
-		$selected_councils = array_unique( $selected_councils );
 
 		$results        = $result['state'] = '';
 		$result['type'] = 'none';
 
 
-		if ( count( $selected_councils ) == 1 ) {
+        if (count($selected_councils) == 0) {
+            $result['type'] = 'none';
+        } elseif ( count( $selected_councils ) == 1 ) {
 
 			$selected_councils_id = Entry::get_field_id_from_key($selected_councils);
 			$results = LodgeView::show_static_view($selected_councils_id);
-			$results .= LodgeView::show_static_view( $selected_councils );
+			//$results = LodgeView::show_static_view( $selected_councils );
 			$result['type'] = 'one';
 
 
@@ -150,7 +135,7 @@ class LodgeView extends View {
 			foreach ( $selected_councils as $selected_council ) {
 				$selected_councils_id = Entry::get_field_id_from_key($selected_council);
 				$results .= LodgeView::show_static_view($selected_councils_id);
-				$results .= LodgeView::show_static_view( $selected_council );
+				//$results .= LodgeView::show_static_view( $selected_council );
 
 			}
 			$result['type'] = 'many';
