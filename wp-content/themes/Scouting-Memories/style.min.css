@@ -369,6 +369,7 @@ html {
 article, aside, figcaption, figure, footer, header, hgroup, main, nav, section {
     display: block;
 }
+article { width: 100%; }
 
 body {
     margin: 0;
