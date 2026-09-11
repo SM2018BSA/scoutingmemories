@@ -330,3 +330,10 @@ Underscores is distributed under the terms of the GNU GPL v2 or later.
 img {
   max-width: 100%;
   height: auto; }
+
+
+/*--------------------------------------------------------------
+## Drop Down lists
+--------------------------------------------------------------*/
+#field_sm1_state_name_chosen > div > ul > li[data-option-array-index="5"],
+#field_sm1_state_name_chosen > div > ul > li[data-option-array-index="1"] { margin-bottom:15px; }
