@@ -6,6 +6,7 @@
  * Time: 4:44 PM
  */
 
+require_once('inc/template-tags.php');
 require_once('inc/wp-bootstrap-walker.php');
 require_once('inc/add-google-fonts.php');
 require_once('inc/utility-functions.php');
