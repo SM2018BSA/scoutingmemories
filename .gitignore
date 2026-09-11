@@ -130,3 +130,9 @@ wp-content/themes/Scouting-Memories/temp.html
 !wp-content/plugins/scouting-pdf-embedder/**
 
 wp-content/themes/twentytwenty*
+
+# Git Visualizer Studio (Ignored)
+git-visualizer/
+launch-git-studio.bat
+php-custom.ini
+wp-content/themes/scoutingmemories/
