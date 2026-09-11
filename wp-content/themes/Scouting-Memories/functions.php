@@ -6,7 +6,6 @@
  * Time: 4:44 PM
  */
 
-require_once('inc/template-tags.php');
 require_once('inc/wp-bootstrap-walker.php');
 require_once('inc/add-google-fonts.php');
 require_once('inc/utility-functions.php');
@@ -34,7 +33,7 @@ if (!function_exists('include_custom_bootstrapjs')):
     function include_custom_bootstrapjs()
     {
         $rand = rand(1, 9999999);
-        wp_enqueue_script('bootstrap',get_theme_file_uri() .'/js/bootstrap.min.js' ,array(), $rand);
+        wp_enqueue_script('bootstrap', get_theme_file_uri() . '/js/bootstrap.min.js', array('jquery'), $rand, true);
     }
 endif;
 
