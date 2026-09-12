@@ -1,21 +1,21 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 class FrmProStatisticsController {
 
 	/**
 	 * Returns stats requested through the [frm-stats] shortcode
 	 *
 	 * @param array $atts
-	 * @return string
+	 * @return string|int|float
 	 */
 	public static function stats_shortcode( $atts ) {
-		self::convert_old_atts_to_new_atts( $atts );
+		self::prepare_shortcode_atts( $atts );
 
-		self::combine_defaults_and_user_defined_attributes( $atts );
-
-		self::format_atts( $atts );
-
-		if ( ! isset( $atts['id'] ) || ! $atts['id'] ) {
+		if ( empty( $atts['id'] ) ) {
 			return __( 'You must include a valid field id or key in your stats shortcode.', 'formidable-pro' );
 		}
 
@@ -23,7 +23,19 @@ class FrmProStatisticsController {
 	}
 
 	/**
-	 * Get the entry IDs for a field, operator, and value combination
+	 * @since 6.8.4
+	 *
+	 * @param array $atts
+	 * @return void
+	 */
+	private static function prepare_shortcode_atts( &$atts ) {
+		self::convert_old_atts_to_new_atts( $atts );
+		self::combine_defaults_and_user_defined_attributes( $atts );
+		self::format_atts( $atts );
+	}
+
+	/**
+	 * Get the entry IDs for a field, operator, and value combination.
 	 *
 	 * @param array $args
 	 * @return array
@@ -33,7 +45,9 @@ class FrmProStatisticsController {
 
 		if ( ! $filter_args['field'] ) {
 			return $filter_args['entry_ids'];
-		} else if ( $filter_args['after_where'] && ! $filter_args['entry_ids'] ) {
+		}
+
+		if ( $filter_args['after_where'] && ! $filter_args['entry_ids'] ) {
 			return array();
 		}
 
@@ -41,25 +55,26 @@ class FrmProStatisticsController {
 	}
 
 	/**
-	 * Flatten multi-dimensional arrays for stats and graphs
+	 * Flatten multi-dimensional arrays for stats and graphs.
 	 *
 	 * @since 2.02.06
 	 * @param object $field
-	 * @param bool $save_other_key
-	 * @param array $field_values
+	 * @param bool   $save_other_key
+	 * @param array  $field_values
+	 * @return void
 	 */
 	public static function flatten_multi_dimensional_arrays_for_stats( $field, $save_other_key, &$field_values ) {
 		$cleaned_values = array();
 
 		foreach ( $field_values as $k => $i ) {
-			$i = maybe_unserialize( $i );
+			FrmProAppHelper::unserialize_or_decode( $i );
 
 			if ( ! is_array( $i ) ) {
 				$cleaned_values[] = $i;
 				continue;
 			}
 
-			if ( $field->type == 'address' || $field->type == 'credit_card' ) {
+			if ( $field->type === 'address' || $field->type === 'credit_card' ) {
 				$cleaned_values[] = implode( ' ', $i );
 			} else {
 				foreach ( $i as $i_key => $item_value ) {
@@ -117,7 +132,7 @@ class FrmProStatisticsController {
 			if ( isset( $atts[ $k ] ) ) {
 				$combined_atts[ $k ] = $atts[ $k ];
 				unset( $atts[ $k ] );
-			} else if ( $value !== false ) {
+			} elseif ( $value !== false ) {
 				$combined_atts[ $k ] = $value;
 			}
 		}
@@ -227,10 +242,11 @@ class FrmProStatisticsController {
 	}
 
 	/**
-	 * Get field statistic
+	 * Get field statistic.
 	 *
 	 * @since 2.02.06
-	 * @param int $id
+	 *
+	 * @param int   $id
 	 * @param array $atts
 	 * @return int|string|float
 	 */
@@ -242,10 +258,10 @@ class FrmProStatisticsController {
 		}
 
 		$meta_values = self::get_meta_values_for_single_field( $field, $atts );
-		if ( empty( $meta_values ) ) {
-			$statistic = 0;
-		} else {
+		if ( $meta_values ) {
 			$statistic = self::get_stats_from_meta_values( $atts, $meta_values );
+		} else {
+			$statistic = 0;
 		}
 
 		if ( 'star' === $atts['type'] ) {
@@ -256,20 +272,21 @@ class FrmProStatisticsController {
 	}
 
 	/**
-	 * Get the meta values for a single stats field
+	 * Get the meta values for a single stats field.
 	 *
 	 * @since 2.02.06
+	 *
 	 * @param object $field
-	 * @param array $atts
+	 * @param array  $atts
 	 * @return array
 	 */
 	private static function get_meta_values_for_single_field( $field, $atts ) {
-		$atts['form_id'] = $field->form_id;
+		$atts['form_id']    = $field->form_id;
 		$atts['form_posts'] = self::get_form_posts_for_statistics( $atts );
 
 		self::check_field_filters( $atts );
 
-		// If there are field filters and entry IDs is empty, stop now
+		// If there are field filters and entry IDs is empty, stop now.
 		if ( ! empty( $atts['filters'] ) && empty( $atts['entry_ids'] ) ) {
 			return array();
 		}
@@ -288,7 +305,7 @@ class FrmProStatisticsController {
 	 *
 	 * @since 2.02.06
 	 * @param object $field
-	 * @param int $stat
+	 * @param int    $value
 	 * @return string
 	 */
 	private static function get_stars( $field, $value ) {
@@ -311,7 +328,7 @@ class FrmProStatisticsController {
 	private static function get_stats_from_meta_values( $atts, $meta_values ) {
 		$count = count( $meta_values );
 
-		if ( $atts['type'] != 'count' ) {
+		if ( $atts['type'] !== 'count' ) {
 			$total = array_sum( $meta_values );
 		} else {
 			$total = 0;
@@ -330,7 +347,7 @@ class FrmProStatisticsController {
 				$mean = ( $total / $count );
 				$stat = 0.0;
 				foreach ( $meta_values as $i ) {
-					$stat += pow( $i - $mean, 2 );
+					$stat += pow( floatval( $i ) - $mean, 2 );
 				}
 
 				if ( $count > 1 ) {
@@ -359,6 +376,18 @@ class FrmProStatisticsController {
 				$stat = $total;
 		}
 
+		$atts['meta_values'] = $meta_values;
+
+		/**
+		 * Allows changing stat value from meta values.
+		 *
+		 * @since 5.0
+		 *
+		 * @param float $stat Stat value.
+		 * @param array $atts Processed shortcode attributes. `meta_values` is added.
+		 */
+		$stat = apply_filters( 'frm_pro_stat_from_meta_values', $stat, $atts );
+
 		return self::get_formatted_statistic( $atts, $stat );
 	}
 
@@ -373,7 +402,18 @@ class FrmProStatisticsController {
 	 */
 	public static function calculate_median( $meta_values ) {
 		$count = count( $meta_values );
-		rsort( $meta_values );
+		usort(
+			$meta_values,
+			function ( $a, $b ) {
+				if ( ! is_numeric( $a ) ) {
+					$a = 0;
+				}
+				if ( ! is_numeric( $b ) ) {
+					$b = 0;
+				}
+				return strnatcmp( $b, $a );
+			}
+		);
 
 		$middle_index = (int) floor( $count / 2 );
 
@@ -384,7 +424,7 @@ class FrmProStatisticsController {
 			// Even number of values, calculate avg of 2 medians
 			$low_middle  = $meta_values[ $middle_index - 1 ];
 			$high_middle = $meta_values[ $middle_index ];
-			$median      = (float) ( $low_middle + $high_middle ) / 2;
+			$median      = ( (float) $low_middle + (float) $high_middle ) / 2;
 		}
 
 		return $median;
@@ -403,8 +443,10 @@ class FrmProStatisticsController {
 			$dec_point = isset( $atts['dec_point'] ) ? $atts['dec_point'] : '.';
 			$thousands_sep = isset( $atts['thousands_sep'] ) ? $atts['thousands_sep'] : ',';
 			$statistic = number_format( $stat, $atts['decimal'], $dec_point, $thousands_sep );
+		} elseif ( is_numeric( $stat ) ) {
+				$statistic = round( $stat, $atts['decimal'] );
 		} else {
-			$statistic = round( $stat, $atts['decimal'] );
+			$statistic = $stat;
 		}
 
 		return $statistic;
@@ -467,72 +509,74 @@ class FrmProStatisticsController {
 	 * @since 2.02.06
 	 * TODO: update this so old filters are converted to new filters
 	 * @param array $atts
+	 * @return void
 	 */
 	private static function check_field_filters( &$atts ) {
-		if ( ! empty( $atts['filters'] ) ) {
+		if ( empty( $atts['filters'] ) ) {
+			return;
+		}
 
-			if ( ! isset( $atts['entry_ids'] ) ) {
-				$atts['entry_ids'] = array();
-				$after_where = false;
-			} else {
-				$after_where = true;
+		if ( ! isset( $atts['entry_ids'] ) ) {
+			$atts['entry_ids'] = array();
+			$after_where = false;
+		} else {
+			$after_where = true;
+		}
+
+		foreach ( $atts['filters'] as $orig_f => $val ) {
+			// Replace HTML entities with less than/greater than symbols
+			$val = str_replace( array( '&gt;', '&lt;' ), array( '>', '<' ), $val );
+
+			// If first character is a quote, but the last character is not a quote
+			if ( ( strpos( $val, '"' ) === 0 && substr( $val, -1 ) != '"' ) || ( strpos( $val, "'" ) === 0 && substr( $val, -1 ) != "'" ) ) {
+				//parse atts back together if they were broken at spaces
+				$next_val = array( 'char' => substr( $val, 0, 1 ), 'val' => $val );
+				continue;
+				// If we don't have a previous value that needs to be parsed back together
+			} else if ( ! isset( $next_val ) ) {
+				$temp = FrmAppHelper::replace_quotes( $val );
+				foreach ( array( '"', "'" ) as $q ) {
+					// Check if <" or >" exists in string and string does not end with ".
+					if ( substr( $temp, -1 ) != $q && ( strpos( $temp, '<' . $q ) || strpos( $temp, '>' . $q ) ) ) {
+						$next_val = array( 'char' => $q, 'val' => $val );
+						$cont = true;
+					}
+					unset( $q );
+				}
+				unset( $temp );
+
+				if ( isset( $cont ) ) {
+					unset( $cont );
+					continue;
+				}
 			}
 
-			foreach ( $atts['filters'] as $orig_f => $val ) {
-				// Replace HTML entities with less than/greater than symbols
-				$val = str_replace( array( '&gt;', '&lt;' ), array( '>', '<' ), $val );
-
-				// If first character is a quote, but the last character is not a quote
-				if ( ( strpos( $val, '"' ) === 0 && substr( $val, -1 ) != '"' ) || ( strpos( $val, "'" ) === 0 && substr( $val, -1 ) != "'" ) ) {
-					//parse atts back together if they were broken at spaces
-					$next_val = array( 'char' => substr( $val, 0, 1 ), 'val' => $val );
+			// If we have a previous value saved that needs to be parsed back together (due to WordPress pullling it apart)
+			if ( isset( $next_val ) ) {
+				if ( substr( FrmAppHelper::replace_quotes( $val ), -1 ) == $next_val['char'] ) {
+					$val = $next_val['val'] . ' ' . $val;
+					unset( $next_val );
+				} else {
+					$next_val['val'] .= ' ' . $val;
 					continue;
-					// If we don't have a previous value that needs to be parsed back together
-				} else if ( ! isset( $next_val ) ) {
-					$temp = FrmAppHelper::replace_quotes( $val );
-					foreach ( array( '"', "'" ) as $q ) {
-						// Check if <" or >" exists in string and string does not end with ".
-						if ( substr( $temp, -1 ) != $q && ( strpos( $temp, '<' . $q ) || strpos( $temp, '>' . $q ) ) ) {
-							$next_val = array( 'char' => $q, 'val' => $val );
-							$cont = true;
-						}
-						unset( $q );
-					}
-					unset( $temp );
-
-					if ( isset( $cont ) ) {
-						unset( $cont );
-						continue;
-					}
 				}
+			}
 
-				// If we have a previous value saved that needs to be parsed back together (due to WordPress pullling it apart)
-				if ( isset( $next_val ) ) {
-					if ( substr( FrmAppHelper::replace_quotes( $val ), -1 ) == $next_val['char'] ) {
-						$val = $next_val['val'] . ' ' . $val;
-						unset( $next_val );
-					} else {
-						$next_val['val'] .= ' ' . $val;
-						continue;
-					}
-				}
+			$pass_args = array(
+				'orig_f' => $orig_f,
+				'val' => $val,
+				'entry_ids' => $atts['entry_ids'],
+				'form_id' => $atts['form_id'],
+				'form_posts' => $atts['form_posts'],
+				'after_where' => $after_where,
+				'drafts' => $atts['drafts'],
+			);
 
-				$pass_args = array(
-					'orig_f' => $orig_f,
-					'val' => $val,
-					'entry_ids' => $atts['entry_ids'],
-					'form_id' => $atts['form_id'],
-					'form_posts' => $atts['form_posts'],
-					'after_where' => $after_where,
-					'drafts' => $atts['drafts'],
-				);
+			$atts['entry_ids'] = self::get_field_matches( $pass_args );
+			$after_where = true;
 
-				$atts['entry_ids'] = self::get_field_matches( $pass_args );
-				$after_where = true;
-
-				if ( ! $atts['entry_ids'] ) {
-					return;
-				}
+			if ( ! $atts['entry_ids'] ) {
+				return;
 			}
 		}
 	}
@@ -734,7 +778,7 @@ class FrmProStatisticsController {
 
 		if ( in_array( $filter_args['field'], array( 'created_at', 'updated_at' ) ) ) {
 			$filter_args['value'] = str_replace( array( '"', "'" ), '', $filter_args['value'] );
-			$filter_args['value'] = date( 'Y-m-d H:i:s', strtotime( $filter_args['value'] ) );
+			$filter_args['value'] = gmdate( 'Y-m-d H:i:s', strtotime( $filter_args['value'] ) );
 			$filter_args['value'] = get_gmt_from_date( $filter_args['value'] );
 		} else {
 			$filter_args['value'] = trim( trim( $filter_args['value'], "'" ), '"' );
@@ -820,14 +864,14 @@ class FrmProStatisticsController {
 	}
 
 	/**
-	 * Get the entry IDs for a field/column filter
+	 * Get the entry IDs for a field/column filter.
 	 *
 	 * @since 2.02.05
 	 * @param array $filter_args
 	 * @return array
 	 */
 	private static function get_entry_ids_for_field_filter( $filter_args ) {
-		if ( in_array( $filter_args['field'], array( 'created_at', 'updated_at', 'parent_item_id' ) ) ) {
+		if ( in_array( $filter_args['field'], array( 'created_at', 'updated_at', 'parent_item_id' ), true ) ) {
 
 			if ( 'parent_item_id' === $filter_args['field'] ) {
 				$filter_args['value'] = self::maybe_convert_entry_key_to_id( $filter_args['value'] );
@@ -847,13 +891,13 @@ class FrmProStatisticsController {
 			$where_atts = apply_filters( 'frm_stats_where', array( 'where_is' => $filter_args['operator'], 'where_val' => $filter_args['value'] ), $filter_args );
 
 			$pass_args = array(
-				'where_opt' => $filter_args['field'],
-				'where_is' => $where_atts['where_is'],
-				'where_val' => $where_atts['where_val'],
-				'form_id' => $filter_args['form_id'],
-				'form_posts' => $filter_args['form_posts'],
+				'where_opt'   => $filter_args['field'],
+				'where_is'    => $where_atts['where_is'],
+				'where_val'   => $where_atts['where_val'],
+				'form_id'     => $filter_args['form_id'],
+				'form_posts'  => $filter_args['form_posts'],
 				'after_where' => $filter_args['after_where'],
-				'drafts' => $filter_args['drafts'],
+				'drafts'      => $filter_args['drafts'],
 			);
 
 			$entry_ids = FrmProAppHelper::filter_where( $filter_args['entry_ids'], $pass_args );
@@ -881,5 +925,27 @@ class FrmProStatisticsController {
 		}
 
 		$field_values = wp_unslash( $field_values );
+	}
+
+	/**
+	 * Check if meta values for a field include non-numeric data.
+	 *
+	 * @since 6.8.4
+	 *
+	 * @param object $field
+	 * @param array  $args
+	 * @return bool
+	 */
+	public static function has_non_numeric_values( $field, $args ) {
+		self::prepare_shortcode_atts( $args );
+		$meta_values = self::get_meta_values_for_single_field( $field, $args );
+
+		foreach ( $meta_values as $meta_value ) {
+			if ( ! is_numeric( $meta_value ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

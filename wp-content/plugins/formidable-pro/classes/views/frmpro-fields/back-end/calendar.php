@@ -1,6 +1,12 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <p class="frm8 frm_first frm_form_field">
-	<label class="frm_help" title="<?php esc_attr_e( 'Use four digit years or +/- years to make it dynamic. For example, use -5 for the start year and +5 for the end year.', 'formidable-pro' ); ?>">
+	<label>
 		<?php esc_html_e( 'Year Range', 'formidable-pro' ); ?>
+		<span class="frm_help frm_icon_font frm_tooltip_icon" data-placement="right" title="<?php esc_attr_e( 'Use four digit years or +/- years to make it dynamic. For example, use -5 for the start year and +5 for the end year.', 'formidable-pro' ); ?>"></span>
 	</label>
 
 	<span class="frm_grid_container">

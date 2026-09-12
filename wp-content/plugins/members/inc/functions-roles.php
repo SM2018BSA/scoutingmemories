@@ -4,11 +4,14 @@
  *
  * @package    Members
  * @subpackage Includes
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
+if (!defined('ABSPATH')) {
+    die('You are not allowed to call this page directly.');
+}
 
 # Register roles.
 add_action( 'wp_roles_init',          'members_register_roles',         95 );
@@ -307,25 +310,106 @@ function members_role_has_caps( $role ) {
  * @return int|array
  */
 function members_get_role_user_count( $role = '' ) {
+	global $wpdb;
 
 	// If the count is not already set for all roles, let's get it.
 	if ( empty( members_plugin()->role_user_count ) ) {
+		// Use transient cache to avoid full table scan + PHP processing on every request.
+		$cached = get_transient( members_role_user_count_transient_key() );
+		if ( is_array( $cached ) ) {
+			members_plugin()->role_user_count = $cached;
+		} elseif ( wp_is_large_user_count() ) {
+			// On large sites, use core's `count_users( 'time' )` SQL aggregation to avoid loading every capabilities row into memory. Counts primary + secondary roles, matching the scan below.
+			$users_of_blog = count_users( 'time' );
+			$all_roles     = array_keys( wp_roles()->get_names() );
+			$role_counts   = array_fill_keys( $all_roles, 0 );
 
-		// Count users.
-		$user_count = count_users();
+			if ( ! empty( $users_of_blog['avail_roles'] ) && is_array( $users_of_blog['avail_roles'] ) ) {
+				foreach ( $users_of_blog['avail_roles'] as $role_name => $count ) {
+					if ( isset( $role_counts[ $role_name ] ) ) {
+						$role_counts[ $role_name ] = (int) $count;
+					}
+				}
+			}
 
-		// Loop through the user count by role to get a count of the users with each role.
-		foreach ( $user_count['avail_roles'] as $_role => $count )
-			members_plugin()->role_user_count[ $_role ] = $count;
+			members_plugin()->role_user_count = $role_counts;
+			set_transient( members_role_user_count_transient_key(), $role_counts, 12 * HOUR_IN_SECONDS );
+		} else {
+			// Count all users with each role anywhere in wp_capabilities (primary or secondary).
+			// Matches wp user list --role= behavior and fixes undercounting when multiple roles are enabled.
+			$blog_prefix = $wpdb->get_blog_prefix();
+			$meta_key    = $blog_prefix . 'capabilities';
+
+			// Fetch only meta_value to reduce memory (no stdClass objects per row).
+			$results = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT meta_value FROM {$wpdb->usermeta} WHERE meta_key = %s",
+					$meta_key
+				)
+			);
+
+			// Only count keys that are registered roles, not individual capabilities (e.g. edit_posts).
+			$all_roles   = array_keys( wp_roles()->get_names() );
+			$role_counts = array_fill_keys( $all_roles, 0 );
+
+			if ( is_array( $results ) ) {
+				foreach ( $results as $meta_value ) {
+					$meta_value = trim( $meta_value );
+
+					if ( ! is_serialized( $meta_value ) ) {
+						continue;
+					}
+
+					// Safe deserialization: prevent object injection (allowed_classes => false).
+					$caps = unserialize( $meta_value, array( 'allowed_classes' => false ) );
+					if ( ! is_array( $caps ) ) {
+						continue;
+					}
+					// Count only granted capabilities that are actual role names.
+					$user_roles = array_intersect_key( array_filter( $caps ), $role_counts );
+					foreach ( array_keys( $user_roles ) as $role_name ) {
+						$role_counts[ $role_name ]++;
+					}
+				}
+			}
+			members_plugin()->role_user_count = $role_counts;
+			set_transient( members_role_user_count_transient_key(), $role_counts, 12 * HOUR_IN_SECONDS );
+		}
 	}
 
 	// Return the role count.
-	if ( $role )
+	if ( $role ) {
 		return isset( members_plugin()->role_user_count[ $role ] ) ? members_plugin()->role_user_count[ $role ] : 0;
+	}
 
 	// If the `$role` parameter wasn't passed into this function, return the array of user counts.
 	return members_plugin()->role_user_count;
 }
+
+/**
+ * Returns the transient key used for caching role user counts (multisite-safe).
+ *
+ * @since  3.2.20
+ * @return string
+ */
+function members_role_user_count_transient_key() {
+	return 'members_role_user_count_' . get_current_blog_id();
+}
+
+/**
+ * Clears the cached role user counts. Called when user roles change.
+ *
+ * @since  3.2.20
+ */
+function members_clear_role_user_count_cache() {
+	delete_transient( members_role_user_count_transient_key() );
+}
+
+add_action( 'set_user_role', 'members_clear_role_user_count_cache' );
+add_action( 'add_user_role', 'members_clear_role_user_count_cache' );
+add_action( 'remove_user_role', 'members_clear_role_user_count_cache' );
+add_action( 'add_user_to_blog', 'members_clear_role_user_count_cache' );
+add_action( 'remove_user_from_blog', 'members_clear_role_user_count_cache' );
 
 /**
  * Returns the number of granted capabilities that a role has.
@@ -390,7 +474,7 @@ function members_is_wordpress_role( $role ) {
  */
 function members_get_new_role_url() {
 
-	return add_query_arg( 'page', 'role-new', admin_url( 'users.php' ) );
+	return add_query_arg( 'page', 'members', admin_url( 'admin.php' ) );
 }
 
 /**
@@ -415,7 +499,7 @@ function members_get_clone_role_url( $role ) {
  */
 function members_get_edit_roles_url() {
 
-	return add_query_arg( 'page', 'roles', admin_url( 'users.php' ) );
+	return add_query_arg( 'page', 'roles', admin_url( 'admin.php?page=roles' ) );
 }
 
 /**
@@ -470,4 +554,64 @@ function members_get_delete_role_url( $role ) {
 function members_get_role_users_url( $role ) {
 
 	return admin_url( add_query_arg( 'role', $role, 'users.php' ) );
+}
+
+/**
+ * Returns role slugs that were created via the Members plugin UI (Add New Role).
+ * Used by the reset-roles feature to only remove Members-created roles.
+ *
+ * @since  3.2.18
+ * @access public
+ * @return array
+ */
+function members_get_created_roles() {
+
+	$roles = get_option( 'members_created_roles', array() );
+
+	return is_array( $roles ) ? $roles : array();
+}
+
+/**
+ * Tracks a role as created by the Members plugin UI.
+ *
+ * @since  3.2.18
+ * @access public
+ * @param  string $role Role slug.
+ * @return void
+ */
+function members_track_created_role( $role ) {
+
+	if ( ! $role || ! is_string( $role ) ) {
+		return;
+	}
+
+	$roles = members_get_created_roles();
+
+	if ( ! in_array( $role, $roles, true ) ) {
+		$roles[] = $role;
+		update_option( 'members_created_roles', $roles );
+	}
+}
+
+/**
+ * Stops tracking a role as created by Members (e.g. after delete or reset).
+ *
+ * @since  3.2.18
+ * @access public
+ * @param  string $role Role slug.
+ * @return void
+ */
+function members_untrack_created_role( $role ) {
+
+	if ( ! $role || ! is_string( $role ) ) {
+		return;
+	}
+
+	$roles = members_get_created_roles();
+	$key   = array_search( $role, $roles, true );
+
+	if ( false !== $key ) {
+		array_splice( $roles, $key, 1 );
+		update_option( 'members_created_roles', $roles );
+	}
 }

@@ -1,3 +1,19 @@
+<?php
+/**
+ * Shared entry sidebar.
+ *
+ * @package Formidable
+ *
+ * @var string       $id      Entry ID.
+ * @var stdClass     $entry   Entry object.
+ * @var string|null  $browser Browser info string if available.
+ * @var array|null   $data    Additional entry meta data (referrer, user_journey, etc.).
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <div class="frm_with_icons frm_no_print">
 	<h3>
 		<?php esc_html_e( 'Entry Actions', 'formidable' ); ?>
@@ -23,7 +39,7 @@
 		<?php esc_html_e( 'Entry Details', 'formidable' ); ?>
 	</h3>
 	<div class="inside">
-		<?php include( FrmAppHelper::plugin_path() . '/classes/views/frm-entries/_sidebar-shared-pub.php' ); ?>
+		<?php require FrmAppHelper::plugin_path() . '/classes/views/frm-entries/_sidebar-shared-pub.php'; ?>
 
 		<?php if ( $entry->post_id ) { ?>
 			<div class="misc-pub-section frm_no_print">
@@ -48,7 +64,7 @@
 		</div>
 
 		<div class="misc-pub-section">
-			<?php FrmAppHelper::icon_by_class( 'frmfont frm_keyalt_icon', array( 'aria-hidden' => 'true' ) ); ?>
+			<?php FrmAppHelper::icon_by_class( 'frmfont frm_key_icon', array( 'aria-hidden' => 'true' ) ); ?>
 			<?php esc_html_e( 'Entry Key', 'formidable' ); ?>:
 			<b><?php echo esc_html( $entry->item_key ); ?></b>
 		</div>
@@ -60,8 +76,12 @@
 				<b><?php echo esc_html( $entry->parent_item_id ); ?></b>
 			</div>
 		<?php } ?>
+
+		<?php FrmEntriesHelper::maybe_render_captcha_score( $entry->id ); ?>
 	</div>
 </div>
+
+<?php do_action( 'frm_entry_shared_sidebar_middle', $entry ); ?>
 
 <div class="frm_with_icons">
 	<h3><?php esc_html_e( 'User Information', 'formidable' ); ?></h3>
@@ -74,12 +94,13 @@
 				printf(
 					/* translators: %1$s: User display name. */
 					esc_html__( 'Created by: %1$s', 'formidable' ),
-					FrmAppHelper::kses( FrmFieldsHelper::get_user_display_name( $entry->user_id, 'display_name', array( 'link' => true ) ), array( 'a' ) )
-				); // WPCS: XSS ok.
+					FrmAppHelper::kses( FrmFieldsHelper::get_user_display_name( $entry->user_id, 'display_name', array( 'link' => true ) ), array( 'a' ) ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				);
 				?>
 			</div>
 		<?php } ?>
 
+		<?php // phpcs:ignore Universal.Operators.StrictComparisons ?>
 		<?php if ( $entry->updated_by && $entry->updated_by != $entry->user_id ) { ?>
 			<div class="misc-pub-section">
 				<?php
@@ -88,8 +109,8 @@
 				printf(
 					/* translators: %1$s: User display name. */
 					esc_html__( 'Updated by: %1$s', 'formidable' ),
-					FrmAppHelper::kses( FrmFieldsHelper::get_user_display_name( $entry->updated_by, 'display_name', array( 'link' => true ) ), array( 'a' ) )
-				); // WPCS: XSS ok.
+					FrmAppHelper::kses( FrmFieldsHelper::get_user_display_name( $entry->updated_by, 'display_name', array( 'link' => true ) ), array( 'a' ) ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				);
 				?>
 			</div>
 		<?php } ?>
@@ -120,7 +141,7 @@
 
 		<?php
 		foreach ( (array) $data as $k => $d ) {
-			if ( in_array( $k, array( 'browser', 'referrer' ) ) ) {
+			if ( in_array( $k, array( 'browser', 'referrer', 'user_journey' ), true ) ) {
 				continue;
 			}
 			?>

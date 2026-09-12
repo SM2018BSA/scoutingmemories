@@ -4,19 +4,40 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class FrmAppHelper {
-	public static $db_version = 97; //version of the database we are moving to
-	public static $pro_db_version = 37; //deprecated
+
+	/**
+	 * Version of the database we are moving to.
+	 *
+	 * @var int
+	 */
+	public static $db_version = 106;
+
+	/**
+	 * Used by the API add-on.
+	 *
+	 * @var float
+	 */
 	public static $font_version = 7;
 
 	/**
-	 * @since 2.0
+	 * @var bool
 	 */
-	public static $plug_version = '4.0.04';
+	private static $added_gmt_offset_filter = false;
+
+	/**
+	 * @since 2.0
+	 *
+	 * @var string
+	 */
+	public static $plug_version = '6.35';
+
+	/**
+	 * @var bool
+	 */
+	private static $included_svg = false;
 
 	/**
 	 * @since 1.07.02
-	 *
-	 * @param none
 	 *
 	 * @return string The version of this plugin
 	 */
@@ -24,19 +45,31 @@ class FrmAppHelper {
 		return self::$plug_version;
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function plugin_folder() {
 		return basename( self::plugin_path() );
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function plugin_path() {
-		return dirname( dirname( dirname( __FILE__ ) ) );
+		return dirname( __DIR__, 2 );
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function plugin_url() {
-		// Prevously FRM_URL constant.
+		// Previously FRM_URL constant.
 		return plugins_url( '', self::plugin_path() . '/formidable.php' );
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function relative_plugin_url() {
 		return str_replace( array( 'https:', 'http:' ), '', self::plugin_url() );
 	}
@@ -53,15 +86,22 @@ class FrmAppHelper {
 	 * Used for [sitename] shortcode
 	 *
 	 * @since 2.0
+	 *
 	 * @return string
 	 */
 	public static function site_name() {
 		return get_option( 'blogname' );
 	}
 
+	/**
+	 * @param string $url
+	 *
+	 * @return string
+	 */
 	public static function make_affiliate_url( $url ) {
 		$affiliate_id = self::get_affiliate();
-		if ( ! empty( $affiliate_id ) ) {
+
+		if ( $affiliate_id ) {
 			$url = str_replace( array( 'http://', 'https://' ), '', $url );
 			$url = 'http://www.shareasale.com/r.cfm?u=' . absint( $affiliate_id ) . '&b=841990&m=64739&afftrack=plugin&urllink=' . urlencode( $url );
 		}
@@ -69,44 +109,159 @@ class FrmAppHelper {
 		return $url;
 	}
 
+	/**
+	 * @return int
+	 */
 	public static function get_affiliate() {
 		return absint( apply_filters( 'frm_affiliate_id', 0 ) );
 	}
 
 	/**
 	 * @since 3.04.02
-	 * @param array|string $args
+	 *
+	 * @param array|string $args If a string is passed, it is used for the utm_campaign attribute.
 	 * @param string       $page
 	 */
 	public static function admin_upgrade_link( $args, $page = '' ) {
-		if ( empty( $page ) ) {
-			$page = 'https://formidableforms.com/lite-upgrade/';
-		} else {
+		if ( $page ) {
+			$page = str_replace( 'https://formidableforms.com/', '', $page );
 			$page = 'https://formidableforms.com/' . $page;
+		} else {
+			$page = 'https://formidableforms.com/lite-upgrade/';
 		}
 
-		$anchor = '';
-		if ( is_array( $args ) ) {
-			$medium  = $args['medium'];
-			$content = $args['content'];
-			if ( isset( $args['anchor'] ) ) {
-				$anchor = '#' . $args['anchor'];
-			}
-		} else {
-			$medium = $args;
-		}
+		$args = is_array( $args ) ? self::adjust_legacy_utm_args( $args ) : array( 'campaign' => $args );
 
 		$query_args = array(
-			'utm_source'   => 'WordPress',
-			'utm_medium'   => $medium,
-			'utm_campaign' => 'liteplugin',
+			'utm_source' => 'plugin',
+			'utm_medium' => self::get_utm_medium(),
 		);
+		$query_args = self::maybe_add_utm_license( $query_args );
 
-		if ( isset( $content ) ) {
-			$query_args['utm_content'] = $content;
+		if ( isset( $args['campaign'] ) ) {
+			$query_args['utm_campaign'] = $args['campaign'];
 		}
 
-		return add_query_arg( $query_args, $page ) . $anchor;
+		if ( isset( $args['content'] ) ) {
+			$query_args['utm_content'] = $args['content'];
+		}
+
+		if ( isset( $args['param'] ) ) {
+			$query_args['f'] = $args['param'];
+		}
+
+		if ( ! empty( $args['plan'] ) ) {
+			$query_args['plan'] = $args['plan'];
+		}
+
+		$link = add_query_arg( $query_args, $page );
+
+		if ( isset( $args['anchor'] ) ) {
+			$link .= '#' . $args['anchor'];
+		}
+
+		return self::make_affiliate_url( $link );
+	}
+
+	/**
+	 * If medium is "pro", add an additional utm_license param with their active license type.
+	 *
+	 * @since 6.25.1
+	 *
+	 * @param array  $query_args
+	 * @param string $link
+	 *
+	 * @return array
+	 */
+	private static function maybe_add_utm_license( $query_args, $link = '' ) {
+		$medium = $query_args['utm_medium'] ?? self::pull_medium_from_link( $link );
+
+		if ( 'pro' === $medium && is_callable( 'FrmProAddonsController::get_readable_license_type' ) ) {
+			$query_args['utm_license'] = strtolower( FrmProAddonsController::get_readable_license_type() );
+		}
+
+		return $query_args;
+	}
+
+	/**
+	 * @since 6.26
+	 *
+	 * @param string $link
+	 *
+	 * @return string
+	 */
+	private static function pull_medium_from_link( $link ) {
+		if ( ! $link ) {
+			return '';
+		}
+
+		$parsed = parse_url( $link );
+
+		if ( ! is_array( $parsed ) || ! isset( $parsed['query'] ) ) {
+			return '';
+		}
+
+		$query_args = wp_parse_args( $parsed['query'] );
+
+		return ! empty( $query_args['utm_medium'] ) ? $query_args['utm_medium'] : '';
+	}
+
+	/**
+	 * @since 6.25.1
+	 *
+	 * @return string
+	 */
+	private static function get_utm_medium() {
+		return self::pro_is_connected() ? 'pro' : 'lite';
+	}
+
+	/**
+	 * Change campaign from "liteplugin" to what we're currently using for medium.
+	 *
+	 * @since 6.25.1
+	 *
+	 * @param array $args
+	 *
+	 * @return array
+	 */
+	private static function adjust_legacy_utm_args( $args ) {
+		if ( isset( $args['medium'] ) ) {
+			$args['campaign'] = $args['medium'];
+			unset( $args['medium'] );
+		}
+
+		return $args;
+	}
+
+	/**
+	 * @since 6.21
+	 *
+	 * @param string $cta_link
+	 * @param array  $utm
+	 */
+	public static function maybe_add_missing_utm( $cta_link, $utm ) {
+		$utm        = self::adjust_legacy_utm_args( $utm );
+		$query_args = array();
+
+		if ( ! str_contains( $cta_link, 'utm_source' ) ) {
+			$query_args['utm_source'] = 'plugin';
+		}
+
+		if ( ! str_contains( $cta_link, 'utm_medium' ) ) {
+			$query_args['utm_medium'] = self::get_utm_medium();
+		}
+
+		if ( ! str_contains( $cta_link, 'utm_campaign' ) && isset( $utm['campaign'] ) ) {
+			$query_args['utm_campaign'] = $utm['campaign'];
+		}
+
+		if ( ! str_contains( $cta_link, 'utm_content' ) && isset( $utm['content'] ) ) {
+			$query_args['utm_content'] = $utm['content'];
+		}
+
+		$query_args = self::maybe_add_utm_license( $query_args, $cta_link );
+
+		return $query_args ? add_query_arg( $query_args, $cta_link ) : $cta_link;
 	}
 
 	/**
@@ -115,11 +270,13 @@ class FrmAppHelper {
 	 * @since 2.0
 	 *
 	 * @param array $args - May include the form id when values need translation.
-	 * @return FrmSettings $frm_setings
+	 *
+	 * @return FrmSettings
 	 */
 	public static function get_settings( $args = array() ) {
 		global $frm_settings;
-		if ( empty( $frm_settings ) ) {
+
+		if ( ! $frm_settings ) {
 			$frm_settings = new FrmSettings( $args );
 		} elseif ( isset( $args['current_form'] ) ) {
 			// If the global has already been set, allow strings to be filtered.
@@ -129,14 +286,39 @@ class FrmAppHelper {
 		return $frm_settings;
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function get_menu_name() {
-		$frm_settings = self::get_settings();
+		if ( ! self::pro_is_installed() || FrmAddonsController::is_license_expired() ) {
+			return 'Formidable';
+		}
 
-		return $frm_settings->menu;
+		return self::get_settings()->menu;
+	}
+
+	/**
+	 * Determine if the current branding is set to 'formidable'.
+	 * Checks the menu icon, and verifies if it matches the formidable branding.
+	 *
+	 * @since 6.4.2
+	 *
+	 * @return bool True if the menu icon is the logo, false otherwise.
+	 */
+	public static function is_formidable_branding() {
+		if ( ! self::pro_is_installed() ) {
+			return true;
+		}
+
+		return str_contains( self::get_menu_icon_class(), 'frm_logo_icon' );
 	}
 
 	/**
 	 * @since 3.05
+	 *
+	 * @param array $atts
+	 *
+	 * @return string
 	 */
 	public static function svg_logo( $atts = array() ) {
 		$defaults = array(
@@ -147,49 +329,158 @@ class FrmAppHelper {
 		);
 		$atts     = array_merge( $defaults, $atts );
 
+		// phpcs:disable SlevomatCodingStandard.Files.LineLength.LineTooLong
 		return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 599.68 601.37" width="' . esc_attr( $atts['width'] ) . '" height="' . esc_attr( $atts['height'] ) . '">
-				<defs />
-				<rect fill="' . esc_attr( $atts['orange'] ) . '" x="289.64" y="383.96" width="140" height="76" />
-				<path fill="' . esc_attr( $atts['fill'] ) . '" d="M400.21,147H200.12c-17,0-30.48,12.2-30.48,29.31V218h260V147Z" />
-				<path fill="' . esc_attr( $atts['fill'] ) . '" d="M397.86,264H169.64V460h75V340H397.86A32.22,32.22,0,0,0,428,318.56a24.29,24.29,0,0,0,1.66-8.69V264Z" />
-				<path fill="' . esc_attr( $atts['fill'] ) . '" d="M299.84,601.37A300.26,300.26,0,0,1,0,300.68,299.84,299.84,0,1,1,511.85,513.3,297.44,297.44,0,0,1,299.84,601.37Zm0-563A261.94,261.94,0,0,0,38.26,300.68,261.58,261.58,0,1,0,484.8,115.2,259.47,259.47,0,0,0,299.84,38.37Z" />
-			</svg>';
+			<path fill="' . esc_attr( $atts['orange'] ) . '" d="M289.6 384h140v76h-140z"/>
+			<path fill="' . esc_attr( $atts['fill'] ) . '" d="M400.2 147h-200c-17 0-30.6 12.2-30.6 29.3V218h260v-71zM397.9 264H169.6v196h75V340H398a32.2 32.2 0 0 0 30.1-21.4 24.3 24.3 0 0 0 1.7-8.7V264zM299.8 601.4A300.3 300.3 0 0 1 0 300.7a299.8 299.8 0 1 1 511.9 212.6 297.4 297.4 0 0 1-212 88zm0-563A262 262 0 0 0 38.3 300.7a261.6 261.6 0 1 0 446.5-185.5 259.5 259.5 0 0 0-185-76.8z"/>
+		</svg>';
+		// phpcs:enable SlevomatCodingStandard.Files.LineLength.LineTooLong
 	}
 
 	/**
 	 * @since 4.0
+	 *
+	 * @param array $atts
+	 *
+	 * @return void
 	 */
 	public static function show_logo( $atts = array() ) {
-		echo self::kses( self::svg_logo( $atts ), 'all' ); // WPCS: XSS ok.
+		self::kses_echo( self::svg_logo( $atts ), 'all' );
+	}
+
+	/**
+	 * @since 4.03.02
+	 *
+	 * @return void
+	 */
+	public static function show_header_logo() {
+		$icon = self::svg_logo(
+			array(
+				'height' => 35,
+				'width'  => 35,
+			)
+		);
+
+		$new_icon = apply_filters( 'frm_icon', $icon, true );
+
+		if ( $new_icon !== $icon ) {
+			if ( str_starts_with( $new_icon, '<svg' ) ) {
+				$icon = str_replace( 'viewBox="0 0 20', 'width="30" height="35" style="color:#929699" viewBox="0 0 20', $new_icon );
+			} else {
+				// Show nothing if it isn't an SVG.
+				$icon = '<div style="height:39px"></div>';
+			}
+		}
+		self::kses_echo( $icon, 'all' );
 	}
 
 	/**
 	 * @since 2.02.04
+	 *
+	 * @return bool
 	 */
 	public static function ips_saved() {
 		$frm_settings = self::get_settings();
-
 		return ! $frm_settings->no_ips;
 	}
 
+	/**
+	 * @return bool
+	 */
 	public static function pro_is_installed() {
-		return apply_filters( 'frm_pro_installed', false );
+		return (bool) apply_filters( 'frm_pro_installed', false );
 	}
 
+	/**
+	 * Check if the Pro plugin is installed, whether authorized or not.
+	 *
+	 * @since 6.8.3
+	 *
+	 * @return bool
+	 */
+	public static function pro_is_included() {
+		return function_exists( 'load_formidable_pro' );
+	}
+
+	/**
+	 * @since 4.06.02
+	 *
+	 * @return bool
+	 */
+	public static function pro_is_connected() {
+		global $frm_vars;
+		return self::pro_is_installed() && $frm_vars['pro_is_authorized'];
+	}
+
+	/**
+	 * @since 4.06
+	 * @since 6.16.2 Added $check_for_settings parameter
+	 *
+	 * @param bool $check_for_settings
+	 *
+	 * @return bool
+	 */
+	public static function is_form_builder_page( $check_for_settings = true ) {
+		$action        = self::simple_get( 'frm_action', 'sanitize_title' );
+		$check_actions = array( 'edit', 'duplicate' );
+
+		if ( $check_for_settings ) {
+			$check_actions[] = 'settings';
+		}
+
+		return self::is_admin_page( 'formidable' ) && in_array( $action, $check_actions, true );
+	}
+
+	/**
+	 * @return bool
+	 */
 	public static function is_formidable_admin() {
-		$page          = self::simple_get( 'page', 'sanitize_title' );
-		$is_formidable = strpos( $page, 'formidable' ) !== false;
-		if ( empty( $page ) ) {
-			global $pagenow;
-			$post_type     = self::simple_get( 'post_type', 'sanitize_title' );
-			$is_formidable = ( $post_type == 'frm_display' );
-			if ( empty( $post_type ) && $pagenow == 'post.php' ) {
-				global $post;
-				$is_formidable = ( $post && $post->post_type == 'frm_display' );
+		$page = self::simple_get( 'page', 'sanitize_title' );
+
+		if ( ! $page ) {
+			return self::is_view_builder_page();
+		}
+
+		return str_contains( $page, 'formidable' );
+	}
+
+	/**
+	 * Checks if is a list page.
+	 *
+	 * @since 6.19
+	 *
+	 * @param string $page The name of the page to check.
+	 *
+	 * @return bool
+	 */
+	public static function is_admin_list_page( $page = 'formidable' ) {
+		if ( 'formidable' === $page ) {
+			return self::on_form_listing_page();
+		}
+
+		if ( ! self::is_admin_page( $page ) ) {
+			return false;
+		}
+
+		if ( 'formidable-entries' === $page ) {
+			$action = self::simple_get( 'frm_action' );
+
+			if ( ! $action || in_array( $action, self::get_entries_listing_page_form_actions(), true ) ) {
+				return true;
 			}
 		}
 
-		return $is_formidable;
+		// Check edit or settings page.
+		return ! self::simple_get( 'frm_action' );
+	}
+
+	/**
+	 * @since 6.20
+	 *
+	 * @return array<string>
+	 */
+	private static function get_entries_listing_page_form_actions() {
+		return array( 'list', 'destroy' );
 	}
 
 	/**
@@ -197,19 +488,24 @@ class FrmAppHelper {
 	 *
 	 * @since 2.0
 	 *
-	 * @param string $page The name of the page to check
+	 * @param string $page The name of the page to check.
 	 *
-	 * @return boolean
+	 * @return bool
 	 */
 	public static function is_admin_page( $page = 'formidable' ) {
 		global $pagenow;
 		$get_page = self::simple_get( 'page', 'sanitize_title' );
+
 		if ( $pagenow ) {
-			// allow this to be true during ajax load i.e. ajax form builder loading
-			return ( $pagenow == 'admin.php' || $pagenow == 'admin-ajax.php' ) && $get_page == $page;
+			// Allow this to be true during ajax load i.e. ajax form builder loading
+			$is_page = ( $pagenow === 'admin.php' || $pagenow === 'admin-ajax.php' ) && $get_page === $page;
+
+			if ( $is_page ) {
+				return true;
+			}
 		}
 
-		return is_admin() && $get_page == $page;
+		return is_admin() && $get_page === $page;
 	}
 
 	/**
@@ -217,22 +513,22 @@ class FrmAppHelper {
 	 * Returns false for the views listing page.
 	 *
 	 * @since 4.0
+	 *
+	 * @return bool
 	 */
 	public static function is_view_builder_page() {
 		global $pagenow;
 
-		if ( $pagenow !== 'post.php' && $pagenow !== 'post-new.php' ) {
+		if ( ! in_array( $pagenow, array( 'post.php', 'post-new.php', 'edit.php' ), true ) ) {
 			return false;
 		}
 
 		$post_type = self::simple_get( 'post_type', 'sanitize_title' );
 
-		if ( empty( $post_type ) ) {
-			$post_id = self::simple_get( 'post', 'absint' );
-			$post    = get_post( $post_id );
-			if ( ! empty( $post ) ) {
-				$post_type = $post->post_type;
-			}
+		if ( ! $post_type ) {
+			$post_id   = self::simple_get( 'post', 'absint' );
+			$post      = get_post( $post_id );
+			$post_type = $post ? $post->post_type : '';
 		}
 
 		return $post_type === 'frm_display';
@@ -243,15 +539,13 @@ class FrmAppHelper {
 	 *
 	 * @since 2.0
 	 *
-	 * @param None
-	 *
-	 * @return boolean
+	 * @return bool
 	 */
 	public static function is_preview_page() {
 		global $pagenow;
 		$action = self::simple_get( 'action', 'sanitize_title' );
 
-		return $pagenow && $pagenow == 'admin-ajax.php' && $action == 'frm_forms_preview';
+		return $pagenow === 'admin-ajax.php' && $action === 'frm_forms_preview';
 	}
 
 	/**
@@ -259,40 +553,27 @@ class FrmAppHelper {
 	 *
 	 * @since 2.0
 	 *
-	 * @param None
-	 *
-	 * @return boolean
+	 * @return bool
 	 */
 	public static function doing_ajax() {
-		return self::wp_doing_ajax() && ! self::is_preview_page();
+		return wp_doing_ajax() && ! self::is_preview_page();
 	}
 
+	/**
+	 * @return string
+	 */
 	public static function js_suffix() {
 		return defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ? '' : '.min';
 	}
 
 	/**
-	 * Use the WP 4.7 wp_doing_ajax function
-	 *
-	 * @since 2.05.07
-	 */
-	public static function wp_doing_ajax() {
-		if ( function_exists( 'wp_doing_ajax' ) ) {
-			$doing_ajax = wp_doing_ajax();
-		} else {
-			$doing_ajax = defined( 'DOING_AJAX' ) && DOING_AJAX;
-		}
-
-		return $doing_ajax;
-	}
-
-	/**
 	 * @since 2.0.8
+	 *
+	 * @return bool
 	 */
 	public static function prevent_caching() {
 		global $frm_vars;
-
-		return isset( $frm_vars['prevent_caching'] ) && $frm_vars['prevent_caching'];
+		return ! empty( $frm_vars['prevent_caching'] );
 	}
 
 	/**
@@ -300,12 +581,17 @@ class FrmAppHelper {
 	 *
 	 * @since 2.0
 	 *
-	 * @param None
-	 *
-	 * @return boolean
+	 * @return bool
 	 */
 	public static function is_admin() {
-		return is_admin() && ! self::wp_doing_ajax();
+		$is_admin = is_admin() && ! wp_doing_ajax();
+
+		/**
+		 * @since 6.0
+		 *
+		 * @param bool $is_admin
+		 */
+		return apply_filters( 'frm_is_admin', $is_admin );
 	}
 
 	/**
@@ -313,15 +599,21 @@ class FrmAppHelper {
 	 *
 	 * @since 2.0
 	 *
-	 * @param mixed $value - value to check
-	 * @param string
+	 * @param mixed  $value Value to check.
+	 * @param string $empty
 	 *
-	 * @return boolean
+	 * @return bool
 	 */
 	public static function is_empty_value( $value, $empty = '' ) {
-		return ( is_array( $value ) && empty( $value ) ) || $value === $empty;
+		return $value === array() || $value === $empty;
 	}
 
+	/**
+	 * @param mixed  $value
+	 * @param string $empty
+	 *
+	 * @return bool
+	 */
 	public static function is_not_empty_value( $value, $empty = '' ) {
 		return ! self::is_empty_value( $value, $empty );
 	}
@@ -340,32 +632,45 @@ class FrmAppHelper {
 	}
 
 	/**
-	 * Check for the IP address in several places
-	 * Used by [ip] shortcode
+	 * Get the server OS
+	 *
+	 * @since 6.4.2
+	 *
+	 * @return string
+	 */
+	public static function get_server_os() {
+		if ( function_exists( 'php_uname' ) ) {
+			return php_uname( 's' );
+		}
+
+		if ( ! defined( 'PHP_OS' ) ) {
+			return '';
+		}
+
+		// match the same response for Windows server as php_uname('s')
+		return in_array( PHP_OS, array( 'WIN32', 'WINNT', 'Windows_NT' ), true ) ? 'Windows NT' : PHP_OS;
+	}
+
+	/**
+	 * Check for the IP address in several places (when custom headers are enabled).
+	 * Used by [ip] shortcode.
 	 *
 	 * @return string The IP address of the current user
 	 */
 	public static function get_ip_address() {
-		$ip_options = array(
-			'HTTP_CLIENT_IP',
-			'HTTP_CF_CONNECTING_IP',
-			'HTTP_X_FORWARDED_FOR',
-			'HTTP_X_FORWARDED',
-			'HTTP_X_CLUSTER_CLIENT_IP',
-			'HTTP_X_REAL_IP',
-			'HTTP_FORWARDED_FOR',
-			'HTTP_FORWARDED',
-			'REMOTE_ADDR',
-		);
-		$ip = '';
+		$ip_options = self::should_use_custom_header_ip() ? self::get_custom_header_keys_for_ip() : array( 'REMOTE_ADDR' );
+		$ip         = '';
+
 		foreach ( $ip_options as $key ) {
 			if ( ! isset( $_SERVER[ $key ] ) ) {
 				continue;
 			}
 
 			$key = self::get_server_value( $key );
+
 			foreach ( explode( ',', $key ) as $ip ) {
-				$ip = trim( $ip ); // just to be safe.
+				// Just to be safe.
+				$ip = trim( $ip );
 
 				if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) !== false ) {
 					return sanitize_text_field( $ip );
@@ -376,15 +681,70 @@ class FrmAppHelper {
 		return sanitize_text_field( $ip );
 	}
 
+	/**
+	 * @since 6.1
+	 *
+	 * @return array
+	 */
+	public static function get_custom_header_keys_for_ip() {
+		return array(
+			'HTTP_CLIENT_IP',
+			'HTTP_CF_CONNECTING_IP',
+			'HTTP_X_FORWARDED_FOR',
+			'HTTP_X_FORWARDED',
+			'HTTP_X_CLUSTER_CLIENT_IP',
+			'HTTP_X_REAL_IP',
+			'HTTP_FORWARDED_FOR',
+			'HTTP_FORWARDED',
+			'REMOTE_ADDR',
+		);
+	}
+
+	/**
+	 * Check if we should check every HTTP header or just $_SERVER['REMOTE_ADDR'].
+	 * The other HTTP headers can be spoofed so this isn't recommended.
+	 * But in some cases (like reverse proxies), the IP may be empty if you use $_SERVER['REMOTE_ADDR'].
+	 *
+	 * @since 6.1
+	 *
+	 * @return bool
+	 */
+	private static function should_use_custom_header_ip() {
+		$settings                    = self::get_settings();
+		$should_use_custom_header_ip = ! $settings->no_ips && $settings->custom_header_ip;
+
+		/**
+		 * Filter whether to check spoofable HTTP headers.
+		 * This uses the custom_header_ip setting, but it is hidden if the GDPR option is also on.
+		 * As the IP is still checked for blacklist checks, someone with the GDPR option may still want to enable this when behind a reverse proxy.
+		 *
+		 * @since 6.1
+		 *
+		 * @param bool $should_use_custom_header_ip
+		 */
+		return apply_filters( 'frm_use_custom_header_ip', $should_use_custom_header_ip );
+	}
+
+	/**
+	 * @param string          $param
+	 * @param mixed           $default
+	 * @param string          $src
+	 * @param callable|string $sanitize
+	 *
+	 * @return mixed
+	 */
 	public static function get_param( $param, $default = '', $src = 'get', $sanitize = '' ) {
-		if ( strpos( $param, '[' ) ) {
+		if ( str_contains( $param, '[' ) ) {
 			$params = explode( '[', $param );
 			$param  = $params[0];
 		}
 
-		if ( $src == 'get' ) {
+		if ( $src === 'get' ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$value = isset( $_POST[ $param ] ) ? wp_unslash( $_POST[ $param ] ) : ( isset( $_GET[ $param ] ) ? wp_unslash( $_GET[ $param ] ) : $default );
-			if ( ! isset( $_POST[ $param ] ) && isset( $_GET[ $param ] ) && ! is_array( $value ) ) {
+
+			if ( ! isset( $_POST[ $param ] ) && isset( $_GET[ $param ] ) && ! is_array( $value ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				$value = htmlspecialchars_decode( wp_unslash( $_GET[ $param ] ) );
 			}
 			self::sanitize_value( $sanitize, $value );
@@ -399,27 +759,40 @@ class FrmAppHelper {
 			);
 		}
 
-		if ( isset( $params ) && is_array( $value ) && ! empty( $value ) ) {
-			foreach ( $params as $k => $p ) {
-				if ( ! $k || ! is_array( $value ) ) {
-					continue;
-				}
+		if ( ! isset( $params ) || ! is_array( $value ) || ! $value ) {
+			return $value;
+		}
 
-				$p     = trim( $p, ']' );
-				$value = isset( $value[ $p ] ) ? $value[ $p ] : $default;
+		foreach ( $params as $k => $p ) {
+			if ( ! $k || ! is_array( $value ) ) {
+				continue;
 			}
+
+			$p     = trim( $p, ']' );
+			$value = $value[ $p ] ?? $default;
 		}
 
 		return $value;
 	}
 
-	public static function get_post_param( $param, $default = '', $sanitize = '' ) {
+	/**
+	 * Get a value from $_POST data.
+	 *
+	 * @param string          $param      The key we are trying to access data from in $_POST.
+	 * @param mixed           $default    The default if nothing is being sent.
+	 * @param callable|string $sanitize   Make sure to pass a sanitize method here. This function will NOT sanitize by default.
+	 * @param bool            $serialized
+	 *
+	 * @return mixed
+	 */
+	public static function get_post_param( $param, $default = '', $sanitize = '', $serialized = false ) {
 		return self::get_simple_request(
 			array(
-				'type'     => 'post',
-				'param'    => $param,
-				'default'  => $default,
-				'sanitize' => $sanitize,
+				'type'       => 'post',
+				'param'      => $param,
+				'default'    => $default,
+				'sanitize'   => $sanitize,
+				'serialized' => $serialized,
 			)
 		);
 	}
@@ -431,7 +804,7 @@ class FrmAppHelper {
 	 * @param string $sanitize
 	 * @param string $default
 	 *
-	 * @return string|array
+	 * @return array|int|string
 	 */
 	public static function simple_get( $param, $sanitize = 'sanitize_text_field', $default = '' ) {
 		return self::get_simple_request(
@@ -451,30 +824,36 @@ class FrmAppHelper {
 	 *
 	 * @param array $args
 	 *
-	 * @return string|array
+	 * @return array|string
 	 */
 	public static function get_simple_request( $args ) {
 		$defaults = array(
-			'param'    => '',
-			'default'  => '',
-			'type'     => 'get',
-			'sanitize' => 'sanitize_text_field',
+			'param'      => '',
+			'default'    => '',
+			'type'       => 'get',
+			'sanitize'   => 'sanitize_text_field',
+			'serialized' => false,
 		);
 		$args     = wp_parse_args( $args, $defaults );
+		$value    = $args['default'];
 
-		$value = $args['default'];
-		if ( $args['type'] == 'get' ) {
+		if ( $args['type'] === 'get' ) {
 			if ( $_GET && isset( $_GET[ $args['param'] ] ) ) {
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.NonceVerification.Missing
 				$value = wp_unslash( $_GET[ $args['param'] ] );
 			}
-		} elseif ( $args['type'] == 'post' ) {
-			if ( isset( $_POST[ $args['param'] ] ) ) {
-				$value = maybe_unserialize( wp_unslash( $_POST[ $args['param'] ] ) );
+		} elseif ( $args['type'] === 'post' ) {
+			if ( isset( $_POST[ $args['param'] ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.NonceVerification.Missing
+				$value = wp_unslash( $_POST[ $args['param'] ] );
+
+				if ( $args['serialized'] === true && is_serialized_string( $value ) && is_serialized( $value ) ) {
+					self::unserialize_or_decode( $value );
+				}
 			}
-		} else {
-			if ( isset( $_REQUEST[ $args['param'] ] ) ) {
-				$value = wp_unslash( $_REQUEST[ $args['param'] ] );
-			}
+		} elseif ( isset( $_REQUEST[ $args['param'] ] ) ) {
+			// phpcs:ignore phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$value = wp_unslash( $_REQUEST[ $args['param'] ] );
 		}
 
 		self::sanitize_value( $args['sanitize'], $value );
@@ -489,32 +868,54 @@ class FrmAppHelper {
 	 *
 	 * @param string $value
 	 *
-	 * @return string $value
+	 * @return string Value.
 	 */
 	public static function preserve_backslashes( $value ) {
 		// If backslashes have already been added, don't add them again
-		if ( strpos( $value, '\\\\' ) === false ) {
-			$value = addslashes( $value );
-		}
-
-		return $value;
+		return str_contains( $value, '\\\\' ) ? $value : addslashes( $value );
 	}
 
+	/**
+	 * Sanitize a value in-place.
+	 * If $value is an array, the sanitize function will get called for each item.
+	 *
+	 * @param callable $sanitize
+	 * @param mixed    $value
+	 *
+	 * @return void
+	 */
 	public static function sanitize_value( $sanitize, &$value ) {
-		if ( ! empty( $sanitize ) ) {
-			if ( is_array( $value ) ) {
-				$temp_values = $value;
-				foreach ( $temp_values as $k => $v ) {
-					self::sanitize_value( $sanitize, $value[ $k ] );
-				}
-			} else {
-				$value = call_user_func( $sanitize, $value );
-			}
+		if ( ! $sanitize ) {
+			return;
 		}
+
+		if ( is_object( $value ) ) {
+			$value = '';
+			return;
+		}
+
+		if ( is_array( $value ) ) {
+			$temp_values = $value;
+
+			foreach ( $temp_values as $k => $v ) {
+				self::sanitize_value( $sanitize, $value[ $k ] );
+			}
+
+			return;
+		}
+
+		$value = call_user_func( $sanitize, $value );
 	}
 
+	/**
+	 * @param array $sanitize_method
+	 * @param array $values
+	 *
+	 * @return void
+	 */
 	public static function sanitize_request( $sanitize_method, &$values ) {
 		$temp_values = $values;
+
 		foreach ( $temp_values as $k => $val ) {
 			if ( isset( $sanitize_method[ $k ] ) ) {
 				$values[ $k ] = call_user_func( $sanitize_method[ $k ], $val );
@@ -524,10 +925,53 @@ class FrmAppHelper {
 
 	/**
 	 * @since 4.0.04
+	 *
+	 * @param mixed $value
+	 *
+	 * @return void
 	 */
 	public static function sanitize_with_html( &$value ) {
-		self::sanitize_value( 'wp_kses_post', $value );
+		if ( current_user_can( 'frm_edit_entries' ) || current_user_can( 'administrator' ) ) {
+			// Only strip unsafe HTML like scripts for a privileged user submitting a form.
+			self::sanitize_value( 'wp_kses_post', $value );
+		} else {
+			self::sanitize_value( self::class . '::strip_most_html', $value );
+		}
 		self::decode_specialchars( $value );
+		self::sanitize_value( 'FrmHtmlSanitizer::sanitize_url_attributes', $value );
+	}
+
+	/**
+	 * Allow only a small set of very basic HTML for unprivileged users.
+	 *
+	 * @since 6.7.1
+	 *
+	 * @param string $value
+	 */
+	public static function strip_most_html( $value ) {
+		if ( '' === $value ) {
+			return $value;
+		}
+
+		$allowed_html = array(
+			'b'      => array(),
+			'br'     => array(),
+			'strong' => array(),
+			'p'      => array(),
+			'i'      => array(),
+			'ul'     => array(),
+			'ol'     => array(),
+			'li'     => array(),
+		);
+
+		/**
+		 * @since 6.7.1
+		 *
+		 * @param array $allowed_html
+		 */
+		$allowed_html = apply_filters( 'frm_allowed_form_input_html', $allowed_html );
+
+		return wp_kses( $value, $allowed_html );
 	}
 
 	/**
@@ -535,16 +979,65 @@ class FrmAppHelper {
 	 * this MUST be done, else we'll be back to the '& entity' problem.
 	 *
 	 * @since 4.0.04
+	 *
+	 * @param mixed $value Value to decode, passed by reference.
 	 */
-	private static function decode_specialchars( &$value ) {
+	public static function decode_specialchars( &$value ) {
 		if ( is_array( $value ) ) {
 			$temp_values = $value;
+
 			foreach ( $temp_values as $k => $v ) {
 				self::decode_specialchars( $value[ $k ] );
 			}
 		} else {
-			$value = wp_specialchars_decode( $value, ENT_COMPAT );
+			self::decode_amp( $value );
 		}
+	}
+
+	/**
+	 * The wp_specialchars_decode function changes too much.
+	 * This will leave HTML as is, but still convert &.
+	 * Adapted from wp_specialchars_decode().
+	 *
+	 * @since 4.03.01
+	 *
+	 * @param string $string The string to prep, passed by reference.
+	 */
+	private static function decode_amp( &$string ) {
+		// Don't bother if there are no entities - saves a lot of processing
+		if ( ! $string || ! str_contains( $string, '&' ) ) {
+			return;
+		}
+
+		$translation = array(
+			'&quot;'  => '"',
+			'&#034;'  => '"',
+			'&#x22;'  => '"',
+			// The space preserves the HTML.
+			'&lt; '   => '< ',
+			// The space preserves the HTML.
+			'&#060; ' => '< ',
+			'&gt;'    => '>',
+			'&#062;'  => '>',
+			'&amp;'   => '&',
+			'&#038;'  => '&',
+			'&#x26;'  => '&',
+		);
+
+		$translation_preg = array(
+			'/&#0*34;/'   => '&#034;',
+			'/&#x0*22;/i' => '&#x22;',
+			'/&#0*60;/'   => '&#060;',
+			'/&#0*62;/'   => '&#062;',
+			'/&#0*38;/'   => '&#038;',
+			'/&#x0*26;/i' => '&#x26;',
+		);
+
+		// Remove zero padding on numeric entities
+		$string = preg_replace( array_keys( $translation_preg ), array_values( $translation_preg ), $string );
+
+		// Replace characters according to translation table
+		$string = strtr( $string, $translation );
 	}
 
 	/**
@@ -552,28 +1045,118 @@ class FrmAppHelper {
 	 *
 	 * @since 2.0
 	 *
-	 * @param string $value
-	 * @param array|string $allowed 'all' for everything included as defaults
+	 * @param string       $value   The value to sanitize.
+	 * @param array|string $allowed Allowed HTML tags and attributes, or 'all' for defaults.
 	 *
 	 * @return string
 	 */
 	public static function kses( $value, $allowed = array() ) {
-		$allowed_html = self::allowed_html( $allowed );
+		return wp_kses( $value, self::allowed_html( $allowed ) );
+	}
 
-		return wp_kses( $value, $allowed_html );
+	/**
+	 * Sanitizes and echoes a given value.
+	 *
+	 * @since 6.18
+	 *
+	 * @param string       $value   The value to sanitize and output.
+	 * @param array|string $allowed Allowed HTML tags and attributes.
+	 *
+	 * @return void
+	 */
+	public static function kses_echo( $value, $allowed = array() ) {
+		echo self::kses( $value, $allowed ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * The regular kses function strips [button_action] from submit button HTML.
+	 *
+	 * @since 5.0.13
+	 *
+	 * @param string $html
+	 *
+	 * @return string
+	 */
+	public static function kses_submit_button( $html ) {
+		$included_button_action = str_contains( $html, '[button_action]' );
+		$included_back_hook     = str_contains( $html, '[back_hook]' );
+		$included_draft_hook    = str_contains( $html, '[draft_hook]' );
+		add_filter( 'safe_style_css', 'FrmAppHelper::allow_visibility_style' );
+		add_filter( 'frm_striphtml_allowed_tags', 'FrmAppHelper::add_allowed_submit_button_tags' );
+		$html = self::kses( $html, 'all' );
+		remove_filter( 'safe_style_css', 'FrmAppHelper::allow_visibility_style' );
+		remove_filter( 'frm_striphtml_allowed_tags', 'FrmAppHelper::add_allowed_submit_button_tags' );
+
+		if ( $included_button_action ) {
+			if ( str_contains( $html, '<input type="submit"' ) ) {
+				$pattern = '/(<input type="submit")([^>]*)(\/>)/';
+				$html    = preg_replace( $pattern, '$1$2[button_action] $3', $html, 1 );
+			} else {
+				$pattern = '/(<button)(.*)(class=")(.*)(frm_button_submit)(.*)(")(.*)([^>]+)(>)/';
+				$html    = preg_replace( $pattern, '$1$2$3$4$5$6$7 [button_action]$8$9$10', $html, 1 );
+			}
+		}
+
+		if ( $included_back_hook ) {
+			$html = str_replace( 'class="frm_prev_page"', 'class="frm_prev_page" [back_hook]', $html );
+		}
+
+		if ( $included_draft_hook ) {
+			return str_replace( 'class="frm_save_draft"', 'class="frm_save_draft" [draft_hook]', $html );
+		}
+
+		return $html;
+	}
+
+	/**
+	 * @since 5.0.13
+	 *
+	 * @param array $allowed_attr
+	 *
+	 * @return array
+	 */
+	public static function allow_visibility_style( $allowed_attr ) {
+		$allowed_attr[] = 'visibility';
+		return $allowed_attr;
+	}
+
+	/**
+	 * @since 5.0.13
+	 *
+	 * @param array $allowed_html
+	 *
+	 * @return array
+	 */
+	public static function add_allowed_submit_button_tags( $allowed_html ) {
+		$allowed_html['input']                    = array(
+			'type'           => true,
+			'value'          => true,
+			'formnovalidate' => true,
+			'name'           => true,
+			'class'          => true,
+		);
+		$allowed_html['button']['formnovalidate'] = true;
+		$allowed_html['button']['name']           = true;
+		$allowed_html['img']['style']             = true;
+		return $allowed_html;
 	}
 
 	/**
 	 * @since 2.05.03
+	 *
+	 * @param array|string $allowed
+	 *
+	 * @return array
 	 */
 	private static function allowed_html( $allowed ) {
 		$html         = self::safe_html();
 		$allowed_html = array();
-		if ( $allowed == 'all' ) {
+
+		if ( $allowed === 'all' ) {
 			$allowed_html = $html;
-		} elseif ( ! empty( $allowed ) ) {
+		} elseif ( $allowed ) {
 			foreach ( (array) $allowed as $a ) {
-				$allowed_html[ $a ] = isset( $html[ $a ] ) ? $html[ $a ] : array();
+				$allowed_html[ $a ] = $html[ $a ] ?? array();
 			}
 		}
 
@@ -582,6 +1165,8 @@ class FrmAppHelper {
 
 	/**
 	 * @since 2.05.03
+	 *
+	 * @return array
 	 */
 	private static function safe_html() {
 		$allow_class = array(
@@ -591,12 +1176,13 @@ class FrmAppHelper {
 
 		return array(
 			'a'          => array(
-				'class'  => true,
-				'href'   => true,
-				'id'     => true,
-				'rel'    => true,
-				'target' => true,
-				'title'  => true,
+				'class'    => true,
+				'href'     => true,
+				'id'       => true,
+				'rel'      => true,
+				'target'   => true,
+				'title'    => true,
+				'tabindex' => true,
 			),
 			'abbr'       => array(
 				'title' => true,
@@ -622,6 +1208,7 @@ class FrmAppHelper {
 				'id'    => true,
 				'title' => true,
 				'style' => true,
+				'role'  => true,
 			),
 			'dl'         => array(),
 			'dt'         => array(),
@@ -659,19 +1246,24 @@ class FrmAppHelper {
 				'title' => true,
 			),
 			'rect'       => array(
-				'class'  => true,
-				'fill'   => true,
-				'height' => true,
-				'width'  => true,
-				'x'      => true,
-				'y'      => true,
+				'class'          => true,
+				'fill'           => true,
+				'height'         => true,
+				'width'          => true,
+				'x'              => true,
+				'y'              => true,
+				'rx'             => true,
+				'stroke'         => true,
+				'stroke-opacity' => true,
+				'stroke-width'   => true,
 			),
 			'section'    => $allow_class,
 			'span'       => array(
-				'class' => true,
-				'id'    => true,
-				'title' => true,
-				'style' => true,
+				'class'       => true,
+				'id'          => true,
+				'title'       => true,
+				'style'       => true,
+				'aria-hidden' => true,
 			),
 			'strike'     => array(),
 			'strong'     => array(),
@@ -681,19 +1273,39 @@ class FrmAppHelper {
 				'viewbox' => true,
 			),
 			'svg'        => array(
-				'class'   => true,
-				'id'      => true,
-				'xmlns'   => true,
-				'viewbox' => true,
-				'width'   => true,
-				'height'  => true,
-				'style'   => true,
+				'class'       => true,
+				'id'          => true,
+				'xmlns'       => true,
+				'viewbox'     => true,
+				'width'       => true,
+				'height'      => true,
+				'style'       => true,
+				'fill'        => true,
+				'aria-label'  => true,
+				'aria-hidden' => true,
 			),
 			'use'        => array(
-				'href'   => true,
+				'href'       => true,
 				'xlink:href' => true,
 			),
 			'ul'         => $allow_class,
+			'label'      => array(
+				'for'   => true,
+				'class' => true,
+				'id'    => true,
+			),
+			'button'     => array(
+				'class' => true,
+				'type'  => true,
+			),
+			'legend'     => array(
+				'class' => true,
+			),
+			'option'     => array(
+				'class'    => true,
+				'value'    => true,
+				'selected' => true,
+			),
 		);
 	}
 
@@ -703,17 +1315,19 @@ class FrmAppHelper {
 	 * @since 2.0
 	 */
 	public static function remove_get_action() {
-		if ( ! isset( $_GET ) ) {
+		if ( empty( $_GET ) ) {
 			return;
 		}
 
 		$action_name = isset( $_GET['action'] ) ? 'action' : ( isset( $_GET['action2'] ) ? 'action2' : '' );
-		if ( empty( $action_name ) ) {
+
+		if ( ! $action_name ) {
 			return;
 		}
 
 		$new_action = self::get_param( $action_name, '', 'get', 'sanitize_text_field' );
-		if ( ! empty( $new_action ) ) {
+
+		if ( $new_action ) {
 			$_SERVER['REQUEST_URI'] = str_replace( '&action=' . $new_action, '', self::get_server_value( 'REQUEST_URI' ) );
 		}
 	}
@@ -722,112 +1336,394 @@ class FrmAppHelper {
 	 * Check the WP query for a parameter
 	 *
 	 * @since 2.0
-	 * @return string|array
+	 *
+	 * @param array|string $value
+	 * @param string       $param
+	 *
+	 * @return array|string
 	 */
 	public static function get_query_var( $value, $param ) {
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( $value != '' ) {
 			return $value;
 		}
 
 		global $wp_query;
-		if ( isset( $wp_query->query_vars[ $param ] ) ) {
-			$value = $wp_query->query_vars[ $param ];
-		}
 
-		return $value;
+		return $wp_query->query_vars[ $param ] ?? $value;
 	}
 
 	/**
 	 * Try to show the SVG if possible. Otherwise, use the font icon.
 	 *
 	 * @since 4.0.02
+	 *
 	 * @param string $class
 	 * @param array  $atts
+	 *
+	 * @return string|null
 	 */
 	public static function icon_by_class( $class, $atts = array() ) {
 		$echo = ! isset( $atts['echo'] ) || $atts['echo'];
+
 		if ( isset( $atts['echo'] ) ) {
 			unset( $atts['echo'] );
 		}
 
-		$html_atts = self::array_to_html_params( $atts );
-
 		$icon = trim( str_replace( array( 'frm_icon_font', 'frmfont ' ), '', $class ) );
-		if ( $icon === $class ) {
-			$icon = '<i class="' . esc_attr( $class ) . '"' . $html_atts . '></i>';
-		} else {
-			$class = strpos( $icon, ' ' ) === false ? '' : ' ' . $icon;
-			if ( strpos( $icon, ' ' ) ) {
+
+		// Replace icons that have been removed or renamed.
+		$deprecated = array(
+			'frm_clone_solid_icon'  => 'frm_clone_icon',
+			'frm_keyalt_icon'       => 'frm_key_icon',
+			'frm_keyalt_solid_icon' => 'frm_key_solid_icon',
+		);
+
+		if ( isset( $deprecated[ $icon ] ) ) {
+			$icon  = $deprecated[ $icon ];
+			$class = str_replace( $icon, $deprecated[ $icon ], $class );
+		}
+
+		$is_font_icon = $icon === $class;
+
+		if ( ! $is_font_icon ) {
+			$class = str_contains( $icon, ' ' ) ? ' ' . $icon : '';
+
+			if ( str_contains( $icon, ' ' ) ) {
 				$icon = explode( ' ', $icon );
 				$icon = reset( $icon );
 			}
-			$icon  = '<svg class="frmsvg' . esc_attr( $class ) . '"' . $html_atts . '>
-				<use xlink:href="#' . esc_attr( $icon ) . '" />
-			</svg>';
 		}
 
-		if ( $echo ) {
-			echo $icon; // WPCS: XSS ok.
-		} else {
-			return $icon;
+		if ( $atts ) {
+			// A caller passed attributes, so kses still has to decide which of them survive. Its
+			// allowlist comes from safe_html() through the frm_striphtml_allowed_tags filter, and
+			// add-ons widen it around their own icons, so there is no fixed list to check against.
+			$html_atts = self::array_to_html_params( $atts );
+			$markup    = $is_font_icon
+			? '<i class="' . esc_attr( $class ) . '"' . $html_atts . '></i>'
+			: '<svg class="frmsvg' . esc_attr( $class ) . '"' . $html_atts . '><use href="#' . esc_attr( $icon ) . '" /></svg>';
+
+			if ( ! $echo ) {
+				return $markup;
+			}
+
+			echo self::kses_icon( $markup ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return null;
 		}
+
+		/**
+		 * With no attributes from the caller, the tag is nothing but this method's own markup
+		 * around an escaped class and icon id, so there is nothing left for kses to decide and it
+		 * can be skipped. Echoing the pieces rather than a finished string keeps that safe to the
+		 * escaping sniff without an annotation.
+		 *
+		 * This is the path the form builder takes for most of the tens of thousands of icons it
+		 * renders on a large form, and the kses pass was most of what each one cost.
+		 */
+		$callback = function () use ( $is_font_icon, $class, $icon ) {
+			if ( $is_font_icon ) {
+				echo '<i class="' . esc_attr( $class ) . '"></i>';
+				return;
+			}
+
+			echo '<svg class="frmsvg' . esc_attr( $class ) . '"><use href="#' . esc_attr( $icon ) . '" /></svg>';
+		};
+
+		return self::clip( $callback, $echo );
+	}
+
+	/**
+	 * Run kses for icons. It needs to add a few filters first in order to preserve some custom style values.
+	 *
+	 * @since 5.0.13
+	 *
+	 * @param string $icon
+	 *
+	 * @return string
+	 */
+	public static function kses_icon( $icon ) {
+		add_filter( 'safe_style_css', 'FrmAppHelper::allow_vars_in_styles' );
+		add_filter( 'safecss_filter_attr_allow_css', 'FrmAppHelper::allow_style', 10, 2 );
+		add_filter( 'frm_striphtml_allowed_tags', 'FrmAppHelper::add_allowed_icon_tags' );
+		$icon = self::kses( $icon, 'all' );
+		remove_filter( 'safe_style_css', 'FrmAppHelper::allow_vars_in_styles' );
+		remove_filter( 'safecss_filter_attr_allow_css', 'FrmAppHelper::allow_style' );
+		remove_filter( 'frm_striphtml_allowed_tags', 'FrmAppHelper::add_allowed_icon_tags' );
+		return $icon;
+	}
+
+	/**
+	 * @since 5.0.13.1
+	 *
+	 * @param array $allowed_html
+	 *
+	 * @return array
+	 */
+	public static function add_allowed_icon_tags( $allowed_html ) {
+		$allowed_html['svg']['data-open'] = true;
+		$allowed_html['svg']['title']     = true;
+		$allowed_html['svg']['tabindex']  = true;
+		return $allowed_html;
+	}
+
+	/**
+	 * @since 5.0.13
+	 *
+	 * @param array $allowed_attr
+	 *
+	 * @return array
+	 */
+	public static function allow_vars_in_styles( $allowed_attr ) {
+		$allowed_attr[] = '--primary-700';
+		return $allowed_attr;
+	}
+
+	/**
+	 * @since 5.0.13
+	 *
+	 * @param bool   $allow_css
+	 * @param string $css_string
+	 */
+	public static function allow_style( $allow_css, $css_string ) {
+		if ( ! $allow_css && str_starts_with( $css_string, '--primary-700:' ) ) {
+			$split     = explode( ':', $css_string, 2 );
+			$allow_css = 2 === count( $split ) && self::is_a_valid_color( $split[1] );
+		}
+		return $allow_css;
+	}
+
+	/**
+	 * @since 5.0.13
+	 *
+	 * @param string $value
+	 *
+	 * @return bool
+	 */
+	private static function is_a_valid_color( $value ) {
+		$match = 0;
+
+		if ( str_starts_with( $value, 'rgba(' ) ) {
+			$match = preg_match( '/^rgba\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3}),\s*(\d*(?:\.\d+)?)\)$/', $value );
+		} elseif ( str_starts_with( $value, 'rgb(' ) ) {
+			$match = preg_match( '/^rgb\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\)$/', $value );
+		} elseif ( str_starts_with( $value, '#' ) ) {
+			$match = preg_match( '/^#([a-f0-9]{6}|[a-f0-9]{3})\b$/', $value );
+		}
+
+		return (bool) $match;
 	}
 
 	/**
 	 * Include svg images.
 	 *
 	 * @since 4.0.02
+	 *
+	 * @return void
 	 */
 	public static function include_svg() {
-		include_once( self::plugin_path() . '/images/icons.svg' );
+		if ( self::$included_svg ) {
+			return;
+		}
+
+		// Use readfile instead of include_once because of a default security rule in Snuffleupagus.
+		readfile( self::plugin_path() . '/images/icons.svg' );
+		self::$included_svg = true;
 	}
 
 	/**
 	 * Convert an associative array to HTML values.
 	 *
 	 * @since 4.0.02
+	 * @since 5.0.13 added $echo parameter.
+	 *
 	 * @param array $atts
-	 * @return string
+	 * @param bool  $echo
+	 *
+	 * @return string|void
 	 */
-	public static function array_to_html_params( $atts ) {
-		$html = '';
-		if ( ! empty( $atts ) ) {
-			foreach ( $atts as $key => $value ) {
-				$html .= ' ' . esc_attr( $key ) . '="' . esc_attr( $value ) . '"';
+	public static function array_to_html_params( $atts, $echo = false ) {
+		$callback = function () use ( $atts ) {
+			if ( ! $atts ) {
+				return;
 			}
+
+			foreach ( $atts as $key => $value ) {
+				echo ' ' . esc_attr( $key ) . '="' . esc_attr( $value ) . '"';
+			}
+		};
+		return self::clip( $callback, $echo );
+	}
+
+	/**
+	 * Call an echo function and either echo it or return the result as a string.
+	 *
+	 * @since 5.0.13
+	 *
+	 * @param Closure $echo_function
+	 * @param bool    $echo
+	 *
+	 * @return string|null
+	 *
+	 * @psalm-return ($echo is true ? null : string)
+	 */
+	public static function clip( $echo_function, $echo = false ) {
+		if ( ! $echo ) {
+			ob_start();
 		}
-		return $html;
+
+		if ( is_callable( $echo_function ) ) {
+			$echo_function();
+		}
+
+		return $echo ? null : ob_get_clean();
 	}
 
 	/**
 	 * @since 3.0
+	 *
+	 * @param array $atts
+	 *
+	 * @return void
 	 */
 	public static function get_admin_header( $atts ) {
-		$has_nav = ( isset( $atts['form'] ) && ! empty( $atts['form'] ) && ( ! isset( $atts['is_template'] ) || ! $atts['is_template'] ) );
-		if ( ! isset( $atts['close'] ) || empty( $atts['close'] ) ) {
+		$has_nav = ! empty( $atts['form'] ) && empty( $atts['is_template'] );
+
+		if ( empty( $atts['close'] ) ) {
 			$atts['close'] = admin_url( 'admin.php?page=formidable' );
 		}
 
-		include( self::plugin_path() . '/classes/views/shared/admin-header.php' );
+		if ( ! isset( $atts['import_link'] ) ) {
+			$atts['import_link'] = false;
+		}
+
+		include self::plugin_path() . '/classes/views/shared/admin-header.php';
 	}
 
 	/**
+	 * @since 6.0
+	 *
+	 * @param string $type
+	 *
+	 * @return void
+	 */
+	public static function import_link( $type = 'secondary' ) {
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		?>
+		<a href="<?php echo esc_url( admin_url( 'admin.php?page=formidable-import' ) ); ?>" class="button frm-button-<?php echo esc_attr( $type ); ?> frm_animate_bg">
+			<?php esc_html_e( 'Import', 'formidable' ); ?>
+		</a>
+		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+	}
+
+	/**
+	 * Print applicable admin banner.
+	 *
+	 * @since 5.4.2
+	 *
+	 * @param bool $should_show_lite_upgrade
+	 *
+	 * @return void
+	 */
+	public static function print_admin_banner( $should_show_lite_upgrade ) {
+		if ( ! current_user_can( 'administrator' ) ) {
+			FrmInbox::maybe_show_banner();
+			return;
+		}
+
+		if ( FrmSalesApi::maybe_show_banner() || self::maybe_show_license_warning() || FrmInbox::maybe_show_banner() || ! $should_show_lite_upgrade || self::pro_is_installed() ) {
+			// Print license warning or inbox banner and exit if either prints.
+			// And exit before printing the upgrade bar if it shouldn't be shown.
+			return;
+		}
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		?>
+		<div class="frm-upgrade-bar">
+			<div class="frm-upgrade-bar-inner">
+				<?php
+				$cta_text = FrmSalesApi::get_best_sale_value( 'lite_banner_cta_text' );
+
+				if ( ! $cta_text ) {
+					$cta_text = __( 'upgrading to PRO', 'formidable' );
+				}
+
+				$upgrade_link = FrmSalesApi::get_best_sale_value( 'lite_banner_cta_link' );
+				$utm          = array(
+					'campaign' => 'settings-license',
+					'content'  => 'lite-banner',
+				);
+
+				$upgrade_link = $upgrade_link ? self::maybe_add_missing_utm( $upgrade_link, $utm ) : self::admin_upgrade_link( $utm );
+
+				printf(
+					/* translators: %1$s: Start link HTML, %2$s: CTA text ("upgrading to PRO" by default), %3$s: End link HTML */
+					esc_html__( 'You\'re using Formidable Forms Lite. To unlock more features consider %1$s%2$s%3$s.', 'formidable' ),
+					'<a href="' . esc_url( $upgrade_link ) . '" target="_blank" rel="noopener">',
+					esc_html( $cta_text ),
+					'</a>'
+				);
+				?>
+			</div>
+		</div>
+		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+	}
+
+	/**
+	 * @since 5.4.2
+	 *
+	 * @return bool True if a banner is available and shown.
+	 */
+	private static function maybe_show_license_warning() {
+		return is_callable( 'FrmProAddonsController::admin_banner' ) && FrmProAddonsController::admin_banner();
+	}
+
+	/**
+	 * Render a button for a new item (Form, Application, etc).
+	 *
 	 * @since 3.0
+	 *
+	 * @param array $atts {
+	 *     Details about the button.
+	 *
+	 *     @type array  $link_hook    Custom link hook, calls do_action and exits early.
+	 *     @type string $new_link     Href value, default #.
+	 *     @type string $class        Custom class names, space separated.
+	 *     @type string $button_text  Button text. Default "Add New".
+	 * }
+	 *
+	 * @return void
 	 */
 	public static function add_new_item_link( $atts ) {
-		if ( isset( $atts['new_link'] ) && ! empty( $atts['new_link'] ) ) { ?>
-			<a href="<?php echo esc_url( $atts['new_link'] ); ?>" class="button button-primary frm-button-primary frm-with-plus">
-				<?php self::icon_by_class( 'frmfont frm_plus_icon frm_svg15' ); ?>
-				<?php esc_html_e( 'Add New', 'formidable' ); ?>
-			</a>
-			<?php
-		} elseif ( isset( $atts['link_hook'] ) ) {
+		if ( isset( $atts['link_hook'] ) ) {
 			do_action( $atts['link_hook']['hook'], $atts['link_hook']['param'] );
+			return;
 		}
+
+		if ( empty( $atts['new_link'] ) && empty( $atts['create_form'] ) && empty( $atts['class'] ) ) {
+			// Do not render a button if none of these attributes are set.
+			return;
+		}
+
+		$href  = ! empty( $atts['new_link'] ) ? esc_url( $atts['new_link'] ) : '#';
+		$class = 'button button-primary frm-button-primary';
+
+		if ( ! empty( $atts['class'] ) ) {
+			$class .= ' ' . $atts['class'];
+		}
+
+		$button_text = ! empty( $atts['button_text'] ) ? $atts['button_text'] : __( 'Add New', 'formidable' );
+
+		require self::plugin_path() . '/classes/views/shared/add-button.php';
 	}
 
 	/**
 	 * @since 3.06
+	 *
+	 * @param array $atts
+	 *
+	 * @return void
 	 */
 	public static function show_search_box( $atts ) {
 		$defaults = array(
@@ -835,33 +1731,50 @@ class FrmAppHelper {
 			'tosearch'    => '',
 			'text'        => __( 'Search', 'formidable' ),
 			'input_id'    => '',
+			'value'       => false,
+			'class'       => '',
 		);
-		$atts = array_merge( $defaults, $atts );
+		$atts     = array_merge( $defaults, $atts );
 
 		if ( $atts['input_id'] === 'template' && empty( $atts['tosearch'] ) ) {
 			$atts['tosearch'] = 'frm-card';
 		}
 
 		$class = 'frm-search-input';
+
 		if ( ! empty( $atts['tosearch'] ) ) {
 			$class .= ' frm-auto-search';
 		}
 
 		$input_id = $atts['input_id'] . '-search-input';
 
+		$input_atts = array(
+			'type'          => 'search',
+			'id'            => $input_id,
+			'name'          => 's',
+			'placeholder'   => $atts['placeholder'],
+			'class'         => $class,
+			'data-tosearch' => $atts['tosearch'],
+		);
+
+		if ( is_string( $atts['value'] ) ) {
+			$input_atts['value'] = $atts['value'];
+		} elseif ( isset( $_REQUEST['s'] ) ) {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$input_atts['value'] = wp_unslash( $_REQUEST['s'] );
+		}
+
+		if ( ! empty( $atts['tosearch'] ) ) {
+			$input_atts['autocomplete'] = 'off';
+		}
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
 		?>
-		<p class="frm-search">
+		<p class="frm-search <?php echo esc_attr( $atts['class'] ); ?>">
 			<label class="screen-reader-text" for="<?php echo esc_attr( $input_id ); ?>">
 				<?php echo esc_html( $atts['text'] ); ?>:
 			</label>
-			<span class="frmfont frm_search_icon"></span>
-			<input type="search" id="<?php echo esc_attr( $input_id ); ?>" name="s"
-				value="<?php _admin_search_query(); ?>" placeholder="<?php echo esc_attr( $atts['placeholder'] ); ?>"
-				class="<?php echo esc_attr( $class ); ?>" data-tosearch="<?php echo esc_attr( $atts['tosearch'] ); ?>"
-				<?php if ( ! empty( $atts['tosearch'] ) ) { ?>
-				autocomplete="off"
-				<?php } ?>
-				/>
+			<?php self::icon_by_class( 'frmfont frm_search_icon frm_svg20' ); ?>
+			<input <?php self::array_to_html_params( $input_atts, true ); ?> />
 			<?php
 			if ( empty( $atts['tosearch'] ) ) {
 				submit_button( $atts['text'], 'button-secondary', '', false, array( 'id' => 'search-submit' ) );
@@ -869,23 +1782,31 @@ class FrmAppHelper {
 			?>
 		</p>
 		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
 	}
 
 	/**
-	 * @param string $type
+	 * @param string      $type   Hook type slug.
+	 * @param object|null $object Optional related object.
+	 *
+	 * @return void
 	 */
 	public static function trigger_hook_load( $type, $object = null ) {
 		// Only load the form hooks once.
 		$hooks_loaded = apply_filters( 'frm_' . $type . '_hooks_loaded', false, $object );
+
 		if ( ! $hooks_loaded ) {
 			do_action( 'frm_load_' . $type . '_hooks' );
 		}
 	}
 
 	/**
-	 * Save all front-end js scripts into a single file
+	 * Save all front-end js scripts into a single file.
+	 * And save an additional single file of all front-end Stripe JS scripts.
 	 *
 	 * @since 3.0
+	 *
+	 * @return void
 	 */
 	public static function save_combined_js() {
 		$file_atts = apply_filters(
@@ -898,10 +1819,33 @@ class FrmAppHelper {
 		$new_file  = new FrmCreateFile( $file_atts );
 
 		$files = array(
-			self::plugin_path() . '/js/jquery/jquery.placeholder.min.js',
 			self::plugin_path() . '/js/formidable.min.js',
 		);
+		/**
+		 * @param array $files
+		 */
 		$files = apply_filters( 'frm_combined_js_files', $files );
+		$new_file->combine_files( $files );
+
+		// Create the minified Stripe Script.
+		$file_atts = apply_filters(
+			'frm_stripe_js_location',
+			array(
+				'file_name'     => 'frmstrp.min.js',
+				'new_file_path' => self::plugin_path() . '/js',
+			)
+		);
+		$new_file  = new FrmCreateFile( $file_atts );
+		$files     = array(
+			FrmStrpLiteAppHelper::plugin_path() . 'js/frmstrp.min.js',
+		);
+
+		/**
+		 * @since 6.5
+		 *
+		 * @param array $files
+		 */
+		$files = apply_filters( 'frm_stripe_combined_js_files', $files );
 		$new_file->combine_files( $files );
 	}
 
@@ -911,17 +1855,27 @@ class FrmAppHelper {
 	 *
 	 * @since 1.07.10
 	 *
-	 * @param string $value The value to compare
+	 * @param bool|int|string $value The value to compare.
 	 *
-	 * @return boolean True or False
+	 * @return bool
 	 */
 	public static function is_true( $value ) {
-		return ( true === $value || 1 == $value || 'true' == $value || 'yes' == $value );
+		return true === $value || '1' === (string) $value || 'true' === $value || 'yes' === $value;
 	}
 
-	public static function get_pages() {
+	/**
+	 * Gets all post from a specific post type.
+	 * This gets the entire WP_Post object so it can require a lot of memory. When only id and title are needed, consider using FrmAppHelper::get_post_ids_and_titles instead.
+	 *
+	 * @since 4.10.01 Add `$post_type` argument.
+	 *
+	 * @param string $post_type Post type to query. Default is `page`.
+	 *
+	 * @return WP_Post[]
+	 */
+	public static function get_pages( $post_type = 'page' ) {
 		$query = array(
-			'post_type'   => 'page',
+			'post_type'   => $post_type,
 			'post_status' => array( 'publish', 'private' ),
 			'numberposts' => - 1,
 			'orderby'     => 'title',
@@ -932,11 +1886,204 @@ class FrmAppHelper {
 	}
 
 	/**
-	 * @param array   $args
-	 * @param string  $page_id Deprecated.
-	 * @param boolean $truncate Deprecated.
+	 * Gets post ids and titles for a specific post type.
+	 *
+	 * @since 5.0.09
+	 *
+	 * @param string $post_type Post type to query. Default is `page`.
+	 *
+	 * @return array
+	 */
+	public static function get_post_ids_and_titles( $post_type = 'page' ) {
+		return FrmDb::get_results(
+			'posts',
+			array(
+				'post_type'   => $post_type,
+				'post_status' => array( 'publish', 'private' ),
+			),
+			'ID, post_title',
+			array(
+				'order_by' => 'post_title ASC',
+			)
+		);
+	}
+
+	/**
+	 * Renders an autocomplete page selection or a regular dropdown depending on
+	 * the total page count
+	 *
+	 * @since 4.03.06
+	 * @since 4.10.01 Added `post_type` and `autocomplete_placeholder` to the arguments array.
+	 *
+	 * @param array $args Selection arguments.
+	 */
+	public static function maybe_autocomplete_pages_options( $args ) {
+		$args        = self::preformat_selection_args( $args );
+		$pages_count = wp_count_posts( $args['post_type'] );
+
+		if ( ! isset( $pages_count->publish ) || $pages_count->publish <= 50 ) {
+			self::wp_pages_dropdown( $args );
+			return;
+		}
+
+		wp_enqueue_script( 'jquery-ui-autocomplete' );
+
+		$selected = self::get_post_param( $args['field_name'], $args['page_id'], 'absint' );
+		$title    = '';
+
+		if ( $selected ) {
+			$title = get_the_title( $selected );
+		}
+
+		?>
+		<input type="text" class="frm-page-search"
+			data-post-type="<?php echo esc_attr( $args['post_type'] ); ?>"
+			placeholder="<?php echo esc_attr( $args['autocomplete_placeholder'] ); ?>"
+			value="<?php echo esc_attr( $title ); ?>" />
+		<input type="hidden" name="<?php echo esc_attr( $args['field_name'] ); ?>"
+			class="frm_autocomplete_value_input"
+			value="<?php echo esc_attr( $selected ); ?>" />
+		<?php
+	}
+
+	/**
+	 * Maybe show an HTML select or autocomplete input based on the number of options.
+	 *
+	 * @since 6.21
+	 *
+	 * @param array $args Args. See the method for details.
+	 */
+	public static function maybe_autocomplete_options( $args ) {
+		$defaults = array(
+			'truncate'                 => false,
+			'placeholder'              => ' ',
+			'name'                     => '',
+			'id'                       => '',
+			'selected'                 => '',
+			'source'                   => array(),
+			'dropdown_limit'           => 50,
+			'autocomplete_placeholder' => __( 'Select an option', 'formidable' ),
+			'value_key'                => 'value',
+			'label_key'                => 'label',
+		);
+
+		$args       = wp_parse_args( $args, $defaults );
+		$html_attrs = array();
+
+		if ( ! empty( $args['name'] ) ) {
+			$html_attrs['name'] = $args['name'];
+		}
+
+		if ( ! empty( $args['id'] ) ) {
+			$html_attrs['id'] = $args['id'];
+		}
+
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		if ( count( $args['source'] ) <= $args['dropdown_limit'] ) {
+			?>
+			<select <?php self::array_to_html_params( $html_attrs, true ); ?>>
+				<option value=""><?php echo esc_html( $args['placeholder'] ); ?></option>
+				<?php
+				foreach ( $args['source'] as $key => $source ) :
+					$value_label = self::get_dropdown_value_and_label_from_option( $source, $key, $args );
+
+					if ( ! empty( $args['truncate'] ) ) {
+						$value_label['label'] = self::truncate( $value_label['label'], $args['truncate'] );
+					}
+					?>
+					<option value="<?php echo esc_attr( $value_label['value'] ); ?>" <?php selected( $value_label['value'], $args['selected'] ); ?>><?php echo esc_html( $value_label['label'] ); ?></option><?php // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong ?>
+				<?php endforeach; ?>
+			</select>
+			<?php
+			return;
+		}
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+
+		$options            = array();
+		$autocomplete_value = '';
+
+		foreach ( $args['source'] as $key => $source ) {
+			$value_label = self::get_dropdown_value_and_label_from_option( $source, $key, $args );
+
+			if ( $value_label['value'] === $args['selected'] ) {
+				$autocomplete_value = $value_label['label'];
+			}
+
+			$options[] = $value_label;
+		}
+
+		$html_attrs['type']  = 'hidden';
+		$html_attrs['class'] = 'frm_autocomplete_value_input';
+		$html_attrs['value'] = $args['selected'];
+		?>
+		<input type="text" class="frm-custom-search"
+			   data-source="<?php echo esc_attr( wp_json_encode( $options ) ); ?>"
+			   placeholder="<?php echo esc_attr( $args['autocomplete_placeholder'] ); ?>"
+			   value="<?php echo esc_attr( $autocomplete_value ); ?>" />
+		<input <?php self::array_to_html_params( $html_attrs, true ); ?> />
+		<?php
+	}
+
+	/**
+	 * Gets dropdown value and label from autodropdown option.
+	 *
+	 * @since 6.21
+	 *
+	 * @param array|string $option Autocomplete option.
+	 * @param string       $key    Array key of the option.
+	 * @param array        $args   See {@see FrmAppHelper::maybe_autocomplete_options()}.
+	 *
+	 * @return array
+	 */
+	private static function get_dropdown_value_and_label_from_option( $option, $key, $args ) {
+		if ( is_array( $option ) ) {
+			$value = $option[ $args['value_key'] ] ?? '';
+			$label = $option[ $args['label_key'] ] ?? '';
+		} else {
+			$value = $key;
+			$label = $option;
+		}
+
+		return compact( 'value', 'label' );
+	}
+
+	/**
+	 * @param array  $args
+	 * @param string $page_id Deprecated.
+	 * @param bool   $truncate Deprecated.
 	 */
 	public static function wp_pages_dropdown( $args = array(), $page_id = '', $truncate = false ) {
+		self::prep_page_dropdown_params( $page_id, $truncate, $args );
+
+		$pages    = self::get_post_ids_and_titles( $args['post_type'] );
+		$selected = self::get_post_param( $args['field_name'], $args['page_id'], 'absint' );
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		?>
+		<select name="<?php echo esc_attr( $args['field_name'] ); ?>" id="<?php echo esc_attr( $args['field_name'] ); ?>" class="frm-pages-dropdown">
+			<option value=""><?php echo esc_html( $args['placeholder'] ); ?></option>
+			<?php foreach ( $pages as $page ) { ?>
+				<option value="<?php echo esc_attr( $page->ID ); ?>" <?php selected( $selected, $page->ID ); ?>>
+					<?php echo esc_html( $args['truncate'] ? self::truncate( $page->post_title, $args['truncate'] ) : $page->post_title ); ?>
+				</option>
+			<?php } ?>
+		</select>
+		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+	}
+
+	/**
+	 * Fill in missing parameters passed to wp_pages_dropdown().
+	 * This is for reverse compatibility with switching 3 params to 1.
+	 *
+	 * @since 4.03.06
+	 *
+	 * @param string $page_id Deprecated.
+	 * @param bool   $truncate Deprecated.
+	 * @param mixed  $args
+	 *
+	 * @return void
+	 */
+	private static function prep_page_dropdown_params( $page_id, $truncate, &$args ) {
 		if ( ! is_array( $args ) ) {
 			$args = array(
 				'field_name' => $args,
@@ -945,35 +2092,42 @@ class FrmAppHelper {
 			);
 		}
 
-		$defaults = array(
-			'truncate'    => false,
-			'placeholder' => ' ',
-			'field_name'  => '',
-			'page_id'     => '',
-		);
-		$args = array_merge( $defaults, $args );
-
-		$pages    = self::get_pages();
-		$selected = self::get_post_param( $args['field_name'], $args['page_id'], 'absint' );
-
-		?>
-		<select name="<?php echo esc_attr( $args['field_name'] ); ?>" id="<?php echo esc_attr( $args['field_name'] ); ?>" class="frm-pages-dropdown">
-			<option value=""><?php echo esc_html( $args['placeholder'] ); ?></option>
-			<?php foreach ( $pages as $page ) { ?>
-				<option value="<?php echo esc_attr( $page->ID ); ?>" <?php selected( $selected, $page->ID ); ?>>
-					<?php echo esc_html( $truncate ? self::truncate( $page->post_title, $args['truncate'] ) : $page->post_title ); ?>
-				</option>
-			<?php } ?>
-		</select>
-		<?php
+		$args = self::preformat_selection_args( $args );
 	}
 
+	/**
+	 * Filter to format args for page dropdown or autocomplete
+	 *
+	 * @since 4.03.06
+	 * @since 4.10.01 Added `post_type` and `autocomplete_placeholder` to the arguments array.
+	 *
+	 * @param array $args
+	 *
+	 * @return array
+	 */
+	private static function preformat_selection_args( $args ) {
+		$defaults = array(
+			'truncate'                 => false,
+			'placeholder'              => ' ',
+			'field_name'               => '',
+			'page_id'                  => '',
+			'post_type'                => 'page',
+			'autocomplete_placeholder' => __( 'Select a Page', 'formidable' ),
+		);
+
+		return array_merge( $defaults, $args );
+	}
+
+	/**
+	 * @param int $post_id
+	 *
+	 * @return string
+	 */
 	public static function post_edit_link( $post_id ) {
 		$post = get_post( $post_id );
+
 		if ( $post ) {
 			$post_url = admin_url( 'post.php?post=' . $post_id . '&action=edit' );
-			$post_url = self::maybe_full_screen_link( $post_url );
-
 			return '<a href="' . esc_url( $post_url ) . '">' . self::truncate( $post->post_title, 50 ) . '</a>';
 		}
 
@@ -984,39 +2138,92 @@ class FrmAppHelper {
 	 * Hide the WordPress menus on some pages.
 	 *
 	 * @since 4.0
+	 *
+	 * @return bool
 	 */
 	public static function is_full_screen() {
-		$action       = self::simple_get( 'frm_action', 'sanitize_title' );
-		$full_builder = self::is_admin_page( 'formidable' ) && ( $action === 'edit' || $action === 'settings' || $action === 'duplicate' );
-		$styler       = self::is_admin_page( 'formidable-styles' );
-		$full_entries = self::simple_get( 'frm-full', 'absint' );
-
-		return $full_builder || $full_entries || $styler || self::is_view_builder_page();
+		return self::is_form_builder_page() || self::is_style_editor_page() || self::is_full_screen_view_builder_page();
 	}
 
 	/**
-	 * @since 4.0
+	 * Check if user is on the style editor or its alternative URL.
+	 * The first URL is a submenu "Styles" in the Formidable menu /wp-admin/admin.php?page=formidable-styles.
+	 * The alternative URL is linked as a submenu "Forms" item of the Appearance menu /wp-admin/themes.php?page=formidable-styles2.
+	 *
+	 * @since 5.5.3
+	 * @since 6.0 Added the $view parameter. Previously there was only a 'edit' view.
+	 *
+	 * @param string $view Supports 'edit', 'list', and ''. If '', both 'edit' and 'list' will match.
+	 *
+	 * @return bool
 	 */
-	public static function maybe_full_screen_link( $link ) {
-		$is_full = self::simple_get( 'frm-full', 'absint' );
-		if ( $is_full && ! empty( $link ) && $link !== '#' ) {
-			$link .= '&frm-full=1';
+	public static function is_style_editor_page( $view = '' ) {
+		if ( ! self::is_admin_page( 'formidable-styles' ) && ! self::is_admin_page( 'formidable-styles2' ) ) {
+			return false;
 		}
-		return $link;
+
+		if ( ! in_array( $view, array( 'list', 'edit' ), true ) ) {
+			return true;
+		}
+
+		$action       = self::simple_get( 'frm_action' );
+		$is_edit_mode = 'edit' === $action || ( ! $action && ! self::simple_get( 'id' ) && ! self::simple_get( 'form' ) );
+
+		if ( ! $is_edit_mode && class_exists( 'FrmProStylesController' ) && in_array( $action, array( 'new_style', 'duplicate' ), true ) ) {
+			$is_edit_mode = true;
+		}
+
+		$checking_for_edit_mode = 'edit' === $view;
+
+		return $is_edit_mode === $checking_for_edit_mode;
 	}
 
+	/**
+	 * @since 5.5.3
+	 *
+	 * @return bool
+	 */
+	private static function is_full_screen_view_builder_page() {
+		return self::is_admin_page( 'formidable-views-editor' );
+	}
+
+	/**
+	 * @param string       $field_name
+	 * @param array|string $capability
+	 * @param string       $multiple 'single' and 'multiple'.
+	 */
 	public static function wp_roles_dropdown( $field_name, $capability, $multiple = 'single' ) {
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
 		?>
 		<select name="<?php echo esc_attr( $field_name ); ?>" id="<?php echo esc_attr( $field_name ); ?>"
-			<?php echo ( 'multiple' === $multiple ) ? 'multiple="multiple"' : ''; ?>
+			<?php echo 'multiple' === $multiple ? 'multiple="multiple"' : ''; ?>
 			class="frm_multiselect">
 			<?php self::roles_options( $capability ); ?>
 		</select>
 		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
 	}
 
+	/**
+	 * @since 4.07
+	 *
+	 * @param array|string $selected
+	 * @param string       $current
+	 */
+	private static function selected( $selected, $current ) {
+		if ( is_callable( 'FrmProAppHelper::selected' ) ) {
+			FrmProAppHelper::selected( $selected, $current );
+		} else {
+			selected( in_array( $current, (array) $selected, true ) );
+		}
+	}
+
+	/**
+	 * @param array|string $capability
+	 */
 	public static function roles_options( $capability ) {
 		global $frm_vars;
+
 		if ( isset( $frm_vars['editable_roles'] ) ) {
 			$editable_roles = $frm_vars['editable_roles'];
 		} else {
@@ -1027,50 +2234,122 @@ class FrmAppHelper {
 		foreach ( $editable_roles as $role => $details ) {
 			$name = translate_user_role( $details['name'] );
 			?>
-			<option value="<?php echo esc_attr( $role ); ?>" <?php echo in_array( $role, (array) $capability ) ? ' selected="selected"' : ''; ?>><?php echo esc_attr( $name ); ?> </option>
+			<option value="<?php echo esc_attr( $role ); ?>" <?php self::selected( $capability, $role ); ?>><?php echo esc_html( $name ); ?></option>
 			<?php
 			unset( $role, $details );
 		}
 	}
 
+	/**
+	 * Gets the list of capabilities.
+	 *
+	 * @since 5.0 Parameter `$type` supports `pro_only` value.
+	 *
+	 * @param string $type Supports `auto`, `pro`, or `pro_only`.
+	 *
+	 * @return array
+	 */
 	public static function frm_capabilities( $type = 'auto' ) {
-		$cap = array(
-			'frm_view_forms'      => __( 'View Forms and Templates', 'formidable' ),
-			'frm_edit_forms'      => __( 'Add/Edit Forms and Templates', 'formidable' ),
-			'frm_delete_forms'    => __( 'Delete Forms and Templates', 'formidable' ),
+		if ( ! self::pro_is_installed() && ! in_array( $type, array( 'pro', 'pro_only' ), true ) ) {
+			return self::get_lite_capabilities();
+		}
+
+		$pro_cap = array(
+			'frm_create_entries' => __( 'Add Entries from Admin Area', 'formidable' ),
+			'frm_edit_entries'   => __( 'Edit Entries from Admin Area', 'formidable' ),
+			'frm_view_reports'   => __( 'View Reports', 'formidable' ),
+		);
+		/**
+		 * @since 5.3.1
+		 *
+		 * @param array<string,string> $pro_cap
+		 */
+		$pro_cap = apply_filters( 'frm_pro_capabilities', $pro_cap );
+
+		if ( 'pro_only' === $type ) {
+			return $pro_cap;
+		}
+
+		return self::get_lite_capabilities() + $pro_cap;
+	}
+
+	/**
+	 * Get the list of lite plugin capabilities.
+	 *
+	 * @since 5.3.1
+	 *
+	 * @return array<string,string>
+	 */
+	private static function get_lite_capabilities() {
+		return array(
+			'frm_view_forms'      => __( 'View Forms List', 'formidable' ),
+			'frm_edit_forms'      => __( 'Add and Edit Forms', 'formidable' ),
+			'frm_delete_forms'    => __( 'Delete Forms', 'formidable' ),
 			'frm_change_settings' => __( 'Access this Settings Page', 'formidable' ),
 			'frm_view_entries'    => __( 'View Entries from Admin Area', 'formidable' ),
 			'frm_delete_entries'  => __( 'Delete Entries from Admin Area', 'formidable' ),
 		);
-
-		if ( ! self::pro_is_installed() && 'pro' != $type ) {
-			return $cap;
-		}
-
-		$cap['frm_create_entries'] = __( 'Add Entries from Admin Area', 'formidable' );
-		$cap['frm_edit_entries']   = __( 'Edit Entries from Admin Area', 'formidable' );
-		$cap['frm_view_reports']   = __( 'View Reports', 'formidable' );
-		$cap['frm_edit_displays']  = __( 'Add/Edit Views', 'formidable' );
-
-		return $cap;
 	}
 
-	public static function user_has_permission( $needed_role ) {
-		if ( $needed_role == '-1' ) {
+	/**
+	 * Call the WordPress current_user_can but also validate empty strings as true for any logged in user
+	 *
+	 * @since 4.06.03
+	 *
+	 * @param string $role
+	 *
+	 * @return bool
+	 */
+	public static function current_user_can( $role ) {
+		if ( $role === '-1' ) {
 			return false;
 		}
 
-		// $needed_role will be equal to blank if "Logged-in users" is selected.
-		if ( ( $needed_role == '' && is_user_logged_in() ) || current_user_can( $needed_role ) ) {
-			return true;
+		if ( $role === 'loggedout' ) {
+			return ! is_user_logged_in();
+		}
+
+		if ( $role === 'loggedin' || ! $role ) {
+			return is_user_logged_in();
+		}
+
+		if ( (int) $role === 1 ) {
+			$role = 'administrator';
+		}
+
+		return is_user_logged_in() ? current_user_can( $role ) : false;
+	}
+
+	/**
+	 * @param array|string $needed_role
+	 *
+	 * @return bool
+	 */
+	public static function user_has_permission( $needed_role ) {
+		if ( is_array( $needed_role ) ) {
+			foreach ( $needed_role as $role ) {
+				if ( self::current_user_can( $role ) ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		$can = self::current_user_can( $needed_role );
+
+		if ( $can || in_array( $needed_role, array( '-1', 'loggedout' ), true ) ) {
+			return $can;
 		}
 
 		$roles = array( 'administrator', 'editor', 'author', 'contributor', 'subscriber' );
+
 		foreach ( $roles as $role ) {
 			if ( current_user_can( $role ) ) {
 				return true;
 			}
-			if ( $role == $needed_role ) {
+
+			if ( $role === $needed_role ) {
 				break;
 			}
 		}
@@ -1090,9 +2369,9 @@ class FrmAppHelper {
 			return;
 		}
 
-		$user_id   = get_current_user_id();
-		$user      = new WP_User( $user_id );
+		$user      = new WP_User( get_current_user_id() );
 		$frm_roles = self::frm_capabilities();
+
 		foreach ( $frm_roles as $frm_role => $frm_role_description ) {
 			$user->add_cap( $frm_role );
 			unset( $frm_role, $frm_role_description );
@@ -1103,33 +2382,45 @@ class FrmAppHelper {
 	 * Make sure admins have permission to see the menu items
 	 *
 	 * @since 2.0.6
+	 *
+	 * @param string $cap
+	 *
+	 * @return void
 	 */
 	public static function force_capability( $cap = 'frm_change_settings' ) {
-		if ( current_user_can( 'administrator' ) && ! current_user_can( $cap ) ) {
-			$role      = get_role( 'administrator' );
-			$frm_roles = self::frm_capabilities();
-			foreach ( $frm_roles as $frm_role => $frm_role_description ) {
-				$role->add_cap( $frm_role );
-			}
+		if ( ! current_user_can( 'administrator' ) || current_user_can( $cap ) ) {
+			return;
+		}
+
+		$role      = get_role( 'administrator' );
+		$frm_roles = self::frm_capabilities();
+
+		foreach ( $frm_roles as $frm_role => $frm_role_description ) {
+			$role->add_cap( $frm_role );
 		}
 	}
 
 	/**
-	 * Check if the user has permision for action.
+	 * Check if the user has permission for action.
 	 * Return permission message and stop the action if no permission
 	 *
 	 * @since 2.0
 	 *
 	 * @param string $permission
+	 * @param string $show_message
 	 */
 	public static function permission_check( $permission, $show_message = 'show' ) {
 		$permission_error = self::permission_nonce_error( $permission );
-		if ( $permission_error !== false ) {
-			if ( 'hide' == $show_message ) {
-				$permission_error = '';
-			}
-			wp_die( esc_html( $permission_error ) );
+
+		if ( $permission_error === false ) {
+			return;
 		}
+
+		if ( 'hide' === $show_message ) {
+			$permission_error = '';
+		}
+
+		wp_die( esc_html( $permission_error ) );
 	}
 
 	/**
@@ -1138,22 +2429,25 @@ class FrmAppHelper {
 	 * @since 2.0
 	 *
 	 * @param string $permission
+	 * @param string $nonce_name
+	 * @param string $nonce
 	 *
 	 * @return false|string The permission message or false if allowed
 	 */
 	public static function permission_nonce_error( $permission, $nonce_name = '', $nonce = '' ) {
-		if ( ! empty( $permission ) && ! current_user_can( $permission ) && ! current_user_can( 'administrator' ) ) {
+		if ( $permission && ! current_user_can( $permission ) && ! current_user_can( 'administrator' ) ) {
 			$frm_settings = self::get_settings();
-
 			return $frm_settings->admin_permission;
 		}
 
 		$error = false;
-		if ( empty( $nonce_name ) ) {
+
+		if ( ! $nonce_name ) {
 			return $error;
 		}
 
-		$nonce_value = ( $_REQUEST && isset( $_REQUEST[ $nonce_name ] ) ) ? sanitize_text_field( wp_unslash( $_REQUEST[ $nonce_name ] ) ) : '';
+		$nonce_value = $_REQUEST && isset( $_REQUEST[ $nonce_name ] ) ? sanitize_text_field( wp_unslash( $_REQUEST[ $nonce_name ] ) ) : '';
+
 		if ( $_REQUEST && ( ! isset( $_REQUEST[ $nonce_name ] ) || ! wp_verify_nonce( $nonce_value, $nonce ) ) ) {
 			$frm_settings = self::get_settings();
 			$error        = $frm_settings->admin_permission;
@@ -1162,152 +2456,240 @@ class FrmAppHelper {
 		return $error;
 	}
 
+	/**
+	 * @param array|string $values
+	 * @param string       $current
+	 *
+	 * @return void
+	 */
 	public static function checked( $values, $current ) {
 		if ( self::check_selected( $values, $current ) ) {
 			echo ' checked="checked"';
 		}
 	}
 
+	/**
+	 * @param array|string $values
+	 * @param string|null  $current
+	 *
+	 * @return bool
+	 */
 	public static function check_selected( $values, $current ) {
 		$values  = self::recursive_function_map( $values, 'trim' );
 		$values  = self::recursive_function_map( $values, 'htmlspecialchars_decode' );
-		$current = htmlspecialchars_decode( trim( $current ) );
+		$current = is_null( $current ) ? '' : htmlspecialchars_decode( trim( $current ) );
 
-		return ( is_array( $values ) && in_array( $current, $values ) ) || ( ! is_array( $values ) && $values == $current );
+		// phpcs:ignore WordPress.PHP.StrictInArray.MissingTrueStrict, Universal.Operators.StrictComparisons
+		return is_array( $values ) ? in_array( $current, $values ) : $values == $current;
 	}
 
+	/**
+	 * @param array|string    $value
+	 * @param callable|string $function
+	 *
+	 * @return array|string
+	 */
 	public static function recursive_function_map( $value, $function ) {
 		if ( is_array( $value ) ) {
 			$original_function = $function;
-			if ( count( $value ) ) {
-				$function = explode( ', ', FrmDb::prepare_array_values( $value, $function ) );
-			} else {
-				$function = array( $function );
-			}
-			if ( ! self::is_assoc( $value ) ) {
-				$value = array_map( array( 'FrmAppHelper', 'recursive_function_map' ), $value, $function );
-			} else {
+			$function          = count( $value ) ? explode( ', ', FrmDb::prepare_array_values( $value, $function ) ) : array( $function );
+
+			if ( self::is_assoc( $value ) ) {
 				foreach ( $value as $k => $v ) {
 					if ( ! is_array( $v ) ) {
 						$value[ $k ] = call_user_func( $original_function, $v );
 					}
 				}
+			} else {
+				$value = array_map( array( 'FrmAppHelper', 'recursive_function_map' ), $value, $function );
 			}
 		} else {
+			$value = self::maybe_update_value_if_null( $value, $function );
 			$value = call_user_func( $function, $value );
+		}//end if
+
+		return $value;
+	}
+
+	/**
+	 * Updates value to empty string if it is null and being passed to a string function.
+	 *
+	 * @since 6.8.4
+	 *
+	 * @param mixed  $value
+	 * @param string $function
+	 *
+	 * @return mixed
+	 */
+	private static function maybe_update_value_if_null( $value, $function ) {
+		if ( null === $value && in_array( $function, array( 'trim', 'strlen' ), true ) ) {
+			return '';
 		}
 
 		return $value;
 	}
 
+	/**
+	 * @param array $array
+	 *
+	 * @return bool
+	 */
 	public static function is_assoc( $array ) {
 		return (bool) count( array_filter( array_keys( $array ), 'is_string' ) );
 	}
 
 	/**
 	 * Flatten a multi-dimensional array
+	 *
+	 * @param array  $array
+	 * @param string $keys
+	 *
+	 * @return array
 	 */
 	public static function array_flatten( $array, $keys = 'keep' ) {
 		$return = array();
+
 		foreach ( $array as $key => $value ) {
 			if ( is_array( $value ) ) {
 				$return = array_merge( $return, self::array_flatten( $value, $keys ) );
+			} elseif ( $keys === 'keep' ) {
+				$return[ $key ] = $value;
 			} else {
-				if ( $keys == 'keep' ) {
-					$return[ $key ] = $value;
-				} else {
-					$return[] = $value;
-				}
+				$return[] = $value;
 			}
 		}
 
 		return $return;
 	}
 
+	/**
+	 * Flatten an array before imploding it to avoid Array to string conversion warnings.
+	 *
+	 * @since 6.16.1
+	 *
+	 * @param string $sep
+	 * @param array  $array
+	 *
+	 * @return string
+	 */
+	public static function safe_implode( $sep, $array ) {
+		$array = self::array_flatten( $array );
+		return implode( $sep, $array );
+	}
+
+	/**
+	 * @param string $text
+	 * @param bool   $is_rich_text
+	 *
+	 * @return string
+	 */
 	public static function esc_textarea( $text, $is_rich_text = false ) {
 		$safe_text = str_replace( '&quot;', '"', $text );
+
 		if ( ! $is_rich_text ) {
 			$safe_text = htmlspecialchars( $safe_text, ENT_NOQUOTES );
 		}
-		$safe_text = str_replace( '&amp;', '&', $safe_text );
 
-		return apply_filters( 'esc_textarea', $safe_text, $text );
+		$safe_text = str_replace( '&amp; ', '& ', $safe_text );
+
+		/**
+		 * @param string $safe_text
+		 * @param string $text
+		 */
+		return (string) apply_filters( 'esc_textarea', $safe_text, $text );
 	}
 
 	/**
 	 * Add auto paragraphs to text areas
 	 *
 	 * @since 2.0
+	 *
+	 * @param mixed $content
+	 *
+	 * @return mixed
 	 */
 	public static function use_wpautop( $content ) {
-		if ( apply_filters( 'frm_use_wpautop', true ) ) {
-			$content = wpautop( str_replace( '<br>', '<br />', $content ) );
+		if ( apply_filters( 'frm_use_wpautop', true ) && is_string( $content ) ) {
+			return wpautop( str_replace( '<br>', '<br />', $content ) );
 		}
 
 		return $content;
 	}
 
+	/**
+	 * Replace quotes with their HTML entities.
+	 *
+	 * @param string $val
+	 *
+	 * @return string
+	 */
 	public static function replace_quotes( $val ) {
 		// Replace double quotes.
 		$val = str_replace( array( '&#8220;', '&#8221;', '&#8243;' ), '"', $val );
 
 		// Replace single quotes.
-		$val = str_replace( array( '&#8216;', '&#8217;', '&#8242;', '&prime;', '&rsquo;', '&lsquo;' ), "'", $val );
-
-		return $val;
+		return str_replace( array( '&#8216;', '&#8217;', '&#8242;', '&prime;', '&rsquo;', '&lsquo;' ), "'", $val );
 	}
 
 	/**
-	 * @since 2.0
-	 * @return string The base Google APIS url for the current version of jQuery UI
-	 */
-	public static function jquery_ui_base_url() {
-		$url = 'http' . ( is_ssl() ? 's' : '' ) . '://ajax.googleapis.com/ajax/libs/jqueryui/' . self::script_version( 'jquery-ui-core', '1.11.4' );
-		$url = apply_filters( 'frm_jquery_ui_base_url', $url );
-
-		return $url;
-	}
-
-	/**
-	 * @param string $handle
+	 * @param string     $handle
+	 * @param int|string $default
+	 *
+	 * @return int|string
 	 */
 	public static function script_version( $handle, $default = 0 ) {
 		global $wp_scripts;
+
 		if ( ! $wp_scripts ) {
 			return $default;
 		}
 
 		$ver = $default;
+
 		if ( ! isset( $wp_scripts->registered[ $handle ] ) ) {
 			return $ver;
 		}
 
 		$query = $wp_scripts->registered[ $handle ];
+
 		if ( is_object( $query ) && ! empty( $query->ver ) ) {
-			$ver = $query->ver;
+			return $query->ver;
 		}
 
 		return $ver;
 	}
 
-	public static function js_redirect( $url ) {
-		return '<script type="text/javascript">window.location="' . esc_url_raw( $url ) . '"</script>';
+	/**
+	 * @since 5.0.13 added $echo param.
+	 *
+	 * @param string $url
+	 * @param bool   $echo
+	 *
+	 * @return string|null
+	 */
+	public static function js_redirect( $url, $echo = false ) {
+		$callback = function () use ( $url ) {
+			echo '<script type="text/javascript">window.location="' . esc_url_raw( $url ) . '"</script>';
+		};
+		return self::clip( $callback, $echo );
 	}
 
+	/**
+	 * @param int|string $user_id
+	 *
+	 * @return int|string
+	 */
 	public static function get_user_id_param( $user_id ) {
-		if ( ! $user_id || empty( $user_id ) || is_numeric( $user_id ) ) {
+		if ( ! $user_id || is_numeric( $user_id ) ) {
 			return $user_id;
 		}
 
 		$user_id = sanitize_text_field( $user_id );
-		if ( $user_id == 'current' ) {
+
+		if ( $user_id === 'current' ) {
 			$user_id = get_current_user_id();
 		} else {
-			if ( is_email( $user_id ) ) {
-				$user = get_user_by( 'email', $user_id );
-			} else {
-				$user = get_user_by( 'login', $user_id );
-			}
+			$user = is_email( $user_id ) ? get_user_by( 'email', $user_id ) : get_user_by( 'login', $user_id );
 
 			if ( $user ) {
 				$user_id = $user->ID;
@@ -1318,77 +2700,158 @@ class FrmAppHelper {
 		return $user_id;
 	}
 
+	/**
+	 * @param string $filename
+	 * @param array  $atts
+	 *
+	 * @return false|string
+	 */
 	public static function get_file_contents( $filename, $atts = array() ) {
 		if ( ! is_file( $filename ) ) {
 			return false;
 		}
 
-		extract( $atts );
+		extract( $atts ); // phpcs:ignore WordPress.PHP.DontExtract
 		ob_start();
-		include( $filename );
-		$contents = ob_get_contents();
-		ob_end_clean();
-
-		return $contents;
+		include $filename;
+		return ob_get_clean();
 	}
 
 	/**
+	 * @param string $name
 	 * @param string $table_name
 	 * @param string $column
-	 * @param int $id
-	 * @param int $num_chars
+	 * @param int    $id
+	 * @param int    $num_chars
 	 */
-	public static function get_unique_key( $name = '', $table_name, $column, $id = 0, $num_chars = 5 ) {
+	public static function get_unique_key( $name, $table_name, $column, $id = 0, $num_chars = 5 ) {
 		$key = '';
 
-		if ( ! empty( $name ) ) {
+		if ( $name ) {
 			$key = sanitize_key( $name );
+			$key = self::maybe_clear_long_key( $key, $column );
 		}
 
-		if ( empty( $key ) ) {
-			$max_slug_value = pow( 36, $num_chars );
-			$min_slug_value = 37; // we want to have at least 2 characters in the slug
-			$key            = base_convert( rand( $min_slug_value, $max_slug_value ), 10, 36 );
+		if ( ! $key ) {
+			$key = self::generate_new_key( $num_chars );
 		}
 
-		$not_allowed = array(
-			'id',
-			'key',
-			'created-at',
-			'detaillink',
-			'editlink',
-			'siteurl',
-			'evenodd',
-		);
+		$key = self::prevent_numeric_and_reserved_keys( $key );
 
-		if ( is_numeric( $key ) || in_array( $key, $not_allowed ) ) {
-			$key = $key . 'a';
-		}
-
-		$key_check = FrmDb::get_var(
+		$similar_keys = FrmDb::get_col(
 			$table_name,
 			array(
-				$column => $key,
-				'ID !'  => $id,
+				$column . ' like%' => $key,
+				'ID !'             => $id,
 			),
 			$column
 		);
 
-		if ( $key_check || is_numeric( $key_check ) ) {
-			$suffix = 2;
-			do {
-				$alt_post_name = substr( $key, 0, 200 - ( strlen( $suffix ) + 1 ) ) . $suffix;
-				$key_check     = FrmDb::get_var(
-					$table_name,
-					array(
-						$column => $alt_post_name,
-						'ID !'  => $id,
-					),
-					$column
-				);
-				$suffix ++;
-			} while ( $key_check || is_numeric( $key_check ) );
-			$key = $alt_post_name;
+		// Create a unique field id if it has already been used.
+		if ( ! in_array( $key, $similar_keys, true ) ) {
+			return $key;
+		}
+
+		$key = self::maybe_truncate_key_before_appending( $column, $key );
+
+		/**
+		 * Allow for a custom separator between the attempted key and the generated suffix.
+		 *
+		 * @since 5.2.03
+		 *
+		 * @param string $separator. Default empty.
+		 * @param string $key the key without the added suffix.
+		 */
+		$separator = apply_filters( 'frm_unique_' . $column . '_separator', '', $key );
+
+		$suffix = 2;
+		do {
+			$key_check = $key . $separator . $suffix;
+			++$suffix;
+		} while ( in_array( $key_check, $similar_keys, true ) );
+
+		return $key_check;
+	}
+
+	/**
+	 * Avoid trying to append to a really long key,
+	 * The database limit is 100 for form and field keys so we want to avoid getting too close.
+	 *
+	 * @param string $column
+	 * @param string $key
+	 *
+	 * @return string
+	 */
+	private static function maybe_truncate_key_before_appending( $column, $key ) {
+		if ( ! in_array( $column, array( 'form_key', 'field_key' ), true ) ) {
+			return $key;
+		}
+
+		$max_key_length_before_truncating = 60;
+
+		if ( strlen( $key ) > $max_key_length_before_truncating ) {
+			$key = substr( $key, 0, $max_key_length_before_truncating );
+
+			if ( is_numeric( $key ) ) {
+				$key .= 'a';
+			}
+		}
+
+		return $key;
+	}
+
+	/**
+	 * Possibly reset a key to avoid conflicts with column size limits.
+	 *
+	 * @param string $key
+	 * @param string $column
+	 *
+	 * @return string either the original key value, or an empty string if the key was too long.
+	 */
+	private static function maybe_clear_long_key( $key, $column ) {
+		if ( 'field_key' === $column && strlen( $key ) >= 70 ) {
+			return '';
+		}
+		return $key;
+	}
+
+	/**
+	 * @since 6.21 This is changed from `private` to `public`.
+	 *
+	 * @param int $num_chars
+	 *
+	 * @return string
+	 */
+	public static function generate_new_key( $num_chars ) {
+		$max_slug_value = 36 ** $num_chars;
+
+		// We want to have at least 2 characters in the slug.
+		$min_slug_value = 37;
+		return base_convert( random_int( $min_slug_value, $max_slug_value ), 10, 36 );
+	}
+
+	/**
+	 * @param string $key
+	 *
+	 * @return string
+	 */
+	private static function prevent_numeric_and_reserved_keys( $key ) {
+		if ( is_numeric( $key ) ) {
+			$key .= 'a';
+		} else {
+			$not_allowed = array(
+				'id',
+				'key',
+				'created-at',
+				'detaillink',
+				'editlink',
+				'siteurl',
+				'evenodd',
+			);
+
+			if ( in_array( $key, $not_allowed, true ) ) {
+				$key .= 'a';
+			}
 		}
 
 		return $key;
@@ -1397,17 +2860,22 @@ class FrmAppHelper {
 	/**
 	 * Editing a Form or Entry
 	 *
-	 * @param string $table
+	 * @param object       $record
+	 * @param string       $table
+	 * @param array|string $fields
+	 * @param bool         $default
+	 * @param array        $post_values
+	 * @param array        $args
 	 *
-	 * @return bool|array
+	 * @return array|bool
 	 */
 	public static function setup_edit_vars( $record, $table, $fields = '', $default = false, $post_values = array(), $args = array() ) {
 		if ( ! $record ) {
 			return false;
 		}
 
-		if ( empty( $post_values ) ) {
-			$post_values = wp_unslash( $_POST );
+		if ( ! $post_values ) {
+			$post_values = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		}
 
 		$values = array(
@@ -1416,7 +2884,7 @@ class FrmAppHelper {
 		);
 
 		foreach ( array( 'name', 'description' ) as $var ) {
-			$default_val    = isset( $record->{$var} ) ? $record->{$var} : '';
+			$default_val    = $record->{$var} ?? '';
 			$values[ $var ] = self::get_param( $var, $default_val, 'get', 'wp_kses_post' );
 			unset( $var, $default_val );
 		}
@@ -1427,53 +2895,80 @@ class FrmAppHelper {
 
 		self::prepare_field_arrays( $fields, $record, $values, array_merge( $args, compact( 'default', 'post_values' ) ) );
 
-		if ( $table == 'entries' ) {
+		if ( $table === 'entries' ) {
 			$values = FrmEntriesHelper::setup_edit_vars( $values, $record );
-		} elseif ( $table == 'forms' ) {
+		} elseif ( $table === 'forms' ) {
 			$values = FrmFormsHelper::setup_edit_vars( $values, $record, $post_values );
 		}
 
 		return $values;
 	}
 
+	/**
+	 * @param array|string $fields
+	 * @param object       $record
+	 * @param array        $values
+	 * @param array        $args
+	 *
+	 * @return void
+	 */
 	private static function prepare_field_arrays( $fields, $record, array &$values, $args ) {
-		if ( ! empty( $fields ) ) {
-			foreach ( (array) $fields as $field ) {
-				$field->default_value   = apply_filters( 'frm_get_default_value', $field->default_value, $field, true );
-				$args['parent_form_id'] = isset( $args['parent_form_id'] ) ? $args['parent_form_id'] : $field->form_id;
-				self::fill_field_defaults( $field, $record, $values, $args );
+		if ( ! $fields ) {
+			return;
+		}
+
+		foreach ( (array) $fields as $field ) {
+			if ( ! self::is_admin_page() ) {
+				// Don't prep default values on the form settings page.
+				$field->default_value = apply_filters( 'frm_get_default_value', $field->default_value, $field, true );
 			}
+
+			$args['parent_form_id'] = $args['parent_form_id'] ?? $field->form_id;
+			self::fill_field_defaults( $field, $record, $values, $args );
 		}
 	}
 
+	/**
+	 * @param object $field
+	 * @param object $record
+	 * @param array  $values
+	 * @param array  $args
+	 *
+	 * @return void
+	 */
 	private static function fill_field_defaults( $field, $record, array &$values, $args ) {
 		$post_values = $args['post_values'];
 
 		if ( $args['default'] ) {
 			$meta_value = $field->default_value;
-		} else {
-			if ( $record->post_id && self::pro_is_installed() && isset( $field->field_options['post_field'] ) && $field->field_options['post_field'] ) {
-				if ( ! isset( $field->field_options['custom_field'] ) ) {
-					$field->field_options['custom_field'] = '';
-				}
-				$meta_value = FrmProEntryMetaHelper::get_post_value(
-					$record->post_id,
-					$field->field_options['post_field'],
-					$field->field_options['custom_field'],
-					array(
-						'truncate' => false,
-						'type'     => $field->type,
-						'form_id'  => $field->form_id,
-						'field'    => $field,
-					)
-				);
-			} else {
-				$meta_value = FrmEntryMeta::get_meta_value( $record, $field->id );
+		} elseif ( $record->post_id && self::pro_is_installed() && ! empty( $field->field_options['post_field'] ) ) {
+			if ( ! isset( $field->field_options['custom_field'] ) ) {
+				$field->field_options['custom_field'] = '';
 			}
-		}
 
-		$field_type = isset( $post_values['field_options'][ 'type_' . $field->id ] ) ? $post_values['field_options'][ 'type_' . $field->id ] : $field->type;
-		$new_value  = isset( $post_values['item_meta'][ $field->id ] ) ? maybe_unserialize( $post_values['item_meta'][ $field->id ] ) : $meta_value;
+			$meta_value = FrmProEntryMetaHelper::get_post_value(
+				$record->post_id,
+				$field->field_options['post_field'],
+				$field->field_options['custom_field'],
+				array(
+					'truncate' => false,
+					'type'     => $field->type,
+					'form_id'  => $field->form_id,
+					'field'    => $field,
+				)
+			);
+		} else {
+			$meta_value = FrmEntryMeta::get_meta_value( $record, $field->id );
+		}//end if
+
+		$field_type = $post_values['field_options'][ 'type_' . $field->id ] ?? $field->type;
+
+		if ( isset( $post_values['item_meta'][ $field->id ] ) ) {
+			$new_value = $post_values['item_meta'][ $field->id ];
+			self::unserialize_or_decode( $new_value );
+		} else {
+			$new_value = $meta_value;
+		}
 
 		$field_array                   = self::start_field_array( $field );
 		$field_array['value']          = $new_value;
@@ -1484,11 +2979,11 @@ class FrmAppHelper {
 
 		FrmFieldsHelper::prepare_edit_front_field( $field_array, $field, $values['id'], $args );
 
-		if ( ! isset( $field_array['unique'] ) || ! $field_array['unique'] ) {
+		if ( empty( $field_array['unique'] ) ) {
 			$field_array['unique_msg'] = '';
 		}
 
-		$field_array = array_merge( $field->field_options, $field_array );
+		$field_array = array_merge( (array) $field->field_options, $field_array );
 
 		$values['fields'][ $field->id ] = $field_array;
 	}
@@ -1515,10 +3010,13 @@ class FrmAppHelper {
 	}
 
 	/**
+	 * @param object $record
 	 * @param string $table
+	 * @param array  $post_values
+	 * @param array  $values
 	 */
 	private static function fill_form_opts( $record, $table, $post_values, array &$values ) {
-		if ( $table == 'entries' ) {
+		if ( $table === 'entries' ) {
 			$form = $record->form_id;
 			FrmForm::maybe_get_form( $form );
 		} else {
@@ -1537,7 +3035,12 @@ class FrmAppHelper {
 		}
 
 		foreach ( $form->options as $opt => $value ) {
-			$values[ $opt ] = isset( $post_values[ $opt ] ) ? maybe_unserialize( $post_values[ $opt ] ) : $value;
+			if ( isset( $post_values[ $opt ] ) ) {
+				$values[ $opt ] = $post_values[ $opt ];
+				self::unserialize_or_decode( $values[ $opt ] );
+			} else {
+				$values[ $opt ] = $value;
+			}
 		}
 
 		self::fill_form_defaults( $post_values, $values );
@@ -1545,13 +3048,19 @@ class FrmAppHelper {
 
 	/**
 	 * Set to POST value or default
+	 *
+	 * @param array $post_values
+	 * @param array $values
+	 *
+	 * @return void
 	 */
 	private static function fill_form_defaults( $post_values, array &$values ) {
 		$form_defaults = FrmFormsHelper::get_default_opts();
 
 		foreach ( $form_defaults as $opt => $default ) {
+			// phpcs:ignore Universal.Operators.StrictComparisons
 			if ( ! isset( $values[ $opt ] ) || $values[ $opt ] == '' ) {
-				$values[ $opt ] = ( $post_values && isset( $post_values['options'][ $opt ] ) ) ? $post_values['options'][ $opt ] : $default;
+				$values[ $opt ] = $post_values['options'][ $opt ] ?? $default;
 			}
 
 			unset( $opt, $default );
@@ -1563,7 +3072,7 @@ class FrmAppHelper {
 
 		foreach ( array( 'before', 'after', 'submit' ) as $h ) {
 			if ( ! isset( $values[ $h . '_html' ] ) ) {
-				$values[ $h . '_html' ] = ( isset( $post_values['options'][ $h . '_html' ] ) ? $post_values['options'][ $h . '_html' ] : FrmFormsHelper::get_default_html( $h ) );
+				$values[ $h . '_html' ] = $post_values['options'][ $h . '_html' ] ?? FrmFormsHelper::get_default_html( $h );
 			}
 			unset( $h );
 		}
@@ -1574,44 +3083,68 @@ class FrmAppHelper {
 	 *
 	 * @param array $post_values
 	 *
-	 * @return boolean|int
+	 * @return bool|int
 	 */
 	public static function custom_style_value( $post_values ) {
-		if ( ! empty( $post_values ) && isset( $post_values['options']['custom_style'] ) ) {
-			$custom_style = absint( $post_values['options']['custom_style'] );
-		} else {
-			$frm_settings = self::get_settings();
-			$custom_style = ( $frm_settings->load_style != 'none' );
+		if ( $post_values && isset( $post_values['options']['custom_style'] ) ) {
+			return absint( $post_values['options']['custom_style'] );
 		}
 
-		return $custom_style;
+		$frm_settings = self::get_settings();
+		return $frm_settings->load_style !== 'none';
 	}
 
-	public static function truncate( $str, $length, $minword = 3, $continue = '...' ) {
-		if ( is_array( $str ) ) {
+	/**
+	 * Truncate a string.
+	 *
+	 * Note: By default, this function will allow for a few additional characters more than $length.
+	 * If a string has no spaces, it allows up to 50 additional characters. To force a true length limit,
+	 * use $force_length_limit = true.
+	 *
+	 * @param mixed      $original_string
+	 * @param int|string $length
+	 * @param int        $minword
+	 * @param string     $continue
+	 * @param bool       $force_length_limit Force the final string to never exceed the length limit.
+	 *
+	 * @return string
+	 */
+	public static function truncate( $original_string, $length, $minword = 3, $continue = '...', $force_length_limit = false ) {
+		if ( ! is_string( $original_string ) && ! is_int( $original_string ) ) {
 			return '';
 		}
 
-		$length       = (int) $length;
-		$str          = wp_strip_all_tags( $str );
+		$length = (int) $length;
+
+		if ( $length === 0 ) {
+			return '';
+		}
+
+		$str          = wp_strip_all_tags( (string) $original_string );
 		$original_len = self::mb_function( array( 'mb_strlen', 'strlen' ), array( $str ) );
 
-		if ( $length == 0 ) {
-			return '';
-		} elseif ( $length <= 10 ) {
+		if ( $length <= 10 ) {
 			$sub = self::mb_function( array( 'mb_substr', 'substr' ), array( $str, 0, $length ) );
 
-			return $sub . ( ( $length < $original_len ) ? $continue : '' );
+			if ( $force_length_limit ) {
+				return $sub;
+			}
+
+			return $sub . ( $length < $original_len ? $continue : '' );
 		}
 
-		$sub = '';
-		$len = 0;
-
+		$sub   = '';
+		$len   = 0;
 		$words = self::mb_function( array( 'mb_split', 'explode' ), array( ' ', $str ) );
 
+		if ( ! is_array( $words ) ) {
+			return $original_string;
+		}
+
 		foreach ( $words as $word ) {
-			$part      = ( ( $sub != '' ) ? ' ' : '' ) . $word;
+			$part      = ( $sub !== '' ? ' ' : '' ) . $word;
 			$total_len = self::mb_function( array( 'mb_strlen', 'strlen' ), array( $sub . $part ) );
+
 			if ( $total_len > $length && substr_count( $sub, ' ' ) ) {
 				break;
 			}
@@ -1626,12 +3159,70 @@ class FrmAppHelper {
 			unset( $total_len, $word );
 		}
 
-		return $sub . ( ( $len < $original_len ) ? $continue : '' );
+		$sub = self::maybe_force_truncate_on_string_with_no_spaces( $sub, $length, $force_length_limit );
+
+		if ( $force_length_limit ) {
+			// Ensure the final string doesn't exceed the length limit.
+			$final_len = self::mb_function( array( 'mb_strlen', 'strlen' ), array( $sub ) );
+
+			if ( $final_len > $length ) {
+				return self::mb_function( array( 'mb_substr', 'substr' ), array( $sub, 0, $length ) );
+			}
+
+			return $sub;
+		}
+
+		return $sub . ( $len < $original_len ? $continue : '' );
 	}
 
+	/**
+	 * If the string is still too long because there may not have been any spaces, force truncate.
+	 *
+	 * @since 6.5.4
+	 *
+	 * @param string $sub                Current substring.
+	 * @param int    $length             The length limit.
+	 * @param bool   $force_length_limit Force the string to not exceed the length limit.
+	 *
+	 * @return string
+	 */
+	private static function maybe_force_truncate_on_string_with_no_spaces( $sub, $length, $force_length_limit = false ) {
+		if ( ! $force_length_limit ) {
+			if ( strlen( $sub ) < $length + 50 ) {
+				// If the string isn't way over the limit, leave it.
+				return $sub;
+			}
+
+			$first_space = strpos( $sub, ' ', $length );
+
+			if ( false !== $first_space ) {
+				// Ignore anything with spaces.
+				return $sub;
+			}
+
+			return substr( $sub, 0, $length + 10 );
+		}
+
+		// When force_length_limit is true, ensure the string doesn't exceed the length.
+		$final_len = self::mb_function( array( 'mb_strlen', 'strlen' ), array( $sub ) );
+
+		if ( $final_len > $length ) {
+			return self::mb_function( array( 'mb_substr', 'substr' ), array( $sub, 0, $length ) );
+		}
+
+		return $sub;
+	}
+
+	/**
+	 * @param array $function_names
+	 * @param array $args
+	 *
+	 * @return mixed
+	 */
 	public static function mb_function( $function_names, $args ) {
 		$mb_function_name = $function_names[0];
 		$function_name    = $function_names[1];
+
 		if ( function_exists( $mb_function_name ) ) {
 			$function_name = $mb_function_name;
 		}
@@ -1639,12 +3230,19 @@ class FrmAppHelper {
 		return call_user_func_array( $function_name, $args );
 	}
 
+	/**
+	 * @param string $date
+	 * @param string $date_format
+	 * @param string $time_format
+	 *
+	 * @return string
+	 */
 	public static function get_formatted_time( $date, $date_format = '', $time_format = '' ) {
-		if ( empty( $date ) ) {
+		if ( ! $date ) {
 			return $date;
 		}
 
-		if ( empty( $date_format ) ) {
+		if ( ! $date_format ) {
 			$date_format = get_option( 'date_format' );
 		}
 
@@ -1654,8 +3252,8 @@ class FrmAppHelper {
 		}
 
 		$formatted = self::get_localized_date( $date_format, $date );
+		$do_time   = gmdate( 'H:i:s', strtotime( $date ) ) !== '00:00:00';
 
-		$do_time = ( date( 'H:i:s', strtotime( $date ) ) != '00:00:00' );
 		if ( $do_time ) {
 			$formatted .= self::add_time_to_date( $time_format, $date );
 		}
@@ -1663,43 +3261,50 @@ class FrmAppHelper {
 		return $formatted;
 	}
 
+	/**
+	 * @param string $time_format
+	 * @param string $date
+	 *
+	 * @return string
+	 */
 	private static function add_time_to_date( $time_format, $date ) {
-		if ( empty( $time_format ) ) {
+		if ( ! $time_format ) {
 			$time_format = get_option( 'time_format' );
 		}
 
 		$trimmed_format = trim( $time_format );
-		$time           = '';
-		if ( $time_format && ! empty( $trimmed_format ) ) {
-			$time = ' ' . __( 'at', 'formidable' ) . ' ' . self::get_localized_date( $time_format, $date );
+
+		if ( $time_format && $trimmed_format ) {
+			return ' ' . __( 'at', 'formidable' ) . ' ' . self::get_localized_date( $time_format, $date );
 		}
 
-		return $time;
+		return '';
 	}
 
 	/**
 	 * @since 2.0.8
+	 *
+	 * @param string $date_format
+	 * @param string $date
+	 *
+	 * @return string
 	 */
 	public static function get_localized_date( $date_format, $date ) {
 		$date = get_date_from_gmt( $date );
-
 		return date_i18n( $date_format, strtotime( $date ) );
 	}
 
 	/**
-	 * Gets the time ago in words
+	 * Gets the time ago in words.
 	 *
-	 * @param int $from in seconds
-	 * @param int|string $to in seconds
+	 * @param int        $from   In seconds.
+	 * @param int|string $to     In seconds.
+	 * @param int|string $levels Number of time units to include or a specific unit.
 	 *
-	 * @return string $time_ago
+	 * @return string Time ago.
 	 */
 	public static function human_time_diff( $from, $to = '', $levels = 1 ) {
-		if ( empty( $to ) ) {
-			$now = new DateTime();
-		} else {
-			$now = new DateTime( '@' . $to );
-		}
+		$now = ! $to && 0 !== $to ? new DateTime() : new DateTime( '@' . $to );
 		$ago = new DateTime( '@' . $from );
 
 		// Get the time difference
@@ -1707,74 +3312,212 @@ class FrmAppHelper {
 		$diff        = get_object_vars( $diff_object );
 
 		// Add week amount and update day amount
-		$diff['w'] = floor( $diff['d'] / 7 );
+		$diff['w']  = floor( $diff['d'] / 7 );
 		$diff['d'] -= $diff['w'] * 7;
 
 		$time_strings = self::get_time_strings();
 
+		if ( ! is_numeric( $levels ) ) {
+			// Show time in specified unit.
+			$levels = self::get_unit( $levels );
+
+			if ( isset( $time_strings[ $levels ] ) ) {
+				$diff         = array(
+					$levels => self::time_format( $levels, $diff ),
+				);
+				$time_strings = array(
+					$levels => $time_strings[ $levels ],
+				);
+			}
+
+			$levels = 1;
+		}
+
 		foreach ( $time_strings as $k => $v ) {
-			if ( $diff[ $k ] ) {
+			if ( ! empty( $diff[ $k ] ) ) {
 				$time_strings[ $k ] = $diff[ $k ] . ' ' . ( $diff[ $k ] > 1 ? $v[1] : $v[0] );
+			} elseif ( isset( $diff[ $k ] ) && count( $time_strings ) === 1 ) {
+				// Account for 0.
+				$time_strings[ $k ] = $diff[ $k ] . ' ' . $v[1];
 			} else {
 				unset( $time_strings[ $k ] );
 			}
 		}
 
-		$levels_deep     = apply_filters( 'frm_time_ago_levels', $levels, compact( 'time_strings', 'from', 'to' ) );
-		$time_strings    = array_slice( $time_strings, 0, $levels_deep );
-		$time_ago_string = $time_strings ? implode( ' ', $time_strings ) : '0 ' . __( 'seconds', 'formidable' );
+		$levels_deep  = apply_filters( 'frm_time_ago_levels', $levels, compact( 'time_strings', 'from', 'to' ) );
+		$time_strings = array_slice( $time_strings, 0, absint( $levels_deep ) );
 
-		return $time_ago_string;
+		return implode( ' ', $time_strings );
 	}
 
 	/**
-	 * Get the translatable time strings
+	 * @since 4.05.01
+	 *
+	 * @param string $unit
+	 * @param array  $diff
+	 *
+	 * @return int
+	 */
+	private static function time_format( $unit, $diff ) {
+		$return = array(
+			'y' => 'y',
+			'd' => 'days',
+		);
+
+		if ( isset( $return[ $unit ] ) ) {
+			return $diff[ $return[ $unit ] ];
+		}
+
+		$total = $diff['days'] * self::convert_time( 'd', $unit );
+		$times = array( 'h', 'i', 's' );
+
+		foreach ( $times as $time ) {
+			if ( ! isset( $diff[ $time ] ) ) {
+				continue;
+			}
+
+			$total += $diff[ $time ] * self::convert_time( $time, $unit );
+		}
+
+		return floor( $total );
+	}
+
+	/**
+	 * @since 4.05.01
+	 *
+	 * @param string $from
+	 * @param string $to
+	 *
+	 * @return int
+	 */
+	private static function convert_time( $from, $to ) {
+		$convert = array(
+			's' => 1,
+			'i' => MINUTE_IN_SECONDS,
+			'h' => HOUR_IN_SECONDS,
+			'd' => DAY_IN_SECONDS,
+			'w' => WEEK_IN_SECONDS,
+			'm' => DAY_IN_SECONDS * 30.42,
+			'y' => DAY_IN_SECONDS * 365.25,
+		);
+
+		return $convert[ $from ] / $convert[ $to ];
+	}
+
+	/**
+	 * @since 4.05.01
+	 *
+	 * @param string $unit
+	 *
+	 * @return int|string
+	 */
+	private static function get_unit( $unit ) {
+		$units = self::get_time_strings();
+
+		if ( isset( $units[ $unit ] ) || is_numeric( $unit ) ) {
+			return $unit;
+		}
+
+		foreach ( $units as $u => $strings ) {
+			if ( in_array( $unit, $strings, true ) ) {
+				return $u;
+			}
+		}
+
+		return 1;
+	}
+
+	/**
+	 * Get the translatable time strings. The untranslated version is a failsafe
+	 * in case languages are changing for the unit set in the shortcode.
 	 *
 	 * @since 2.0.20
+	 *
 	 * @return array
 	 */
 	private static function get_time_strings() {
 		return array(
-			'y' => array( __( 'year', 'formidable' ), __( 'years', 'formidable' ) ),
-			'm' => array( __( 'month', 'formidable' ), __( 'months', 'formidable' ) ),
-			'w' => array( __( 'week', 'formidable' ), __( 'weeks', 'formidable' ) ),
-			'd' => array( __( 'day', 'formidable' ), __( 'days', 'formidable' ) ),
-			'h' => array( __( 'hour', 'formidable' ), __( 'hours', 'formidable' ) ),
-			'i' => array( __( 'minute', 'formidable' ), __( 'minutes', 'formidable' ) ),
-			's' => array( __( 'second', 'formidable' ), __( 'seconds', 'formidable' ) ),
+			'y' => array(
+				__( 'year', 'formidable' ),
+				__( 'years', 'formidable' ),
+				'year',
+			),
+			'm' => array(
+				__( 'month', 'formidable' ),
+				__( 'months', 'formidable' ),
+				'month',
+			),
+			'w' => array(
+				__( 'week', 'formidable' ),
+				__( 'weeks', 'formidable' ),
+				'week',
+			),
+			'd' => array(
+				__( 'day', 'formidable' ),
+				__( 'days', 'formidable' ),
+				'day',
+			),
+			'h' => array(
+				__( 'hour', 'formidable' ),
+				__( 'hours', 'formidable' ),
+				'hour',
+			),
+			'i' => array(
+				__( 'minute', 'formidable' ),
+				__( 'minutes', 'formidable' ),
+				'minute',
+			),
+			's' => array(
+				__( 'second', 'formidable' ),
+				__( 'seconds', 'formidable' ),
+				'second',
+			),
 		);
 	}
 
 	// Pagination Methods.
 
 	/**
-	 * @param integer $current_p
+	 * @param int $r_count
+	 * @param int $current_p
+	 * @param int $p_size
+	 *
+	 * @return int
 	 */
 	public static function get_last_record_num( $r_count, $current_p, $p_size ) {
-		return ( ( $r_count < ( $current_p * $p_size ) ) ? $r_count : ( $current_p * $p_size ) );
+		return $r_count < $current_p * $p_size ? $r_count : $current_p * $p_size;
 	}
 
 	/**
-	 * @param integer $current_p
+	 * @param int $r_count
+	 * @param int $current_p
+	 * @param int $p_size
+	 *
+	 * @return int
 	 */
 	public static function get_first_record_num( $r_count, $current_p, $p_size ) {
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( $current_p == 1 ) {
 			return 1;
-		} else {
-			return ( self::get_last_record_num( $r_count, ( $current_p - 1 ), $p_size ) + 1 );
 		}
+		return self::get_last_record_num( $r_count, $current_p - 1, $p_size ) + 1;
 	}
 
 	/**
+	 * @param array $json_vars
+	 *
 	 * @return array
 	 */
 	public static function json_to_array( $json_vars ) {
 		$vars = array();
+
 		foreach ( $json_vars as $jv ) {
 			$jv_name = explode( '[', $jv['name'] );
 			$last    = count( $jv_name ) - 1;
+
 			foreach ( $jv_name as $p => $n ) {
 				$name = trim( $n, ']' );
+
 				if ( ! isset( $l1 ) ) {
 					$l1 = $name;
 				}
@@ -1787,7 +3530,7 @@ class FrmAppHelper {
 					$l3 = $name;
 				}
 
-				$this_val = ( $p == $last ) ? $jv['value'] : array();
+				$this_val = $p === $last ? $jv['value'] : array();
 
 				switch ( $p ) {
 					case 0:
@@ -1811,10 +3554,10 @@ class FrmAppHelper {
 				}
 
 				unset( $this_val, $n );
-			}
+			}//end foreach
 
 			unset( $last, $jv );
-		}
+		}//end foreach
 
 		return $vars;
 	}
@@ -1822,8 +3565,13 @@ class FrmAppHelper {
 	/**
 	 * @param string $name
 	 * @param string $l1
+	 * @param mixed  $val
+	 * @param array  $vars
+	 *
+	 * @return void
 	 */
 	public static function add_value_to_array( $name, $l1, $val, &$vars ) {
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( $name == '' ) {
 			$vars[] = $val;
 		} elseif ( ! isset( $vars[ $l1 ] ) ) {
@@ -1831,23 +3579,31 @@ class FrmAppHelper {
 		}
 	}
 
+	/**
+	 * @param string $name
+	 * @param string $class
+	 * @param string $form_name
+	 *
+	 * @return void
+	 */
 	public static function maybe_add_tooltip( $name, $class = 'closed', $form_name = '' ) {
 		$tooltips = array(
 			'action_title'  => __( 'Give this action a label for easy reference.', 'formidable' ),
-			'email_to'      => __( 'Add one or more recipient addresses separated by a ",".  FORMAT: Name <name@email.com> or name@email.com.  [admin_email] is the address set in WP General Settings.', 'formidable' ),
+			'email_to'      => __( 'Add one or more recipient addresses separated by a ",".  FORMAT: Name <name@email.com> or name@email.com.  [default-email] is the address set in the global "Default Email Address" settings.', 'formidable' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 			'cc'            => __( 'Add CC addresses separated by a ",".  FORMAT: Name <name@email.com> or name@email.com.', 'formidable' ),
 			'bcc'           => __( 'Add BCC addresses separated by a ",".  FORMAT: Name <name@email.com> or name@email.com.', 'formidable' ),
-			'reply_to'      => __( 'If you would like a different reply to address than the "from" address, add a single address here.  FORMAT: Name <name@email.com> or name@email.com.', 'formidable' ),
+			'reply_to'      => __( 'If you would like a different reply to address than the "from" address, add a single address here.  FORMAT: Name <name@email.com> or name@email.com.', 'formidable' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 			'from'          => __( 'Enter the name and/or email address of the sender. FORMAT: John Bates <john@example.com> or john@example.com.', 'formidable' ),
 			/* translators: %1$s: Form name, %2$s: Date */
-			'email_subject' => esc_attr( sprintf( __( 'If you leave the subject blank, the default will be used: %1$s Form submitted on %2$s', 'formidable' ), $form_name, self::site_name() ) ),
+			'email_subject' => esc_attr( sprintf( __( 'If you leave the subject blank, the default will be used: %1$s Form submitted on %2$s', 'formidable' ), $form_name, self::site_name() ) ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+			'new_tab'       => __( 'This option will open the link in a new browser tab. Please note that some popup blockers may prevent this from happening, in which case the link will be displayed.', 'formidable' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 		);
 
 		if ( ! isset( $tooltips[ $name ] ) ) {
 			return;
 		}
 
-		if ( 'open' == $class ) {
+		if ( 'open' === $class ) {
 			echo ' frm_help"';
 		} else {
 			echo ' class="frm_help"';
@@ -1855,21 +3611,33 @@ class FrmAppHelper {
 
 		echo ' title="' . esc_attr( $tooltips[ $name ] );
 
-		if ( 'open' != $class ) {
+		if ( 'open' !== $class ) {
 			echo '"';
 		}
 	}
 
 	/**
 	 * Add the current_page class to that page in the form nav
+	 *
+	 * @param int|string $page
+	 * @param int|string $current_page
+	 * @param array      $action
+	 *
+	 * @return void
 	 */
 	public static function select_current_page( $page, $current_page, $action = array() ) {
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( $current_page != $page ) {
 			return;
 		}
 
 		$frm_action = self::simple_get( 'frm_action', 'sanitize_title' );
-		if ( empty( $action ) || ( ! empty( $frm_action ) && in_array( $frm_action, $action ) ) ) {
+
+		if ( 'lite-reports' === $frm_action ) {
+			$frm_action = 'reports';
+		}
+
+		if ( ! $action || ( $frm_action && in_array( $frm_action, $action, true ) ) ) {
 			echo ' class="current_page"';
 		}
 	}
@@ -1887,7 +3655,9 @@ class FrmAppHelper {
 		// Loop through array to strip slashes and add only the needed ones.
 		foreach ( $post_content as $key => $val ) {
 			// Replace problematic characters (like &quot;)
-			$val = str_replace( '&quot;', '"', $val );
+			if ( is_string( $val ) ) {
+				$val = str_replace( '&quot;', '"', $val );
+			}
 
 			self::prepare_action_slashes( $val, $key, $post_content );
 			unset( $key, $val );
@@ -1899,14 +3669,19 @@ class FrmAppHelper {
 		// Add extra slashes for \r\n since WP strips them.
 		$post_content = str_replace( array( '\\r', '\\n', '\\u', '\\t' ), array( '\\\\r', '\\\\n', '\\\\u', '\\\\t' ), $post_content );
 
-		// allow for &quot
-		$post_content = str_replace( '&quot;', '\\"', $post_content );
-
-		return $post_content;
+		// Allow for &quot
+		return str_replace( '&quot;', '\\"', $post_content );
 	}
 
+	/**
+	 * @param array|string $val
+	 * @param int|string   $key
+	 * @param array        $post_content
+	 *
+	 * @return void
+	 */
 	private static function prepare_action_slashes( $val, $key, &$post_content ) {
-		if ( ! isset( $post_content[ $key ] ) ) {
+		if ( ! isset( $post_content[ $key ] ) || is_numeric( $val ) ) {
 			return;
 		}
 
@@ -1915,48 +3690,181 @@ class FrmAppHelper {
 				self::prepare_action_slashes( $v1, $k1, $post_content[ $key ] );
 				unset( $k1, $v1 );
 			}
-		} else {
-			// Strip all slashes so everything is the same, no matter where the value is coming from
-			$val = stripslashes( $val );
 
-			// Add backslashes before double quotes and forward slashes only
-			$post_content[ $key ] = addcslashes( $val, '"\\/' );
+			return;
 		}
+
+		// Strip all slashes so everything is the same, no matter where the value is coming from
+		$val = stripslashes( $val );
+
+		// Add backslashes before double quotes and forward slashes only
+		$post_content[ $key ] = addcslashes( $val, '"\\/' );
 	}
 
-	public static function maybe_json_decode( $string ) {
-		if ( is_array( $string ) ) {
+	/**
+	 * Check for either json or serialized data. This is temporary while transitioning
+	 * all data to json.
+	 *
+	 * @since 4.02.03
+	 *
+	 * @param array|string $value
+	 *
+	 * @return void
+	 */
+	public static function unserialize_or_decode( &$value ) {
+		if ( is_array( $value ) ) {
+			return;
+		}
+
+		$value = is_serialized( $value ) ? self::maybe_unserialize_array( $value ) : self::maybe_json_decode( $value, false );
+	}
+
+	/**
+	 * Safely unserialize an array if necessary.
+	 * This function doesn't actually use unserialize. The string is parsed instead.
+	 *
+	 * @since 6.2
+	 *
+	 * @param mixed $value
+	 *
+	 * @return mixed
+	 */
+	public static function maybe_unserialize_array( $value ) {
+		if ( ! is_string( $value ) ) {
+			return $value;
+		}
+
+		// Since we only expect an array, skip anything that doesn't start with a:.
+		if ( ! is_serialized( $value ) || ! str_starts_with( $value, 'a:' ) ) {
+			return $value;
+		}
+
+		$parsed = FrmSerializedStringParserHelper::get()->parse( $value );
+
+		return is_array( $parsed ) ? $parsed : $value;
+	}
+
+	/**
+	 * Decode a JSON string.
+	 * Do not switch shortcodes like [24] to array unless intentional ie XML values.
+	 *
+	 * @param array|string|null $string
+	 * @param bool              $single_to_array
+	 *
+	 * @return array|string|null
+	 */
+	public static function maybe_json_decode( $string, $single_to_array = true ) {
+		if ( is_array( $string ) || is_null( $string ) ) {
 			return $string;
 		}
 
-		$new_string = json_decode( $string, true );
-		if ( function_exists( 'json_last_error' ) ) {
-			// php 5.3+
-			if ( json_last_error() == JSON_ERROR_NONE ) {
-				$string = $new_string;
-			}
-		} elseif ( isset( $new_string ) ) {
-			// php < 5.3 fallback
-			$string = $new_string;
+		$new_string   = json_decode( $string, true );
+		$single_value = false;
+
+		if ( ! $single_to_array ) {
+			$single_value = is_array( $new_string ) && count( $new_string ) === 1 && isset( $new_string[0] );
+		}
+
+		if ( json_last_error() === JSON_ERROR_NONE && is_array( $new_string ) && ! $single_value ) {
+			return $new_string;
 		}
 
 		return $string;
 	}
 
 	/**
+	 * @since 6.2.3
+	 *
+	 * @param string $value
+	 *
+	 * @return string
+	 */
+	public static function maybe_utf8_encode( $value ) {
+		$from_format = 'ISO-8859-1';
+		$to_format   = 'UTF-8';
+
+		if ( function_exists( 'mb_check_encoding' ) && function_exists( 'mb_convert_encoding' ) ) {
+			if ( mb_check_encoding( $value, $from_format ) ) {
+				return mb_convert_encoding( $value, $to_format, $from_format );
+			}
+
+			return $value;
+		}
+
+		if ( function_exists( 'iconv' ) ) {
+			$converted = iconv( $from_format, $to_format, $value );
+
+			// Value is false if $value is not ISO-8859-1.
+			if ( false !== $converted ) {
+				return $converted;
+			}
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Reformat the json serialized array in name => value array.
+	 *
+	 * @since 4.02.03
+	 *
+	 * @param array $form
+	 *
+	 * @return void
+	 */
+	public static function format_form_data( &$form ) {
+		$formatted = array();
+
+		foreach ( $form as $input ) {
+			if ( ! isset( $input['name'] ) ) {
+				continue;
+			}
+
+			$key = $input['name'];
+
+			if ( ! isset( $formatted[ $key ] ) ) {
+				$formatted[ $key ] = $input['value'];
+				continue;
+			}
+
+			if ( is_array( $formatted[ $key ] ) ) {
+				$formatted[ $key ][] = $input['value'];
+			} else {
+				$formatted[ $key ] = array( $formatted[ $key ], $input['value'] );
+			}
+		}
+
+		parse_str( http_build_query( $formatted ), $form );
+	}
+
+	/**
+	 * @since 4.02.03
+	 *
+	 * @param array|string $value
+	 *
+	 * @return string
+	 */
+	public static function maybe_json_encode( $value ) {
+		return is_array( $value ) ? wp_json_encode( $value ) : $value;
+	}
+
+	/**
+	 * Echo The javascript to open and highlight the Formidable menu
+	 *
 	 * @since 1.07.10
 	 *
-	 * @param string $post_type The name of the post type that may need to be highlighted
-	 * echo The javascript to open and highlight the Formidable menu
+	 * @param string $post_type The name of the post type that may need to be highlighted.
+	 *
+	 * @return void
 	 */
 	public static function maybe_highlight_menu( $post_type ) {
 		global $post;
 
-		if ( isset( $_REQUEST['post_type'] ) && $_REQUEST['post_type'] != $post_type ) {
+		if ( isset( $_REQUEST['post_type'] ) && $_REQUEST['post_type'] !== $post_type ) {
 			return;
 		}
 
-		if ( is_object( $post ) && $post->post_type != $post_type ) {
+		if ( is_object( $post ) && $post->post_type !== $post_type ) {
 			return;
 		}
 
@@ -1968,17 +3876,25 @@ class FrmAppHelper {
 	 * Load the JS file on non-Formidable pages in the admin area
 	 *
 	 * @since 2.0
+	 *
+	 * @param bool $load
+	 *
+	 * @return void
 	 */
 	public static function load_admin_wide_js( $load = true ) {
-		$version = self::plugin_version();
-		wp_register_script( 'formidable_admin_global', self::plugin_url() . '/js/formidable_admin_global.js', array( 'jquery' ), $version );
+		wp_register_script( 'formidable_admin_global', self::plugin_url() . '/js/formidable_admin_global.js', array( 'jquery' ), self::plugin_version() );
 
 		$global_strings = array(
-			'updating_msg' => __( 'Please wait while your site updates.', 'formidable' ),
-			'deauthorize'  => __( 'Are you sure you want to deauthorize Formidable Forms on this site?', 'formidable' ),
-			'url'          => self::plugin_url(),
-			'loading'      => __( 'Loading&hellip;', 'formidable' ),
-			'nonce'        => wp_create_nonce( 'frm_ajax' ),
+			'updating_msg'                  => __( 'Please wait while your site updates.', 'formidable' ),
+			'deauthorize'                   => __( 'Are you sure you want to deauthorize Formidable Forms on this site?', 'formidable' ),
+			'url'                           => self::plugin_url(),
+			'app_url'                       => 'https://formidableforms.com/',
+			'applicationsUrl'               => admin_url( 'admin.php?page=formidable-applications' ),
+			'canAccessApplicationDashboard' => current_user_can( is_callable( 'FrmProApplicationsHelper::get_required_templates_capability' ) ? FrmProApplicationsHelper::get_required_templates_capability() : 'frm_edit_forms' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+			'loading'                       => __( 'Loading&hellip;', 'formidable' ),
+			'nonce'                         => wp_create_nonce( 'frm_ajax' ),
+			'proIncludesSliderJs'           => is_callable( 'FrmProFormsHelper::prepare_custom_currency' ),
+			'inboxSlideIn'                  => FrmInbox::get_inbox_slide_in_value_for_js(),
 		);
 		wp_localize_script( 'formidable_admin_global', 'frmGlobal', $global_strings );
 
@@ -1989,6 +3905,8 @@ class FrmAppHelper {
 
 	/**
 	 * @since 2.0.9
+	 *
+	 * @return void
 	 */
 	public static function load_font_style() {
 		wp_enqueue_style( 'frm_fonts', self::plugin_url() . '/css/frm_fonts.css', array(), self::plugin_version() );
@@ -1996,70 +3914,241 @@ class FrmAppHelper {
 
 	/**
 	 * @param string $location
+	 *
+	 * @return void
 	 */
 	public static function localize_script( $location ) {
-		$ajax_url = admin_url( 'admin-ajax.php', is_ssl() ? 'admin' : 'http' );
-		$ajax_url = apply_filters( 'frm_ajax_url', $ajax_url );
+		global $wp_scripts, $wp_version;
 
 		$script_strings = array(
-			'ajax_url'     => $ajax_url,
-			'images_url'   => self::plugin_url() . '/images',
-			'loading'      => __( 'Loading&hellip;', 'formidable' ),
-			'remove'       => __( 'Remove', 'formidable' ),
-			'offset'       => apply_filters( 'frm_scroll_offset', 4 ),
-			'nonce'        => wp_create_nonce( 'frm_ajax' ),
-			'id'           => __( 'ID', 'formidable' ),
-			'no_results'   => __( 'No results match', 'formidable' ),
-			'file_spam'    => __( 'That file looks like Spam.', 'formidable' ),
-			'calc_error'   => __( 'There is an error in the calculation in the field with key', 'formidable' ),
-			'empty_fields' => __( 'Please complete the preceding required fields before uploading a file.', 'formidable' ),
+			'ajax_url'             => esc_url_raw( self::get_ajax_url() ),
+			'images_url'           => self::plugin_url() . '/images',
+			'loading'              => __( 'Loading&hellip;', 'formidable' ),
+			'remove'               => __( 'Remove', 'formidable' ),
+			'offset'               => apply_filters( 'frm_scroll_offset', 4 ),
+			'nonce'                => wp_create_nonce( 'frm_ajax' ),
+			'id'                   => __( 'ID', 'formidable' ),
+			'no_results'           => __( 'No results match', 'formidable' ),
+			'file_spam'            => __( 'That file looks like Spam.', 'formidable' ),
+			'calc_error'           => __( 'There is an error in the calculation in the field with key', 'formidable' ),
+			'empty_fields'         => __( 'Please complete the preceding required fields before uploading a file.', 'formidable' ),
+			'focus_first_error'    => self::should_focus_first_error(),
+			'include_alert_role'   => self::should_include_alert_role_on_field_errors(),
+			// We need to keep this setting for a few versions because Pro checks for this.
+			'include_resend_email' => false,
 		);
-		wp_localize_script( 'formidable', 'frm_js', $script_strings );
 
-		if ( $location == 'admin' ) {
-			$frm_settings         = self::get_settings();
-			$admin_script_strings = array(
-				'desc'              => __( '(Click to add description)', 'formidable' ),
-				'blank'             => __( '(Blank)', 'formidable' ),
-				'no_label'          => __( '(no label)', 'formidable' ),
-				'saving'            => esc_attr( __( 'Saving', 'formidable' ) ),
-				'saved'             => esc_attr( __( 'Saved', 'formidable' ) ),
-				'ok'                => __( 'OK', 'formidable' ),
-				'cancel'            => __( 'Cancel', 'formidable' ),
-				'default'           => __( 'Default', 'formidable' ),
-				'clear_default'     => __( 'Clear default value when typing', 'formidable' ),
-				'no_clear_default'  => __( 'Do not clear default value when typing', 'formidable' ),
-				'valid_default'     => __( 'Default value will pass form validation', 'formidable' ),
-				'no_valid_default'  => __( 'Default value will NOT pass form validation', 'formidable' ),
-				'confirm'           => __( 'Are you sure?', 'formidable' ),
-				'conf_delete'       => __( 'Are you sure you want to delete this field and all data associated with it?', 'formidable' ),
-				'conf_delete_sec'   => __( 'WARNING: This will delete all fields inside of the section as well.', 'formidable' ),
-				'conf_no_repeat'    => __( 'Warning: If you have entries with multiple rows, all but the first row will be lost.', 'formidable' ),
-				'default_unique'    => $frm_settings->unique_msg,
-				'default_conf'      => __( 'The entered values do not match', 'formidable' ),
-				'enter_email'       => __( 'Enter Email', 'formidable' ),
-				'confirm_email'     => __( 'Confirm Email', 'formidable' ),
-				'conditional_text'  => __( 'Conditional content here', 'formidable' ),
-				'new_option'        => __( 'New Option', 'formidable' ),
-				'css_invalid_size'  => __( 'In certain browsers (e.g. Firefox) text will not display correctly if the field height is too small relative to the field padding and text size. Please increase your field height or decrease your field padding.', 'formidable' ),
-				'enter_password'    => __( 'Enter Password', 'formidable' ),
-				'confirm_password'  => __( 'Confirm Password', 'formidable' ),
-				'import_complete'   => __( 'Import Complete', 'formidable' ),
-				'updating'          => __( 'Please wait while your site updates.', 'formidable' ),
-				'no_save_warning'   => __( 'Warning: There is no way to retrieve unsaved entries.', 'formidable' ),
-				'private'           => __( 'Private', 'formidable' ),
-				'jquery_ui_url'     => self::jquery_ui_base_url(),
-				'pro_url'           => is_callable( 'FrmProAppHelper::plugin_url' ) ? FrmProAppHelper::plugin_url() : '',
-				'no_licenses'       => __( 'No new licenses were found', 'formidable' ),
-				'unmatched_parens'  => __( 'This calculation has at least one unmatched ( ) { } [ ].', 'formidable' ),
-				'view_shortcodes'   => __( 'This calculation may have shortcodes that work in Views but not forms.', 'formidable' ),
-				'text_shortcodes'   => __( 'This calculation may have shortcodes that work in text calculations but not numeric calculations.', 'formidable' ),
-				'repeat_limit_min'  => __( 'Please enter a Repeat Limit that is greater than 1.', 'formidable' ),
-				'install'           => __( 'Install', 'formidable' ),
-				'active'            => __( 'Active', 'formidable' ),
-			);
-			wp_localize_script( 'formidable_admin', 'frm_admin_js', $admin_script_strings );
+		$data = $wp_scripts->get_data( 'formidable', 'data' );
+
+		if ( ! $data ) {
+			wp_localize_script( 'formidable', 'frm_js', $script_strings );
 		}
+
+		if ( $location === 'admin' ) {
+			$admin_script_strings = array(
+				'desc'                               => __( '(Click to add description)', 'formidable' ),
+				'blank'                              => __( '(Blank)', 'formidable' ),
+				'no_label'                           => self::get_no_label_text(),
+				'ok'                                 => __( 'OK', 'formidable' ),
+				'cancel'                             => __( 'Cancel', 'formidable' ),
+				'default_label'                      => __( 'Default', 'formidable' ),
+				'clear_default'                      => __( 'Clear default value when typing', 'formidable' ),
+				'no_clear_default'                   => __( 'Do not clear default value when typing', 'formidable' ),
+				'valid_default'                      => __( 'Default value will pass form validation', 'formidable' ),
+				'no_valid_default'                   => __( 'Default value will NOT pass form validation', 'formidable' ),
+				'confirm'                            => __( 'Are you sure?', 'formidable' ),
+				'conf_delete'                        => __( 'Are you sure you want to delete this field and all data associated with it?', 'formidable' ),
+				'conf_delete_sec'                    => __( 'All fields inside this Section will be deleted along with their data. Are you sure you want to delete this group of fields?', 'formidable' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+				'conf_no_repeat'                     => __( 'Warning: If you have entries with multiple rows, all but the first row will be lost.', 'formidable' ),
+				'default_unique'                     => FrmFieldsHelper::default_unique_msg(),
+				'default_conf'                       => __( 'The entered values do not match', 'formidable' ),
+				'enter_email'                        => __( 'Enter Email', 'formidable' ),
+				'confirm_email'                      => __( 'Confirm Email', 'formidable' ),
+				'conditional_text'                   => __( 'Conditional content here', 'formidable' ),
+				'new_option'                         => __( 'New Option', 'formidable' ),
+				'css_invalid_size'                   => __( 'In certain browsers (e.g. Firefox) text will not display correctly if the field height is too small relative to the field padding and text size. Please increase your field height or decrease your field padding.', 'formidable' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+				'enter_password'                     => __( 'Enter Password', 'formidable' ),
+				'confirm_password'                   => __( 'Confirm Password', 'formidable' ),
+				'import_complete'                    => __( 'Import Complete', 'formidable' ),
+				'updating'                           => __( 'Please wait while your site updates.', 'formidable' ),
+				'no_save_warning'                    => __( 'Warning: There is no way to retrieve unsaved entries.', 'formidable' ),
+				'private_label'                      => __( 'Private', 'formidable' ),
+				'jquery_ui_url'                      => '',
+				'pro_url'                            => is_callable( 'FrmProAppHelper::plugin_url' ) ? FrmProAppHelper::plugin_url() : '',
+				'no_licenses'                        => __( 'No new licenses were found', 'formidable' ),
+				'unmatched_parens'                   => __( 'This calculation has at least one unmatched ( ) { } [ ].', 'formidable' ),
+				'view_shortcodes'                    => __( 'This calculation may have shortcodes that work in Views but not forms.', 'formidable' ),
+				'text_shortcodes'                    => __( 'This calculation may have shortcodes that work in text calculations but not numeric calculations.', 'formidable' ),
+				/* translators: %d is the number of allowed actions per form */
+				'only_one_action'                    => sprintf( __( 'This form action is limited to %d per form.', 'formidable' ), 1 ),
+				'edit_action_text'                   => __( 'Please edit the existing form action.', 'formidable' ),
+				'only_one_payment_action'            => __( 'This form already has a payment action, and is currently limited to a single payment action.', 'formidable' ),
+				'only_one_stripe_action'             => __( 'This form already has a payment action. Multiple Stripe actions are available when using the Stripe add-on, available for Formidable Business licenses and higher.', 'formidable' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+				'unsafe_params'                      => FrmFormsHelper::reserved_words(),
+				/* Translators: %s is the name of a Detail Page Slug that is a reserved word.*/
+				'slug_is_reserved'                   => sprintf( __( 'The Detail Page Slug "%s" is reserved by WordPress. This may cause problems. Is this intentional?', 'formidable' ), '****' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+				/* Translators: %s is the name of a parameter that is a reserved word.  More than one word could be listed here, though that would not be common. */
+				'param_is_reserved'                  => sprintf( __( 'The parameter "%s" is reserved by WordPress. This may cause problems when included in the URL. Is this intentional? ', 'formidable' ), '****' ), // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+				'reserved_words'                     => __( 'See the list of reserved words in WordPress.', 'formidable' ),
+				'repeat_limit_min'                   => __( 'Please enter a Repeat Limit that is greater than 1.', 'formidable' ),
+				'checkbox_limit'                     => __( 'Please select a limit between 0 and 200.', 'formidable' ),
+				'install'                            => __( 'Install', 'formidable' ),
+				'active'                             => __( 'Active', 'formidable' ),
+				'installed'                          => __( 'Installed', 'formidable' ),
+				'not_installed'                      => __( 'Not Installed', 'formidable' ),
+				'select_a_field'                     => __( 'Select a Field', 'formidable' ),
+				'no_items_found'                     => __( 'No items found.', 'formidable' ),
+				'field_already_used'                 => __( 'Oops. You have already used that field.', 'formidable' ),
+
+				// Deprecated in 6.0.
+				'saving'                             => '',
+
+				// Deprecated in 6.0.
+				'saved'                              => '',
+
+				// translators: %1$s: HTML open tag, %2$s: HTML end tag.
+				'holdShiftMsg'                       => esc_html__( 'You can hold %1$sShift%2$s on your keyboard to select multiple fields', 'formidable' ),
+				'noTitleText'                        => FrmFormsHelper::get_no_title_text(),
+
+				// In older versions this event listener causes the section to immediately close again
+				// When the h3 element is clicked. It's only required in WP 6.7+.
+				'requireAccordionTitleClickListener' => version_compare( $wp_version, '6.7', '>=' ),
+			);
+
+			self::add_form_builder_modal_data( $admin_script_strings );
+
+			/**
+			 * @param array $admin_script_strings
+			 */
+			$admin_script_strings = apply_filters( 'frm_admin_script_strings', $admin_script_strings );
+
+			$data = $wp_scripts->get_data( 'formidable_admin', 'data' );
+
+			if ( ! $data ) {
+				wp_localize_script( 'formidable_admin', 'frm_admin_js', $admin_script_strings );
+			}
+		}//end if
+	}
+
+	/**
+	 * @param array $admin_script_strings
+	 *
+	 * @return void
+	 */
+	private static function add_form_builder_modal_data( &$admin_script_strings ) {
+		if ( ! self::is_form_builder_page() || self::pro_is_installed() ) {
+			return;
+		}
+
+		$stripe_connected      = FrmStrpLiteConnectHelper::at_least_one_mode_is_setup();
+		$square_connected      = FrmSquareLiteConnectHelper::at_least_one_mode_is_setup();
+		$paypal_connected      = FrmPayPalLiteConnectHelper::at_least_one_mode_is_setup();
+		$gateway_connected     = $stripe_connected || $square_connected || $paypal_connected;
+		$payments_settings_url = FrmStrpLiteAppController::get_payments_settings_url();
+
+		if ( ! $gateway_connected ) {
+			// This modal shows when user clicks on one of the pricing fields and no payment gateways configured.
+			$admin_script_strings['paymentsSettingsModal'] = array(
+				'title'      => __( 'Setup a Payment Gateway first', 'formidable' ),
+				'msg'        => __( 'To use the payment fields, please install and configure a payment gateway in your account settings.', 'formidable' ),
+				'closeText'  => __( 'Close', 'formidable' ),
+				'actionUrl'  => $payments_settings_url,
+				'actionText' => __( 'Go to Payment Settings', 'formidable' ),
+				'noCenter'   => true,
+			);
+		}
+
+		// This modal shows on load once after upgrading the plugin.
+		$show_pricing_fields_modal = get_option( 'frm_show_pricing_fields_modal' );
+
+		if ( ! $show_pricing_fields_modal ) {
+			return;
+		}
+
+		$admin_script_strings['pricingFieldsModal'] = array(
+			'title'    => esc_html__( 'Start Accepting Payments Today!', 'formidable' ),
+			'img'      => esc_url( self::plugin_url() . '/images/upsell/pricing-fields.png' ),
+			'noCenter' => true,
+		);
+
+		if ( $gateway_connected ) {
+			$gateway_texts = array();
+
+			if ( $stripe_connected ) {
+				$gateway_texts['stripe'] = esc_html__( 'Stripe', 'formidable' );
+			}
+
+			if ( $square_connected ) {
+				$gateway_texts['square'] = esc_html__( 'Square', 'formidable' );
+			}
+
+			if ( $paypal_connected ) {
+				$gateway_texts['paypal'] = esc_html__( 'PayPal', 'formidable' );
+			}
+
+			$admin_script_strings['pricingFieldsModal']['msg'] = sprintf(
+				// translators: %s: Stripe, Square, or PayPal.
+				esc_html__( 'You already have %s connected, so these have already been unlocked.', 'formidable' ),
+				esc_html( implode( ' ' . esc_html__( 'and', 'formidable' ) . ' ', $gateway_texts ) )
+			);
+		} else {
+			$admin_script_strings['pricingFieldsModal']['closeText']  = __( 'I\'ll do it later!', 'formidable' );
+			$admin_script_strings['pricingFieldsModal']['actionText'] = __( 'Setup Payments Now', 'formidable' );
+			$admin_script_strings['pricingFieldsModal']['actionUrl']  = $payments_settings_url;
+			// phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+			$admin_script_strings['pricingFieldsModal']['msg'] = __( 'We\'ve unlocked Product, Quantity, and Total fields for Lite users! You can now transform your forms into checkout pages. To start collecting revenue, simply connect your preferred payment gateway (Stripe, Square, or PayPal) in your settings.', 'formidable' );
+		}//end if
+
+		delete_option( 'frm_show_pricing_fields_modal' );
+	}
+
+	/**
+	 * Get the no label text.
+	 *
+	 * @since 6.25.1
+	 *
+	 * @return string
+	 */
+	public static function get_no_label_text() {
+		return __( '(no label)', 'formidable' );
+	}
+
+	/**
+	 * @since 6.5
+	 *
+	 * @return string
+	 */
+	public static function get_ajax_url() {
+		$ajax_url = admin_url( 'admin-ajax.php', is_ssl() ? 'admin' : 'http' );
+
+		/**
+		 * @since 2.0.13
+		 *
+		 * @param string $ajax_url
+		 */
+		return apply_filters( 'frm_ajax_url', $ajax_url );
+	}
+
+	/**
+	 * Returns whether or not the first errored input should be auto-focused (default true).
+	 *
+	 * @since 5.2.05
+	 *
+	 * @return bool
+	 */
+	private static function should_focus_first_error() {
+		return (bool) apply_filters( 'frm_focus_first_error', true );
+	}
+
+	/**
+	 * Returns whether or not field errors should include role="alert" (default true).
+	 *
+	 * @since 5.2.05
+	 *
+	 * @return bool
+	 */
+	public static function should_include_alert_role_on_field_errors() {
+		return (bool) apply_filters( 'frm_include_alert_role_on_field_errors', true );
 	}
 
 	/**
@@ -2067,7 +4156,9 @@ class FrmAppHelper {
 	 *
 	 * @since 1.07.10
 	 *
-	 * @param float $min_version The version the add-on requires
+	 * @param float $min_version The version the add-on requires.
+	 *
+	 * @return void
 	 */
 	public static function min_version_notice( $min_version ) {
 		$frm_version = self::plugin_version();
@@ -2078,15 +4169,19 @@ class FrmAppHelper {
 		}
 
 		$wp_list_table = _get_list_table( 'WP_Plugins_List_Table' );
-		echo '<tr class="plugin-update-tr active"><th colspan="' . absint( $wp_list_table->get_column_count() ) . '" class="check-column plugin-update colspanchange"><div class="update-message">' .
-			esc_html__( 'You are running an outdated version of Formidable. This plugin may not work correctly if you do not update Formidable.', 'formidable' ) .
-			'</div></td></tr>';
+		echo '<tr class="plugin-update-tr active"><th colspan="' . absint( $wp_list_table->get_column_count() ) . '" class="check-column plugin-update colspanchange"><div class="update-message">' . // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+		esc_html__( 'You are running an outdated version of Formidable. This plugin may not work correctly if you do not update Formidable.', 'formidable' ) .
+		'</div></td></tr>';
 	}
 
 	/**
 	 * If Pro is far outdated, show a message.
 	 *
 	 * @since 4.0.01
+	 *
+	 * @param string $min_version
+	 *
+	 * @return void
 	 */
 	public static function min_pro_version_notice( $min_version ) {
 		if ( ! self::is_formidable_admin() ) {
@@ -2097,70 +4192,70 @@ class FrmAppHelper {
 		self::php_version_notice();
 
 		$is_pro = self::pro_is_installed() && class_exists( 'FrmProDb' );
+
 		if ( ! $is_pro || self::meets_min_pro_version( $min_version ) ) {
 			return;
 		}
 
-		$pro_version = FrmProDb::$plug_version;
-		$expired = FrmAddonsController::is_license_expired();
-		?>
-		<div class="error frm_previous_install">
-			<?php
-			esc_html_e( 'You are running a version of Formidable Forms that may not be compatible with your version of Formidable Forms Pro.', 'formidable' );
-			if ( empty( $expired ) ) {
-				echo ' Please <a href="' . esc_url( admin_url( 'plugins.php?s=formidable%20forms%20pro' ) ) . '">update now</a>.';
-			} else {
-				echo '<br/>Please <a href="https://formidableforms.com/account/licenses/?utm_source=WordPress&utm_medium=outdated">renew now</a> to get the latest Pro version or <a href="https://downloads.wordpress.org/plugin/formidable.<?php echo esc_attr( $pro_version ); ?>.zip">download the previous Lite version</a> to revert.';
-			}
-			?>
-		</div>
-		<?php
+		include self::plugin_path() . '/classes/views/addons/min-version-notice.php';
 	}
 
 	/**
 	 * If Pro is installed, check the version number.
 	 *
 	 * @since 4.0.01
+	 *
+	 * @param string $min_version
+	 *
+	 * @return bool
 	 */
 	public static function meets_min_pro_version( $min_version ) {
 		return ! class_exists( 'FrmProDb' ) || version_compare( FrmProDb::$plug_version, $min_version, '>=' );
 	}
 
 	/**
-	 * Show a message if the browser or PHP version is below the recommendations.
+	 * Show a message if the PHP version is below the recommendations.
 	 *
 	 * @since 4.0.02
+	 *
+	 * @return void
 	 */
 	private static function php_version_notice() {
 		$message = array();
-		if ( version_compare( phpversion(), '5.6', '<' ) ) {
-			$message[] = __( 'The version of PHP on your server is too low. If this is not corrected, you may see issues with Formidable Forms. Please contact your web host and ask to be updated to PHP 7.0+.', 'formidable' );
+
+		if ( version_compare( phpversion(), '7.0', '<' ) ) {
+			$message[] = __( 'The version of PHP on your server is too low. If this is not corrected, you may see issues with Formidable Forms. Please contact your web host and ask to be updated to PHP 7.0+.', 'formidable' ); // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 		}
 
-		$browser = self::get_server_value( 'HTTP_USER_AGENT' );
-		$is_ie   = strpos( $browser, 'MSIE' ) !== false;
-		if ( $is_ie ) {
-			$message[] = __( 'You are using an outdated browser that is not compatible with Formidable Forms. Please update to a more current browser (we recommend Chrome).', 'formidable' );
-		}
-
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
 		foreach ( $message as $m ) {
 			?>
-			<div class="error frm_previous_install">
+			<div class="frm-banner-alert frm_error_style frm_previous_install">
 				<?php echo esc_html( $m ); ?>
 			</div>
 			<?php
 		}
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
 	}
 
+	/**
+	 * @param string $type
+	 *
+	 * @return array<string,string>
+	 */
 	public static function locales( $type = 'date' ) {
 		$locales = array(
 			'en'     => __( 'English', 'formidable' ),
 			'af'     => __( 'Afrikaans', 'formidable' ),
 			'sq'     => __( 'Albanian', 'formidable' ),
+			'ar-DZ'  => __( 'Algerian Arabic', 'formidable' ),
+			'am'     => __( 'Amharic', 'formidable' ),
 			'ar'     => __( 'Arabic', 'formidable' ),
 			'hy'     => __( 'Armenian', 'formidable' ),
 			'az'     => __( 'Azerbaijani', 'formidable' ),
 			'eu'     => __( 'Basque', 'formidable' ),
+			'be'     => __( 'Belarusian', 'formidable' ),
+			'bn'     => __( 'Bengali', 'formidable' ),
 			'bs'     => __( 'Bosnian', 'formidable' ),
 			'bg'     => __( 'Bulgarian', 'formidable' ),
 			'ca'     => __( 'Catalan', 'formidable' ),
@@ -2181,10 +4276,13 @@ class FrmAppHelper {
 			'fr'     => __( 'French', 'formidable' ),
 			'fr-CA'  => __( 'French/Canadian', 'formidable' ),
 			'fr-CH'  => __( 'French/Swiss', 'formidable' ),
+			'gl'     => __( 'Galician', 'formidable' ),
+			'ka'     => __( 'Georgian', 'formidable' ),
 			'de'     => __( 'German', 'formidable' ),
 			'de-AT'  => __( 'German/Austria', 'formidable' ),
 			'de-CH'  => __( 'German/Switzerland', 'formidable' ),
 			'el'     => __( 'Greek', 'formidable' ),
+			'gu'     => __( 'Gujarati', 'formidable' ),
 			'he'     => __( 'Hebrew', 'formidable' ),
 			'iw'     => __( 'Hebrew', 'formidable' ),
 			'hi'     => __( 'Hindi', 'formidable' ),
@@ -2193,220 +4291,901 @@ class FrmAppHelper {
 			'id'     => __( 'Indonesian', 'formidable' ),
 			'it'     => __( 'Italian', 'formidable' ),
 			'ja'     => __( 'Japanese', 'formidable' ),
+			'kn'     => __( 'Kannada', 'formidable' ),
+			'kk'     => __( 'Kazakh', 'formidable' ),
+			'km'     => __( 'Khmer', 'formidable' ),
 			'ko'     => __( 'Korean', 'formidable' ),
+			'ky'     => __( 'Kyrgyz', 'formidable' ),
+			'lo'     => __( 'Laothian', 'formidable' ),
 			'lv'     => __( 'Latvian', 'formidable' ),
 			'lt'     => __( 'Lithuanian', 'formidable' ),
+			'lb'     => __( 'Luxembourgish', 'formidable' ),
+			'mk'     => __( 'Macedonian', 'formidable' ),
+			'ml'     => __( 'Malayalam', 'formidable' ),
 			'ms'     => __( 'Malaysian', 'formidable' ),
+			'mr'     => __( 'Marathi', 'formidable' ),
 			'no'     => __( 'Norwegian', 'formidable' ),
+			'nb'     => __( 'Norwegian Bokmål', 'formidable' ),
+			'nn'     => __( 'Norwegian Nynorsk', 'formidable' ),
 			'pl'     => __( 'Polish', 'formidable' ),
 			'pt'     => __( 'Portuguese', 'formidable' ),
 			'pt-BR'  => __( 'Portuguese/Brazilian', 'formidable' ),
 			'pt-PT'  => __( 'Portuguese/Portugal', 'formidable' ),
+			'rm'     => __( 'Romansh', 'formidable' ),
 			'ro'     => __( 'Romanian', 'formidable' ),
 			'ru'     => __( 'Russian', 'formidable' ),
 			'sr'     => __( 'Serbian', 'formidable' ),
 			'sr-SR'  => __( 'Serbian', 'formidable' ),
+			'si'     => __( 'Sinhalese', 'formidable' ),
 			'sk'     => __( 'Slovak', 'formidable' ),
 			'sl'     => __( 'Slovenian', 'formidable' ),
 			'es'     => __( 'Spanish', 'formidable' ),
 			'es-419' => __( 'Spanish/Latin America', 'formidable' ),
+			'sw'     => __( 'Swahili', 'formidable' ),
 			'sv'     => __( 'Swedish', 'formidable' ),
 			'ta'     => __( 'Tamil', 'formidable' ),
+			'te'     => __( 'Telugu', 'formidable' ),
 			'th'     => __( 'Thai', 'formidable' ),
-			'tu'     => __( 'Turkish', 'formidable' ),
+			'tj'     => __( 'Tajiki', 'formidable' ),
 			'tr'     => __( 'Turkish', 'formidable' ),
-			'uk'     => __( 'Ukranian', 'formidable' ),
+			'uk'     => __( 'Ukrainian', 'formidable' ),
+			'ur'     => __( 'Urdu', 'formidable' ),
 			'vi'     => __( 'Vietnamese', 'formidable' ),
+			'cy-GB'  => __( 'Welsh', 'formidable' ),
+			'zu'     => __( 'Zulu', 'formidable' ),
 		);
 
 		if ( $type === 'captcha' ) {
-			// remove the languages unavailable for the captcha
-			$unset = array( 'af', 'sq', 'hy', 'az', 'eu', 'bs', 'zh-HK', 'eo', 'et', 'fo', 'fr-CH', 'he', 'is', 'ms', 'sr-SR', 'ta', 'tu' );
+			// Remove the languages unavailable for the captcha
+			$unset = array( 'sq', 'bs', 'eo', 'fo', 'fr-CH', 'sr-SR', 'ar-DZ', 'be', 'cy-GB', 'kk', 'km', 'ky', 'lb', 'mk', 'nb', 'nn', 'rm', 'tj' );
 		} else {
-			// remove the languages unavailable for the datepicker
-			$unset = array( 'fil', 'fr-CA', 'de-AT', 'de-CH', 'iw', 'hi', 'pt', 'pt-PT', 'es-419', 'tr' );
+			// Remove the languages unavailable for the datepicker
+			$unset = array( 'fil', 'fr-CA', 'de-AT', 'de-CH', 'iw', 'hi', 'pt', 'pt-PT', 'es-419', 'mr', 'lo', 'kn', 'si', 'gu', 'bn', 'zu', 'ur', 'te', 'sw', 'am' );
 		}
 
 		$locales = array_diff_key( $locales, array_flip( $unset ) );
-		$locales = apply_filters( 'frm_locales', $locales );
 
-		return $locales;
+		/**
+		 * Filter available locale options.
+		 *
+		 * @since 5.4.5 Added $args parameter with type.
+		 *
+		 * @param array<string,string> $locales
+		 * @param array                $args {
+		 *
+		 *     @type string $type
+		 * }
+		 */
+		return apply_filters( 'frm_locales', $locales, compact( 'type' ) );
 	}
 
 	/**
-	 * @deprecated 4.0
+	 * @return string
 	 */
-	public static function insert_opt_html( $args ) {
-		_deprecated_function( __METHOD__, '4.0', 'FrmFormsHelper::insert_opt_html' );
-		FrmFormsHelper::insert_opt_html( $args );
+	public static function get_menu_icon_class() {
+		if ( is_callable( 'FrmProAppHelper::get_settings' ) ) {
+			$settings = FrmProAppHelper::get_settings();
+
+			if ( is_object( $settings ) && ! empty( $settings->menu_icon ) ) {
+				return $settings->menu_icon;
+			}
+		}
+
+		return 'frmfont frm_logo_icon';
 	}
 
 	/**
-	 * Used to filter shortcode in text widgets
+	 * Shows the images dropdown.
 	 *
-	 * @deprecated 2.5.4
-	 * @codeCoverageIgnore
-	 */
-	public static function widget_text_filter_callback( $matches ) {
-		return FrmDeprecated::widget_text_filter_callback( $matches );
-	}
-
-	/**
-	 * @deprecated 3.01
-	 * @codeCoverageIgnore
-	 */
-	public static function sanitize_array( &$values ) {
-		FrmDeprecated::sanitize_array( $values );
-	}
-
-	/**
-	 * @param array $settings
-	 * @param string $group
+	 * @since 5.0.04
 	 *
-	 * @since 2.0.6
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 */
-	public static function save_settings( $settings, $group ) {
-		return FrmDeprecated::save_settings( $settings, $group );
-	}
-
-	/**
-	 * @since 2.0.4
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 */
-	public static function save_json_post( $settings ) {
-		return FrmDeprecated::save_json_post( $settings );
-	}
-
-	/**
-	 * @since 2.0
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * @param array $args {
+	 *     Arguments.
 	 *
-	 * @param string $cache_key The unique name for this cache
-	 * @param string $group The name of the cache group
-	 * @param string $query If blank, don't run a db call
-	 * @param string $type The wpdb function to use with this query
+	 *     @type string  $selected    Selected value.
+	 *     @type array[] $options     Array of options with keys are option values and values are array.
+	 *                                The option array contains `text`, `svg` and `custom_atts`.
+	 *     @type string  $classes     Custom CSS classes for the wrapper element.
+	 *     @type array   $input_attrs Attributes of value input.
+	 * }
+	 */
+	public static function images_dropdown( $args ) {
+		$args            = self::fill_default_images_dropdown_args( $args );
+		$input_attrs_str = self::get_images_dropdown_input_attrs( $args );
+		ob_start();
+		include self::plugin_path() . '/classes/views/shared/images-dropdown.php';
+		$output = ob_get_clean();
+
+		/**
+		 * Allows modifying the output of FrmAppHelper::images_dropdown() method.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param string $output The output.
+		 * @param array  $args   Passed arguments.
+		 */
+		echo apply_filters( 'frm_images_dropdown_output', $output, $args ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * Fills the default images_dropdown() arguments.
 	 *
-	 * @return mixed $results The cache or query results
-	 */
-	public static function check_cache( $cache_key, $group = '', $query = '', $type = 'get_var', $time = 300 ) {
-		return FrmDeprecated::check_cache( $cache_key, $group, $query, $type, $time );
-	}
-
-	/**
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 */
-	public static function set_cache( $cache_key, $results, $group = '', $time = 300 ) {
-		return FrmDeprecated::set_cache( $cache_key, $results, $group, $time );
-	}
-
-	/**
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 */
-	public static function add_key_to_group_cache( $key, $group ) {
-		FrmDeprecated::add_key_to_group_cache( $key, $group );
-	}
-
-	/**
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 */
-	public static function get_group_cached_keys( $group ) {
-		return FrmDeprecated::get_group_cached_keys( $group );
-	}
-
-	/**
-	 * @since 2.0
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 * @return mixed The cached value or false
-	 */
-	public static function check_cache_and_transient( $cache_key ) {
-		return FrmDeprecated::check_cache( $cache_key );
-	}
-
-	/**
-	 * @since 2.0
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * @since 5.0.04
 	 *
-	 * @param string $cache_key
-	 */
-	public static function delete_cache_and_transient( $cache_key, $group = 'default' ) {
-		FrmDeprecated::delete_cache_and_transient( $cache_key, $group );
-	}
-
-	/**
-	 * @since 2.0
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * @param array $args The arguments.
 	 *
-	 * @param string $group The name of the cache group
+	 * @return array
 	 */
-	public static function cache_delete_group( $group ) {
-		FrmDeprecated::cache_delete_group( $group );
+	private static function fill_default_images_dropdown_args( $args ) {
+		$defaults = array(
+			'selected'    => '',
+			'options'     => array(),
+			'classes'     => '',
+			'input_attrs' => array(),
+		);
+		$new_args = wp_parse_args( $args, $defaults );
+
+		$new_args['options']     = (array) $new_args['options'];
+		$new_args['input_attrs'] = (array) $new_args['input_attrs'];
+
+		/**
+		 * Allows modifying the arguments of images_dropdown() method.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param array $new_args Arguments after filling the defaults.
+		 * @param array $args     Arguments passed to the method, before filling the defaults.
+		 */
+		return apply_filters( 'frm_images_dropdown_args', $new_args, $args );
 	}
 
 	/**
-	 * @since 1.07.10
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * Gets HTML attributes of the input in images_dropdown() method.
 	 *
-	 * @param string $term The value to escape
+	 * @since 5.0.04
 	 *
-	 * @return string The escaped value
-	 */
-	public static function esc_like( $term ) {
-		return FrmDeprecated::esc_like( $term );
-	}
-
-	/**
-	 * @param string $order_query
+	 * @param array $args The arguments.
 	 *
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * @return string
 	 */
-	public static function esc_order( $order_query ) {
-		return FrmDeprecated::esc_order( $order_query );
+	private static function get_images_dropdown_input_attrs( $args ) {
+		$input_attrs         = $args['input_attrs'];
+		$input_attrs['type'] = 'radio';
+		$input_attrs['name'] = $args['name'];
+
+		$input_attrs_str = '';
+
+		foreach ( $input_attrs as $key => $input_attr ) {
+			$input_attrs_str .= ' ' . sprintf( '%s="%s"', esc_attr( $key ), esc_attr( $input_attr ) );
+		}
+
+		/**
+		 * Allows modifying the HTML attributes of the input in images_dropdown() method.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param string $input_attrs_str HTML attributes string.
+		 * @param array  $args            The arguments of images_dropdown() method.
+		 */
+		return apply_filters( 'frm_images_dropdown_input_attrs', $input_attrs_str, $args );
 	}
 
 	/**
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
-	 */
-	public static function esc_order_by( &$order_by ) {
-		FrmDeprecated::esc_order_by( $order_by );
-	}
-
-	/**
-	 * @param string $limit
+	 * @since 6.7.1
 	 *
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * @param array $option Option data.
+	 * @param array $args   The arguments of images_dropdown() method.
+	 *
+	 * @return array
 	 */
-	public static function esc_limit( $limit ) {
-		return FrmDeprecated::esc_limit( $limit );
+	public static function get_images_dropdown_atts( $option, $args ) {
+		$image        = self::get_images_dropdown_option_image( $option, $args );
+		$classes      = self::get_images_dropdown_option_classes( $option, $args );
+		$custom_attrs = self::get_images_dropdown_option_html_attrs( $option, $args );
+		return compact( 'image', 'classes', 'custom_attrs' );
 	}
 
 	/**
-	 * @since 2.0
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * Gets the image of each option in images_dropdown() method.
+	 *
+	 * @since 5.0.04
+	 *
+	 * @param array $option Option data.
+	 * @param array $args   The arguments of images_dropdown() method.
+	 *
+	 * @return string
 	 */
-	public static function prepare_array_values( $array, $type = '%s' ) {
-		return FrmDeprecated::prepare_array_values( $array, $type );
+	private static function get_images_dropdown_option_image( $option, $args ) {
+		$image = self::icon_by_class(
+			'frmfont ' . $option['svg'],
+			array(
+				'echo' => false,
+			)
+		);
+
+		$args['option'] = $option;
+
+		/**
+		 * Allows modifying the image of each option in images_dropdown() method.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param string $image The image HTML.
+		 * @param array  $args  The arguments of images_dropdown() method, with `option` array is added.
+		 */
+		return apply_filters( 'frm_images_dropdown_option_image', $image, $args );
 	}
 
 	/**
-	 * @deprecated 2.05.06
-	 * @codeCoverageIgnore
+	 * Gets the HTML classes of each option in images_dropdown() method.
+	 *
+	 * @since 5.0.04
+	 *
+	 * @param array $option Option data.
+	 * @param array $args   The arguments of images_dropdown() method.
+	 *
+	 * @return string
 	 */
-	public static function prepend_and_or_where( $starts_with = ' WHERE ', $where = '' ) {
-		return FrmDeprecated::prepend_and_or_where( $starts_with, $where );
+	private static function get_images_dropdown_option_classes( $option, $args ) {
+		$classes = '';
+
+		if ( ! empty( $option['custom_attrs']['class'] ) ) {
+			$classes .= ' ' . $option['custom_attrs']['class'];
+		}
+
+		$args['option'] = $option;
+
+		/**
+		 * Allows modifying the CSS classes of each option in images_dropdown() method.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param string $classes CSS classes.
+		 * @param array  $args    The arguments of images_dropdown() method, with `option` array is added.
+		 */
+		return apply_filters( 'frm_images_dropdown_option_classes', $classes, $args );
+	}
+
+	/**
+	 * Gets the custom HTML attributes of each option in images_dropdown() method.
+	 *
+	 * @since 5.0.04
+	 *
+	 * @param array $option Option data.
+	 * @param array $args   The arguments of images_dropdown() method.
+	 *
+	 * @return string
+	 */
+	private static function get_images_dropdown_option_html_attrs( $option, $args ) {
+		$html_attrs = '';
+
+		if ( ! empty( $option['custom_attrs'] ) && is_array( $option['custom_attrs'] ) ) {
+			$html_attrs_arr = array();
+
+			foreach ( $option['custom_attrs'] as $key => $value ) {
+				if ( in_array( $key, array( 'type', 'class', 'data-value' ), true ) ) {
+					continue;
+				}
+
+				$html_attrs_arr[] = sprintf( '%s="%s"', esc_attr( $key ), esc_attr( $value ) );
+			}
+
+			$html_attrs = implode( ' ', $html_attrs_arr );
+		}
+
+		$args['option'] = $option;
+
+		/**
+		 * Allows modifying the custom HTML attributes of each option in images_dropdown() method.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param string $html_attrs The HTML attributes string.
+		 * @param array  $args       The arguments of images_dropdown() method, with `option` array is added.
+		 */
+		return apply_filters( 'frm_images_dropdown_option_html_attrs', $html_attrs, $args );
+	}
+
+	/**
+	 * @since 5.0.07
+	 *
+	 * @return bool true if the current user is allowed to save unfiltered HTML.
+	 */
+	public static function allow_unfiltered_html() {
+		if ( self::should_never_allow_unfiltered_html() ) {
+			return false;
+		}
+		return current_user_can( 'unfiltered_html' );
+	}
+
+	/**
+	 * @since 5.0.13
+	 *
+	 * @return bool
+	 */
+	public static function should_never_allow_unfiltered_html() {
+		if ( defined( 'DISALLOW_UNFILTERED_HTML' ) && DISALLOW_UNFILTERED_HTML ) {
+			return true;
+		}
+
+		/**
+		 * Formidable will check DISALLOW_UNFILTERED_HTML to determine if some form HTML should be filtered or not.
+		 * In many cases, scripts are added intentionally to forms and will not be stripped if DISALLOW_UNFILTERED_HTML is not set.
+		 * It is also possible to filter Formidable without defining DISALLOW_UNFILTERED_HTML, with add_filter( 'frm_disallow_unfiltered_html', '__return_true' );
+		 *
+		 * @since 5.0.13
+		 */
+		return apply_filters( 'frm_disallow_unfiltered_html', false );
+	}
+
+	/**
+	 * @since 5.0.07
+	 *
+	 * @param array $values
+	 * @param array $keys
+	 *
+	 * @return array
+	 */
+	public static function maybe_filter_array( $values, $keys ) {
+		if ( self::allow_unfiltered_html() ) {
+			return $values;
+		}
+
+		foreach ( $keys as $key ) {
+			if ( isset( $values[ $key ] ) ) {
+				$values[ $key ] = self::kses( $values[ $key ], 'all' );
+			}
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Some back end fields allow privileged users to add scripts.
+	 * A site that uses the DISALLOW_UNFILTERED_HTML always remove scripts on echo.
+	 *
+	 * @since 5.0.13
+	 *
+	 * @param string       $value
+	 * @param array|string $allowed 'all' for everything included as defaults.
+	 *
+	 * @return string
+	 */
+	public static function maybe_kses( $value, $allowed = 'all' ) {
+		if ( self::should_never_allow_unfiltered_html() ) {
+			return self::kses( $value, $allowed );
+		}
+		return $value;
+	}
+
+	/**
+	 * Check if an option attribute used in an [input] shortcode is safe.
+	 *
+	 * @since 6.11.2
+	 *
+	 * @param string $key
+	 * @param string $context Either 'display' or 'update'. On update, we want to allow a few keys that are never displayed.
+	 *
+	 * @return bool
+	 */
+	public static function input_key_is_safe( $key, $context = 'display' ) {
+		if ( 'update' === $context && in_array( $key, array( 'opt', 'label' ), true ) ) {
+			$safe = true;
+		} elseif ( str_starts_with( $key, 'data-' ) ) {
+			// Allow all data attributes.
+			$safe = true;
+		} elseif ( str_starts_with( $key, 'aria-' ) ) {
+			// Allow all aria attributes.
+			$safe = true;
+		} else {
+			$safe_keys = array(
+				'class',
+				'required',
+				'title',
+				'placeholder',
+				'value',
+				'readonly',
+				'disabled',
+				'size',
+				'maxlength',
+				'min',
+				'max',
+				'pattern',
+				'step',
+				'autofocus',
+				'width',
+				'height',
+				'autocomplete',
+				'tabindex',
+				'role',
+				'style',
+			);
+			$safe      = in_array( $key, $safe_keys, true );
+		}//end if
+
+		/**
+		 * Filter the $safe value so additional keys can be allowed or disallowed.
+		 *
+		 * @since 6.11.2
+		 *
+		 * @param bool   $safe True if the key is considered safe.
+		 * @param string $key
+		 * @param string $context Either 'display' or 'update'.
+		 */
+		return (bool) apply_filters( 'frm_input_key_is_safe', $safe, $key, $context );
+	}
+
+	/**
+	 * @since 5.0.16
+	 *
+	 * @param string $medium
+	 *
+	 * @return array
+	 */
+	public static function get_landing_page_upgrade_data_params( $medium = 'landing' ) {
+		$params = array(
+			'medium'     => $medium,
+			'upgrade'    => __( 'Form Landing Pages', 'formidable' ),
+			'message'    => __( 'Easily manage a landing page for your form. Upgrade to get form landing pages.', 'formidable' ),
+			'screenshot' => 'landing.png',
+			'learn-more' => self::get_doc_url( 'landing-page-forms', 'form-landing-page-settings', false ),
+		);
+		return self::get_upgrade_data_params( 'landing', $params );
+	}
+
+	/**
+	 * @since 5.0.17
+	 *
+	 * @param string $feature
+	 *
+	 * @return bool
+	 */
+	public static function show_new_feature( $feature ) {
+		$link = FrmAddonsController::install_link( $feature );
+		return array_key_exists( 'status', $link ) || array_key_exists( 'class', $link );
+	}
+
+	/**
+	 * Enhances upgrade data parameters with installation link and plan requirement information.
+	 *
+	 * @since 5.0.17
+	 *
+	 * @param string $plugin   The plugin slug to get installation data for.
+	 * @param array  $params   Initial parameters for the upgrade data.
+	 * @param bool   $detailed Whether to include detailed information.
+	 *
+	 * @return array Modified parameters with installation data.
+	 */
+	public static function get_upgrade_data_params( $plugin, $params, $detailed = false ) {
+		$link = FrmAddonsController::install_link( $plugin );
+
+		if ( ! $link ) {
+			return $params;
+		}
+
+		if ( ! empty( $link['url'] ) && self::pro_is_installed() ) {
+			$params['oneclick'] = json_encode( $link );
+			unset( $params['message'] );
+
+			if ( ! isset( $params['medium'] ) ) {
+				$params['medium'] = $plugin;
+			}
+		} else {
+			$params['requires'] = $params['requires'] ?? FrmFormsHelper::get_plan_required( $link );
+		}
+
+		if ( $detailed ) {
+			$params['plugin-status'] = $link['status'] ?? '';
+		}
+
+		return $params;
+	}
+
+	/**
+	 * Returns true if every character in text is a hexadecimal 'digit', that is a decimal digit or a character from [A-Fa-f], false otherwise.
+	 * Not every server installs the ctype extension, so use a fallback if the function does not exist.
+	 *
+	 * @since 5.0.17
+	 *
+	 * @param string $text
+	 *
+	 * @return bool
+	 */
+	public static function ctype_xdigit( $text ) {
+		if ( function_exists( 'ctype_xdigit' ) ) {
+			return ctype_xdigit( $text );
+		}
+		return is_string( $text ) && '' !== $text && ! preg_match( '/[^A-Fa-f0-9]/', $text );
+	}
+
+	/**
+	 * Set the current screen to avoid undefined notices.
+	 *
+	 * @since 5.2.01
+	 */
+	public static function set_current_screen_and_hook_suffix() {
+		global $hook_suffix;
+
+		if ( is_null( $hook_suffix ) ) {
+			// $hook_suffix gets used in substr so make sure it's not null. PHP 8.1 deprecates null in substr.
+			$hook_suffix = ''; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+		}
+
+		set_current_screen();
+	}
+
+	/**
+	 * Shows pill text.
+	 *
+	 * @since 5.2.02
+	 *
+	 * @param string|null $text Text in the pill. Default is NEW.
+	 */
+	public static function show_pill_text( $text = null ) {
+		if ( null === $text ) {
+			$text = __( 'NEW', 'formidable' );
+		}
+		echo '<span class="frm-meta-tag frm-new-pill">' . esc_html( $text ) . '</span>';
+	}
+
+	/**
+	 * Count the number of decimals digits.
+	 *
+	 * @since 5.2.07
+	 *
+	 * @param mixed $num Number.
+	 *
+	 * @return false|int Returns `false` if the passed parameter is not number.
+	 */
+	public static function count_decimals( $num ) {
+		if ( ! is_numeric( $num ) ) {
+			return false;
+		}
+
+		$num   = (string) $num;
+		$parts = explode( '.', $num );
+
+		if ( 1 === count( $parts ) ) {
+			return 0;
+		}
+
+		return strlen( $parts[ count( $parts ) - 1 ] );
+	}
+
+	/**
+	 * Prevent a fatal error in PHP8 if gmt_offset happens to be set an empty string.
+	 * This is a bug in WordPress. It isn't safe to call current_time( 'timestamp' ) without this with an empty string offset.
+	 * In the future this might be safe to remove. Keep an eye on the current_time function in functions.php.
+	 *
+	 * @since 5.3.1
+	 *
+	 * @return void
+	 */
+	public static function filter_gmt_offset() {
+		if ( self::$added_gmt_offset_filter ) {
+			// Avoid adding twice.
+			return;
+		}
+
+		add_filter(
+			'option_gmt_offset',
+			function ( $offset ) {
+				if ( ! is_string( $offset ) || is_numeric( $offset ) ) {
+					// Leave a valid value alone.
+					return $offset;
+				}
+
+				return 0;
+			}
+		);
+		self::$added_gmt_offset_filter = true;
+	}
+
+	/**
+	 * @since 5.3.1
+	 *
+	 * @return bool
+	 */
+	public static function on_form_listing_page() {
+		if ( ! self::is_admin_page( 'formidable' ) ) {
+			return false;
+		}
+
+		$action = self::simple_get( 'frm_action', 'sanitize_title' );
+		return ! $action || in_array( $action, self::get_form_listing_page_actions(), true );
+	}
+
+	/**
+	 * Get all actions that also display the forms list.
+	 *
+	 * @since 5.3.1
+	 *
+	 * @return array<string>
+	 */
+	private static function get_form_listing_page_actions() {
+		return array( 'list', 'trash', 'untrash', 'destroy' );
+	}
+
+	/**
+	 * Safely call get_plugins, importing the required files if they are not yet loaded.
+	 *
+	 * @since 5.5
+	 *
+	 * @return array
+	 */
+	public static function get_plugins() {
+		if ( ! function_exists( 'get_plugins' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		return get_plugins();
+	}
+
+	/**
+	 * Make sure that the file we're trying to load is in fact the expected file type, and that it's coming from our S3 bucket.
+	 * This is to make sure that the URL can't be exploited for a SSRF attack.
+	 *
+	 * @since 5.5.5
+	 *
+	 * @param string $url
+	 * @param string $expected_extension
+	 *
+	 * @return bool
+	 */
+	public static function validate_url_is_in_s3_bucket( $url, $expected_extension ) {
+		$file_is_in_expected_s3_bucket = str_starts_with( $url, 'https://s3.amazonaws.com/fp.strategy11.com' );
+
+		if ( ! $file_is_in_expected_s3_bucket ) {
+			return false;
+		}
+
+		$parsed = parse_url( $url );
+
+		if ( ! is_array( $parsed ) ) {
+			// URL is malformed.
+			return false;
+		}
+
+		$path = $parsed['path'];
+		$ext  = pathinfo( $path, PATHINFO_EXTENSION );
+		// The URL isn't to an XML file.
+		return $expected_extension === $ext;
+	}
+
+	/**
+	 * Display a dismissable warning message and save its dismissal state.
+	 *
+	 * @since 6.3
+	 *
+	 * @param string $message The warning message to display.
+	 * @param string $option  The unique identifier for the dismissal state of the message and the WP Ajax action.
+	 *
+	 * @return void
+	 */
+	public static function add_dismissable_warning_message( $message = '', $option = '' ) {
+		if ( ! $message || ! $option ) {
+			return;
+		}
+
+		$ajax_callback = function () use ( $option ) {
+			self::dismiss_warning_message( $option );
+		};
+
+		// We're handling JS codes with `doJsonPost` and it adds 'frm_' to the beginning of the action.
+		// To prevent any issues, we add 'frm_' from the beginning of the action.
+		add_action( 'wp_ajax_frm_' . $option, $ajax_callback );
+
+		add_filter(
+			'frm_message_list',
+			function ( $show_messages ) use ( $message, $option ) {
+				if ( get_option( $option, false ) ) {
+					return $show_messages;
+				}
+
+				$dismiss_icon = self::icon_by_class(
+					'frmfont frm_close_icon',
+					array(
+						'aria-label' => _x( 'Dismiss', 'warning message: close icon label', 'formidable' ),
+						'echo'       => false,
+					)
+				);
+
+				$show_messages[] = $message;
+				$show_messages[] = '<span class="frm-warning-dismiss frmsvg" data-action="' . esc_attr( $option ) . '">' . $dismiss_icon . '</span>';
+
+				return $show_messages;
+			}
+		);
+	}
+
+	/**
+	 * Dismiss a warning message and update the dismissal state.
+	 *
+	 * @since 6.3
+	 *
+	 * @param string $option The unique identifier for the dismissal state of the message.
+	 *
+	 * @return void
+	 */
+	public static function dismiss_warning_message( $option = '' ) {
+		self::permission_check( 'frm_change_settings' );
+		check_ajax_referer( 'frm_ajax', 'nonce' );
+
+		if ( $option ) {
+			update_option( $option, true, false );
+		}
+
+		wp_send_json_success();
+	}
+
+	/**
+	 * Lite license copy.
+	 * Used in FrmDashboardController & FrmSettingsController
+	 *
+	 * @since 6.8
+	 *
+	 * @return string
+	 */
+	public static function copy_for_lite_license() {
+		$message = __( 'You\'re using Formidable Forms Lite - no license needed. Enjoy!', 'formidable' ) . ' 🙂';
+		return apply_filters( 'frm_license_type_text', $message );
+	}
+
+	/**
+	 * Removes scripts that are unnecessarily loaded across the pages!
+	 *
+	 * @since 6.9
+	 *
+	 * @return void
+	 */
+	public static function dequeue_extra_global_scripts() {
+		wp_dequeue_script( 'frm-surveys-admin' );
+		wp_dequeue_script( 'frm-quizzes-form-action' );
+	}
+
+	/**
+	 * Shows tooltip icon.
+	 *
+	 * @since 6.12
+	 *
+	 * @param string $tooltip_text Tooltip text.
+	 * @param array  $atts         Tooltip wrapper HTML attributes.
+	 *
+	 * @return void
+	 */
+	public static function tooltip_icon( $tooltip_text, $atts = array() ) {
+		$atts['title'] = $tooltip_text;
+
+		if ( isset( $atts['class'] ) ) {
+			$atts['class'] .= ' frm_help';
+		} else {
+			$atts['class'] = 'frm_help';
+		}
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		?>
+		<span <?php self::array_to_html_params( $atts, true ); ?>>
+			<?php self::icon_by_class( 'frmfont frm_tooltip_icon' ); ?>
+		</span>
+		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+	}
+
+	/**
+	 * Prints errors for settings in onboarding wizard or template settings.
+	 *
+	 * @since 6.15
+	 *
+	 * @param array $args Args.
+	 *
+	 * @return void
+	 */
+	public static function print_setting_error( $args ) {
+		$args = wp_parse_args(
+			$args,
+			array(
+				'id'     => '',
+				'errors' => array(),
+				'class'  => '',
+			)
+		);
+
+		$args['class'] .= ' frm-validation-error frm-mt-xs frm_hidden';
+
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		?>
+		<span id="<?php echo esc_attr( $args['id'] ); ?>" class="<?php echo esc_attr( $args['class'] ); ?>">
+			<?php
+			if ( is_array( $args['errors'] ) ) {
+				foreach ( $args['errors'] as $key => $msg ) {
+					?>
+					<span frm-error="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $msg ); ?></span>
+					<?php
+				}
+			} else {
+				echo '<span>' . esc_html( $args['errors'] ) . '</span>';
+			}
+			?>
+		</span>
+		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+	}
+
+	/**
+	 * Check if GDPR is enabled.
+	 *
+	 * @since 6.19
+	 *
+	 * @return bool
+	 */
+	public static function is_gdpr_enabled() {
+		$frm_settings = self::get_settings();
+		return $frm_settings->enable_gdpr || $frm_settings->no_ips || $frm_settings->custom_header_ip || $frm_settings->no_gdpr_cookies;
+	}
+
+	/**
+	 * Check if GDPR cookies are disabled.
+	 *
+	 * @since 6.19
+	 *
+	 * @return bool
+	 */
+	public static function no_gdpr_cookies() {
+		$frm_settings = self::get_settings();
+		return $frm_settings->enable_gdpr && $frm_settings->no_gdpr_cookies;
+	}
+
+	/**
+	 * Check if a string is valid UTF-8.
+	 *
+	 * @since 6.24
+	 *
+	 * @param string|null $string The string to check.
+	 *
+	 * @return bool
+	 */
+	public static function is_valid_utf8( $string ) {
+		if ( is_null( $string ) ) {
+			// Return true so we do not attempt to change encoding on a null value.
+			return true;
+		}
+
+		// wp_is_valid_utf8 is added in WP 6.9.
+		if ( function_exists( 'wp_is_valid_utf8' ) ) {
+			return wp_is_valid_utf8( $string );
+		}
+
+		// As of WP 6.9, seems_utf8 is deprecated.
+		return function_exists( 'seems_utf8' ) ? seems_utf8( $string ) : false;
+	}
+
+	/**
+	 * Get a documentation URL with UTM parameters and affiliate tracking.
+	 *
+	 * @since 6.26
+	 *
+	 * @param string $path           The relative path to append to the base URL.
+	 * @param string $campaign       The campaign to use for UTM parameters.
+	 * @param bool   $add_kb_base    Whether to prepend 'knowledgebase/' to the path. Default true.
+	 *
+	 * @return string The processed URL with UTM parameters and affiliate tracking.
+	 */
+	public static function get_doc_url( $path, $campaign, $add_kb_base = true ) {
+		$path = trim( $path, '/' );
+
+		if ( $add_kb_base ) {
+			$path = 'knowledgebase/' . $path;
+		}
+
+		return self::maybe_add_missing_utm( 'https://formidableforms.com/' . $path, array( 'campaign' => $campaign ) );
+	}
+
+	/**
+	 * @since 5.0.16
+	 * @deprecated 6.26
+	 *
+	 * @return bool
+	 */
+	public static function show_landing_pages() {
+		_deprecated_function( __METHOD__, '6.26' );
+		return true;
 	}
 }

@@ -3,19 +3,54 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "X-Generator: babel-plugin-makepot\n"
 
-#: js/src/view/block.js:23
+#: js/src/calculator/block.js:35
+msgid "Display a Calculator Form"
+msgstr ""
+
+#: js/src/calculator/block.js:51
+msgid "This site does not have any calculator forms."
+msgstr ""
+
+#: js/src/calculator/block.js:61
+msgid "Calculator Form"
+msgstr ""
+
+#: js/src/components/license-modal.js:104
+msgid "Get started with Formidable Pro and create advanced custom forms."
+msgstr ""
+
+#: js/src/components/license-modal.js:112
+#. %1$s: HTML start of a tag, %2$s: HTML close of a tag
+msgid ""
+"To activate Formidable Pro, paste your license below. %1$sFind your "
+"license%2$s."
+msgstr ""
+
+#: js/src/components/license-modal.js:69
+msgid "Cancel"
+msgstr ""
+
+#: js/src/components/license-modal.js:93
+msgid "Enter License"
+msgstr ""
+
+#: js/src/components/license-modal.js:95
+msgid "License Activated"
+msgstr ""
+
+#: js/src/view/block.js:24
 msgid "Display a View"
 msgstr ""
 
-#: js/src/view/block.js:27
+#: js/src/view/block.js:28
 msgid "data display"
 msgstr ""
 
-#: js/src/view/block.js:28
+#: js/src/view/block.js:29
 msgid "show entries"
 msgstr ""
 
-#: js/src/view/block.js:41
+#: js/src/view/block.js:42
 msgid "This site does not have any Views."
 msgstr ""
 

@@ -1,7 +1,7 @@
 function frmProFormJS() {
-	/* globals frm_js, frmFrontForm, google */
+	/* globals frm_js, frmFrontForm, google, jQuery */
 	/* globals __frmDatepicker, __frmDropzone, __frmUniqueTimes */
-	/* globals __FRMLOOKUP, __FRMCALC, __FRMRULES */
+	/* globals __FRMLOOKUP, __FRMCALC, __FRMRULES, __FRMCURR */
 	/* globals __frmChosen, __frmHideOrShowFields, __frmDepDynamicFields */
 	/* globals __frmDepLookupFields, __frmMasks, __FRMTABLES */
 
@@ -11,8 +11,22 @@ function frmProFormJS() {
 	var processesRunning = 0;
 	var lookupQueues = {};
 	var hiddenSubmitButtons = [];
+	var pendingDynamicFieldAjax = [];
+	var listWrappersOriginal = {};
 
 	function setNextPage( e ) {
+		var closestButton;
+		if ( this.className.indexOf( 'frm_rootline_title' ) !== -1 ) {
+			closestButton = this.previousElementSibling;
+			closestButton.click();
+			return;
+		}
+
+		if ( this.className.indexOf( 'frm_rootline_single' ) !== -1 ) {
+			this.querySelector( 'input' ).click();
+			return;
+		}
+
 		/*jshint validthis:true */
 		var $thisObj = jQuery( this );
 		var thisType = $thisObj.attr( 'type' );
@@ -20,13 +34,16 @@ function frmProFormJS() {
 			e.preventDefault();
 		}
 
-		var f = $thisObj.parents( 'form:first' ),
+		var f = $thisObj.parents( 'form' ).first(),
 			v = '',
 			d = '',
 			thisName = this.name;
 
 		if ( thisName === 'frm_prev_page' || this.className.indexOf( 'frm_prev_page' ) !== -1 ) {
 			v = jQuery( f ).find( '.frm_next_page' ).attr( 'id' ).replace( 'frm_next_p_', '' );
+			if ( f.length ) {
+				maybeAddEmptyHiddenInputsForCheckboxes( f.get( 0 ) );
+			}
 		} else if ( thisName === 'frm_save_draft' || this.className.indexOf( 'frm_save_draft' ) !== -1 ) {
 			d = 1;
 		} else if ( this.className.indexOf( 'frm_page_skip' ) !== -1 ) {
@@ -44,6 +61,12 @@ function frmProFormJS() {
 			v = $thisObj.data( 'page' );
 		}
 
+		if ( 1 === d ) {
+			resetTinyMceOnDraftSave();
+		} else {
+			resetTinyMceOnPageTurn();
+		}
+
 		jQuery( '.frm_next_page' ).val( v );
 		jQuery( '.frm_saving_draft' ).val( d );
 
@@ -52,17 +75,96 @@ function frmProFormJS() {
 		}
 	}
 
-	function toggleSection() {
-		/*jshint validthis:true */
-		jQuery( this ).parent().children( '.frm_toggle_container' ).slideToggle( 'fast' );
-		var arrow = jQuery( this ).children( '.frm_arrow_icon' );
+	/**
+	 * When no checkboxes are checked, no $_POST data is sent.
+	 * This causes issues when going back when drafts are enabled.
+	 * The draft gets saved when the next button is pressed, and then
+	 * gets reloaded after being unchecked because there is no $_POST data.
+	 * This adds a hidden input with no value in its place so $_POST data does get sent.
+	 *
+	 * @since 6.8.3
+	 *
+	 * @param {HTMLElement} form
+	 * @returns {void}
+	 */
+	function maybeAddEmptyHiddenInputsForCheckboxes( form ) {
+		form.querySelectorAll( '.frm_opt_container' ).forEach(
+			function( optContainer ) {
+				var checkboxes, hiddenInput;
+				checkboxes = optContainer.querySelectorAll( 'input[type="checkbox"]' );
+				if ( checkboxes.length && ! jQuery( checkboxes ).filter( ':checked' ).length ) {
+					hiddenInput = document.createElement( 'input' );
+					hiddenInput.setAttribute( 'type', 'hidden' );
+					hiddenInput.setAttribute( 'name', checkboxes[ 0 ].getAttribute( 'name' ) );
+					optContainer.appendChild( hiddenInput );
+				}
+			}
+		);
+	}
 
-		if ( -1 !== this.className.indexOf( 'active' ) ) {
-			this.className = this.className.replace( ' active', '' );
-			arrow.attr( 'aria-expanded', 'false' );
-		} else {
+	function resetTinyMceOnDraftSave() {
+		jQuery( document ).one( 'frmFormComplete', function() {
+			jQuery( '.wp-editor-area' ).each( function() {
+				reInitializeRichText( this.id );
+			});
+		});
+	}
+
+	function resetTinyMceOnPageTurn() {
+		var removeIds = [];
+		jQuery( '.frm_form_field .wp-editor-area' ).each(
+			function() {
+				removeIds.push( this.id );
+			}
+		);
+		jQuery( document ).one( 'frmPageChanged', function() {
+			var removeIndex, removeId;
+			// Remove tinymce from RTE fields on page update so they can initialize properly when the page becomes active again
+			for ( removeIndex = 0; removeIndex < removeIds.length; ++removeIndex ) {
+				removeId = removeIds[ removeIndex ];
+				removeRichText( removeId );
+			}
+			checkConditionalLogic();
+		});
+	}
+
+	function toggleSection( e ) {
+		var $toggleContainer, togglingOn;
+
+		if ( e.key !== undefined ) {
+			if ( e.key !== ' ' ) {
+				return;
+			}
+		} else if ( e.keyCode !== undefined && e.keyCode !== 32 ) {
+			return;
+		}
+
+		e.preventDefault();
+
+		/*jshint validthis:true */
+		$toggleContainer = jQuery( this ).parent().children( '.frm_toggle_container' );
+		togglingOn       = 'none' === $toggleContainer.get( 0 ).style.display;
+
+		if ( togglingOn ) {
+			$toggleContainer.show();
+		}
+
+		triggerEvent( document, 'frmBeforeToggleSection', {
+			toggleButton: this
+		});
+
+		if ( togglingOn ) {
+			$toggleContainer.hide();
+		}
+
+		$toggleContainer.slideToggle( 'fast' );
+
+		if ( togglingOn ) {
 			this.className += ' active';
-			arrow.attr( 'aria-expanded', 'true' );
+			this.setAttribute( 'aria-expanded', 'true' );
+		} else {
+			this.className = this.className.replace( ' active', '' );
+			this.setAttribute( 'aria-expanded', 'false' );
 		}
 	}
 
@@ -88,7 +190,7 @@ function frmProFormJS() {
 			altID = 'input[id^="' + idParts.join( '-' ) + '"]';
 		}
 
-		jQuery.datepicker.setDefaults( jQuery.datepicker.regional[ '' ] );
+		jQuery.datepicker.setDefaults( jQuery.datepicker.regional[ '' ]);
 
 		var optKey = 0;
 		for ( var i = 0; i < dateFields.length; i++ ) {
@@ -101,6 +203,9 @@ function frmProFormJS() {
 		if ( dateFields[ optKey ].options.defaultDate !== '' ) {
 			dateFields[ optKey ].options.defaultDate = new Date( dateFields[ optKey ].options.defaultDate );
 		}
+
+		dateFields[ optKey ].options.beforeShow = frmProForm.addFormidableClassToDatepicker;
+		dateFields[ optKey ].options.onClose = frmProForm.removeFormidableClassFromDatepicker;
 
 		jQuery( this ).datepicker( jQuery.extend(
 			{},
@@ -121,75 +226,87 @@ function frmProFormJS() {
 	}
 
 	function loadDropzone( i, repeatRow ) {
-		var field, max, uploadedCount,
+		var field, max, uploadedCount, form,
 			uploadFields = __frmDropzone,
-			selector = '#' + uploadFields[ i ].htmlID + '_dropzone',
-			fieldName = uploadFields[ i ].fieldName;
+			uploadField = uploadFields[ i ],
+			selector = '#' + uploadField.htmlID + '_dropzone',
+			fieldName = uploadField.fieldName;
 
 		if ( typeof repeatRow !== 'undefined' && selector.indexOf( '-0_dropzone' ) !== -1 ) {
 			selector = selector.replace( '-0_dropzone', '-' + repeatRow + '_dropzone' );
 			fieldName = fieldName.replace( '[0]', '[' + repeatRow + ']' );
-			delete uploadFields[ i ].mockFiles;
+			delete uploadField.mockFiles;
 		}
 
 		field = jQuery( selector );
-		if ( field.length < 1 || field.hasClass( 'dz-clickable' ) ) {
+		if ( field.length < 1 || field.hasClass( 'dz-clickable' ) || field.hasClass( 'dz-started' ) ) {
 			return;
 		}
 
-		max = uploadFields[ i ].maxFiles;
-		if ( typeof uploadFields[ i ].mockFiles !== 'undefined' ) {
-			uploadedCount = uploadFields[ i ].mockFiles.length;
+		max = uploadField.maxFiles;
+		if ( typeof uploadField.mockFiles !== 'undefined' ) {
+			uploadedCount = uploadField.mockFiles.length;
 			if ( max > 0 ) {
 				max = max - uploadedCount;
 			}
 		}
 
-		var form = field.closest( 'form' );
-		var formID = '#' + form.attr( 'id' );
-		if ( formID === '#undefined' ) {
-			// use a class if there is not id for WooCommerce
-			formID = 'form.' + form.attr( 'class' ).replace( ' ', '.' );
-		}
+		form = field.closest( 'form' );
+		uploadField = uploadFields[ i ];
 
-		field.dropzone( {
-			url: frm_js.ajax_url,
+		field.dropzone({
+			url: getAjaxUrl( form.get( 0 ) ),
+			headers: {
+				'Frm-Dropzone': 1
+			},
 			addRemoveLinks: false,
 			paramName: field.attr( 'id' ).replace( '_dropzone', '' ),
-			maxFilesize: uploadFields[ i ].maxFilesize,
+			maxFilesize: uploadField.maxFilesize,
+			minFilesize: uploadField.minFilesize,
 			maxFiles: max,
-			uploadMultiple: uploadFields[ i ].uploadMultiple,
-			hiddenInputContainer: formID,
-			dictDefaultMessage: uploadFields[ i ].defaultMessage,
-			dictFallbackMessage: uploadFields[ i ].fallbackMessage,
-			dictFallbackText: uploadFields[ i ].fallbackText,
-			dictFileTooBig: uploadFields[ i ].fileTooBig,
-			dictInvalidFileType: uploadFields[ i ].invalidFileType,
-			dictResponseError: uploadFields[ i ].responseError,
-			dictCancelUpload: uploadFields[ i ].cancel,
-			dictCancelUploadConfirmation: uploadFields[ i ].cancelConfirm,
-			dictRemoveFile: uploadFields[ i ].remove,
-			dictMaxFilesExceeded: uploadFields[ i ].maxFilesExceeded,
+			uploadMultiple: uploadField.uploadMultiple,
+			hiddenInputContainer: field.parent()[0],
+			dictDefaultMessage: uploadField.defaultMessage,
+			dictFallbackMessage: uploadField.fallbackMessage,
+			dictFallbackText: uploadField.fallbackText,
+			dictFileTooBig: uploadField.fileTooBig,
+			dictFileTooSmall: uploadField.fileTooSmall,
+			dictInvalidFileType: uploadField.invalidFileType,
+			dictResponseError: uploadField.responseError,
+			dictCancelUpload: uploadField.cancel,
+			dictCancelUploadConfirmation: uploadField.cancelConfirm,
+			dictRemoveFile: uploadField.remove,
+			dictMaxFilesExceeded: uploadField.maxFilesExceeded,
 			resizeMethod: 'contain',
-			resizeWidth: uploadFields[ i ].resizeWidth,
-			resizeHeight: uploadFields[ i ].resizeHeight,
+			resizeWidth: uploadField.resizeWidth,
+			resizeHeight: uploadField.resizeHeight,
 			thumbnailWidth: 60,
 			thumbnailHeight: 60,
-			timeout: uploadFields[ i ].timeout,
-			previewTemplate: filePreviewHTML( uploadFields[ i ] ),
-			acceptedFiles: uploadFields[ i ].acceptedFiles,
+			timeout: uploadField.timeout,
+			previewTemplate: filePreviewHTML( uploadField ),
+			acceptedFiles: uploadField.acceptedFiles,
 			fallback: function() {
 				// Force ajax submit to turn off
 				jQuery( this.element ).closest( 'form' ).removeClass( 'frm_ajax_submit' );
 			},
 			init: function() {
+				var hidden, mockFileIndex, mockFileData, mockFile;
+
+				hidden = field.parent().find( '.dz-hidden-input' );
+
+				if ( typeof hidden.attr( 'id' ) === 'undefined' ) {
+					hidden.attr( 'id', uploadFields[ i ].label );
+				}
+
+				this.on( 'thumbnail', function( file ) {
+					if ( file.size < 1024 * 1024 * ( this.options.minFilesize ) ) {
+						file.rejectSize();
+					}
+				});
+
 				this.on( 'sending', function( file, xhr, formData ) {
 
-					if ( ! anyPrecedingRequiredFieldsCompleted( uploadFields[ i ], selector ) ) {
-						this.removeFile( file );
-						alert( frm_js.empty_fields );
-						return false;
-					} else if ( isSpam( uploadFields[ i ].parentFormID ) ) {
+					if ( isSpam( uploadFields[ i ].parentFormID, uploadField.checkHoneypot ) ) {
 						this.removeFile( file );
 						alert( frm_js.file_spam );
 						return false;
@@ -198,92 +315,253 @@ function frmProFormJS() {
 						formData.append( 'field_id', uploadFields[ i ].fieldID );
 						formData.append( 'form_id', uploadFields[ i ].formID );
 						formData.append( 'nonce', frm_js.nonce );
-					}
-				} );
 
-				this.on( 'success', function( file, response ) {
-					var mediaIDs = jQuery.parseJSON( response );
-					for ( var m = 0; m < mediaIDs.length; m++ ) {
-						if ( uploadFields[ i ].uploadMultiple !== true ) {
-							jQuery( 'input[name="' + fieldName + '"]' ).val( mediaIDs[ m ] );
+						if ( form.get( 0 ).hasAttribute( 'data-token' ) ) {
+							formData.append( 'antispam_token', form.get( 0 ).getAttribute( 'data-token' ) );
 						}
 					}
-				} );
+				});
+
+				this.on( 'processing', function() {
+					if ( ! this.options.uploadMultiple ) {
+						this.removeEventListeners();
+					}
+				});
+
+				this.on( 'success', function( file, response ) {
+					var mediaIDs, m, mediaID;
+
+					mediaIDs = JSON.parse( response );
+					for ( m = 0; m < mediaIDs.length; m++ ) {
+						if ( uploadFields[ i ].uploadMultiple !== true ) {
+							mediaID = mediaIDs[ m ];
+							jQuery( 'input[name="' + fieldName + '"]' ).val( mediaID );
+						}
+					}
+
+					if ( this.options.uploadMultiple === false ) {
+						this.disable();
+					}
+
+					// Clear the errors here so it only happens on upload.
+					// complete and addedfile both get triggered when reloading a form with a file ID.
+					clearErrorsOnUpload( file.previewElement );
+				});
 
 				this.on( 'successmultiple', function( files, response ) {
-					var mediaIDs = jQuery.parseJSON( response );
+					var mediaIDs = JSON.parse( response );
 					for ( var m = 0; m < files.length; m++ ) {
 						jQuery( files[ m ].previewElement ).append( getHiddenUploadHTML( uploadFields[ i ], mediaIDs[ m ], fieldName ) );
 					}
-				} );
+				});
 
 				this.on( 'complete', function( file ) {
-					processesRunning--;
-					frmFrontForm.removeSubmitLoading( form, 'enable', processesRunning );
+					var fileName, node, img, thumbnail;
 
-					if ( typeof file.mediaID !== 'undefined' ) {
-						if ( uploadFields[ i ].uploadMultiple ) {
-							jQuery( file.previewElement ).append( getHiddenUploadHTML( uploadFields[ i ], file.mediaID, fieldName ) );
+					processesRunning--;
+
+					if ( form.length ) {
+						removeSubmitLoading( form.get( 0 ), uploadFields[ i ].formID, processesRunning );
+					}
+
+					if ( typeof file.mediaID === 'undefined' ) {
+						return;
+					}
+
+					if ( uploadFields[ i ].uploadMultiple ) {
+						jQuery( file.previewElement ).append( getHiddenUploadHTML( uploadFields[ i ], file.mediaID, fieldName ) );
+					}
+
+					// Add download link to the file
+					fileName = file.previewElement.querySelectorAll( '[data-dz-name]' );
+					for ( var _i = 0, _len = fileName.length; _i < _len; _i++ ) {
+						node = fileName[ _i ];
+						if ( file.accessible ) {
+							node.innerHTML = '<a href="' + file.url + '" target="_blank" rel="noopener">' + file.name + '</a>';
+						} else {
+							node.innerHTML = file.name;
 						}
 
-						// Add download link to the file
-						var fileName = file.previewElement.querySelectorAll( '[data-dz-name]' );
-						for ( var _i = 0, _len = fileName.length; _i < _len; _i++ ) {
-							var node = fileName[ _i ];
-							node.innerHTML = '<a href="' + file.url + '" target="_blank" rel="noopener">' + file.name + '</a>';
+						if ( file.ext ) {
+							img = file.previewElement.querySelector( '.dz-image img' );
+							if ( null !== img ) {
+								thumbnail = maybeGetExtensionThumbnail( file.ext );
+								if ( false !== thumbnail ) {
+									img.setAttribute( 'src', thumbnail );
+								}
+							}
 						}
 					}
-				} );
+				});
 
-				this.on( 'addedfile', function() {
+				this.on( 'addedfile', function( file ) {
+					var ext, thumbnail;
+					ext = file.name.split( '.' ).pop();
+					thumbnail = maybeGetExtensionThumbnail( ext );
 					processesRunning++;
 					frmFrontForm.showSubmitLoading( form );
+					if ( false !== thumbnail ) {
+						jQuery( file.previewElement ).find( '.dz-image img' ).attr( 'src', thumbnail );
+					}
+				});
 
-				} );
+				function clearErrorsOnUpload( fileElement ) {
+					var container = fileElement.closest( '.frm_form_field' );
+					if ( ! container ) {
+						return;
+					}
+
+					container.classList.remove( 'frm_blank_field', 'has-error' );
+					container.querySelectorAll( '.form-field .frm_error, .frm_error_style' ).forEach(
+						function( error ) {
+							if ( error.parentNode ) {
+								error.parentNode.removeChild( error );
+							}
+						}
+					);
+				}
 
 				this.on( 'removedfile', function( file ) {
+					var fileCount = this.files.length;
+
+					if ( this.options.uploadMultiple === false && fileCount < 1 ) {
+						this.enable();
+					}
+
 					if ( file.accepted !== false && uploadFields[ i ].uploadMultiple !== true ) {
 						jQuery( 'input[name="' + fieldName + '"]' ).val( '' );
 					}
 
 					if ( file.accepted !== false && typeof file.mediaID !== 'undefined' ) {
 						jQuery( file.previewElement ).remove();
-						var fileCount = this.files.length;
+						fileCount = this.files.length;
 						this.options.maxFiles = uploadFields[ i ].maxFiles - fileCount;
 					}
-				} );
+				});
 
 				if ( typeof uploadFields[ i ].mockFiles !== 'undefined' ) {
-					for ( var f = 0; f < uploadFields[ i ].mockFiles.length; f++ ) {
-						var mockFile = {
-							name: uploadFields[ i ].mockFiles[ f ].name,
-							size: uploadFields[ i ].mockFiles[ f ].size,
-							url: uploadFields[ i ].mockFiles[ f ].file_url,
-							mediaID: uploadFields[ i ].mockFiles[ f ].id,
+					for ( mockFileIndex = 0; mockFileIndex < uploadFields[ i ].mockFiles.length; mockFileIndex++ ) {
+						mockFileData = uploadFields[ i ].mockFiles[ mockFileIndex ];
+						mockFile = {
+							name: mockFileData.name,
+							size: mockFileData.size,
+							url: mockFileData.file_url,
+							mediaID: mockFileData.id,
+							accessible: mockFileData.accessible,
+							ext: mockFileData.ext,
+							type: mockFileData.type
 						};
 
 						this.emit( 'addedfile', mockFile );
-						this.emit( 'thumbnail', mockFile, uploadFields[ i ].mockFiles[ f ].url );
+						if ( mockFile.accessible && 'string' === typeof mockFile.type && 0 === mockFile.type.indexOf( 'image/' ) ) {
+							this.emit( 'thumbnail', mockFile, mockFileData.url );
+						}
+
 						this.emit( 'complete', mockFile );
 						this.files.push( mockFile );
 					}
 				}
 			},
-		} );
+			accept: function( file, done ) {
+				var message = this.options.dictFileTooSmall.replace( '{{minFilesize}}', this.options.minFilesize );
+				file.rejectSize = function() {
+					done( message );
+				};
+
+				return done();
+			}
+		});
+	}
+
+	/**
+	 * Remove the submit loading class from a form and
+	 * only enable the submit button if it is not conditionally disabled.
+	 *
+	 * @param {HTMLElement} form
+	 * @param {string} formId
+	 * @param {number} processesRunning
+	 * @returns {void}
+	 */
+	function removeSubmitLoading( form, formId, processesRunning ) {
+		var isFinalSubmitButton, enable;
+
+		isFinalSubmitButton = form.querySelector( '.frm_submit .frm_button_submit.frm_final_submit' );
+		enable              = ! isFinalSubmitButton || ! submitButtonIsConditionallyDisabled( formId ) ? 'enable' : '';
+
+		if ( '' === enable ) {
+			// If "enable" is not passed, the save draft button stays disabled.
+			// This code enables the save draft button.
+			jQuery( '.frm_loading_form' ).find( 'a.frm_save_draft' ).css( 'pointer-events', '' );
+		}
+
+		frmFrontForm.removeSubmitLoading( jQuery( form ), enable, processesRunning );
+	}
+
+	/**
+	 * Check if the submit button is conditionally disabled.
+	 * This is required for Stripe link so the button does not get enabled at the wrong time after completing the Stripe elements.
+	 *
+	 * @since 6.7.1
+	 *
+	 * @param {String} formId
+	 * @returns {bool}
+	 */
+	function submitButtonIsConditionallyDisabled( formId ) {
+		return submitButtonIsConditionallyNotAvailable( formId ) && 'disable' === __FRMRULES[ 'submit_' + formId ].hideDisable;
+	}
+
+	/**
+	 * Check submit button is conditionally "hidden". This is also used for the enabled check and is used in submitButtonIsConditionallyDisabled.
+	 *
+	 * @since 6.7.1
+	 *
+	 * @param {String} formId
+	 * @returns bool
+	 */
+	function submitButtonIsConditionallyNotAvailable( formId ) {
+		var hideFields = document.getElementById( 'frm_hide_fields_' + formId );
+		return hideFields && -1 !== hideFields.value.indexOf( '"frm_form_' + formId + '_container .frm_final_submit"' );
+	}
+
+	function maybeGetExtensionThumbnail( ext ) {
+		if ( -1 !== [ 'jpg', 'jpeg', 'png' ].indexOf( ext ) ) {
+			return false;
+		}
+
+		if ( 'pdf' === ext ) {
+			return getProPluginUrl() + '/images/pdf.svg';
+		}
+
+		if ( -1 !== ext.indexOf( 'xls' ) ) {
+			return getProPluginUrl() + '/images/xls.svg';
+		}
+
+		return getProPluginUrl() + '/images/doc.svg';
+	}
+
+	function getProPluginUrl() {
+		var freePluginUrlSplitBySlashes = frm_js.images_url.split( '/' );
+		freePluginUrlSplitBySlashes.pop();
+		freePluginUrlSplitBySlashes.pop();
+		freePluginUrlSplitBySlashes.push( 'formidable-pro' );
+		return freePluginUrlSplitBySlashes.join( '/' );
 	}
 
 	function filePreviewHTML( field ) {
-		return "<div class=\"dz-preview dz-file-preview frm_clearfix\">\n" +
-		"<div class=\"dz-image\"><img data-dz-thumbnail /></div>\n" +
-		"<div class=\"dz-column\">\n" +
-		"<div class=\"dz-details\">\n" +
-		"<div class=\"dz-filename\"><span data-dz-name></span></div>\n" +
-		"<div class=\"dz-size\"><span data-dz-size></span></div>\n" +
-		'<a class="dz-remove frm_icon_font frm_cancel1_icon" href="javascript:undefined;" data-dz-remove title="' + field.remove + '"></a>' +
-		"</div>\n" +
-		"<div class=\"dz-progress\"><span class=\"dz-upload\" data-dz-uploadprogress></span></div>\n" +
-		"<div class=\"dz-error-message\"><span data-dz-errormessage></span></div>\n" +
-		"</div>\n" +
+		return '<div class="dz-preview dz-file-preview frm_clearfix">\n' +
+		'<div class="dz-image"><img data-dz-thumbnail /></div>\n' +
+		'<div class="dz-column">\n' +
+		'<div class="dz-details">\n' +
+		'<div class="dz-filename"><span data-dz-name></span></div>\n' +
+		' ' + // add white space between file name and file size.
+		'<div class="dz-size"><span data-dz-size></span></div>\n' +
+		'<a class="dz-remove frm_remove_link" href="javascript:undefined;" data-dz-remove title="' + field.remove + '">' +
+		'<svg width="20" height="20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 0a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm3.6-13L10 8.6 6.4 5 5 6.4 8.6 10 5 13.6 6.4 15l3.6-3.6 3.6 3.6 1.4-1.4-3.6-3.6L15 6.4z"/></svg>' +
+		'</a>' +
+		'</div>\n' +
+		'<div class="dz-progress"><span class="dz-upload" data-dz-uploadprogress></span></div>\n' +
+		'<div class="dz-error-message"><span data-dz-errormessage></span></div>\n' +
+		'</div>\n' +
 		'</div>';
 	}
 
@@ -301,12 +579,39 @@ function frmProFormJS() {
 		}
 	}
 
-	function isSpam( formID ) {
-		if ( isHoneypotSpam( formID ) || isHeadless() ) {
-			return true;
-		} else {
-			return false;
+	function postToAjaxUrl( form, data, success, error, extraParams ) {
+		var ajaxParams = 'object' === typeof extraParams ? extraParams : {};
+
+		ajaxParams.type = 'POST';
+		ajaxParams.url = getAjaxUrl( form );
+		ajaxParams.data = data;
+		ajaxParams.success = success;
+
+		if ( 'function' === typeof error ) {
+			ajaxParams.error = error;
 		}
+
+		jQuery.ajax( ajaxParams );
+	}
+
+	function getAjaxUrl( form ) {
+		var ajaxUrl, action;
+
+		ajaxUrl = frm_js.ajax_url;
+		action = form.getAttribute( 'action' );
+
+		if ( 'string' === typeof action && -1 !== action.indexOf( '?action=frm_forms_preview' ) ) {
+			ajaxUrl = action.split( '?action=frm_forms_preview' )[0];
+		}
+
+		return ajaxUrl;
+	}
+
+	function isSpam( formID, checkHoneypot ) {
+		if ( isHeadless() ) {
+			return true;
+		}
+		return checkHoneypot && isHoneypotSpam( formID );
 	}
 
 	/**
@@ -317,9 +622,11 @@ function frmProFormJS() {
 	 * @returns {boolean}
 	 */
 	function isHoneypotSpam( formID ) {
-		var val = document.getElementById( 'frm_verify_' + formID ).value;
-
-		return val !== '';
+		var honeypotField = document.getElementById( 'frm_email_' + formID );
+		if ( honeypotField === null ) {
+			honeypotField = document.getElementById( 'frm_verify_' + formID );
+		}
+		return honeypotField !== null && honeypotField.value !== '';
 	}
 
 	function isHeadless() {
@@ -330,60 +637,6 @@ function frmProFormJS() {
 			window.emit || //couchjs
 			window.spawn  //rhino
 		);
-	}
-
-	/**
-	 * Check that at least one preceding required field is complete
-	 *
-	 * @since 2.03.08
-	 *
-	 * @param {object} uploadField
-	 * @param {string} uploadField.htmlID
-	 * @param {string} uploadField.fieldID
-	 * @returns {boolean}
-	 */
-	function anyPrecedingRequiredFieldsCompleted( uploadField, fileSelector ) {
-		var prevPage, requiredFields,
-			fieldsComplete = true,
-			dropzoneDiv = jQuery( fileSelector ),
-			form = dropzoneDiv.closest( 'form' );
-
-		if ( form.length < 1 ) {
-			return false;
-		}
-
-		prevPage = form.find( 'input[name="frm_prev_page"]' );
-		if ( prevPage.length ) {
-			// Only check if on the first page of the form.
-			return true;
-		}
-
-		requiredFields = jQuery( form ).find(
-			'.frm_required_field:visible input, .frm_required_field:visible select, .frm_required_field:visible textarea, ' + fileSelector
-		);
-
-		if ( requiredFields.length < 1 ) {
-			return true;
-		} else {
-			for ( var r = 0, rl = requiredFields.length; r < rl; r++ ) {
-				if ( '#' + requiredFields[ r ].id === fileSelector ) {
-					break;
-				}
-
-				if ( requiredFields[ r ].className.indexOf( 'frm_optional' ) > -1 || requiredFields[ r ].getAttribute( 'data-frmfile' ) !== null ) {
-					continue;
-				}
-
-				if ( frmFrontForm.checkRequiredField( requiredFields[ r ], [] ).length < 1 ) {
-					fieldsComplete = true;
-					break;
-				} else {
-					fieldsComplete = false;
-				}
-			}
-
-			return fieldsComplete;
-		}
 	}
 
 	/**
@@ -448,19 +701,24 @@ function frmProFormJS() {
         }
 	}
 
-	function maybeCheckDependent( event, field, fieldId, e ) {
-		/*jshint validthis:true */
-		var $field = jQuery( field );
+	function setToggleAriaChecked() {
+		this.nextElementSibling.setAttribute( 'aria-checked', this.checked ? 'true' : 'false' );
+	}
+
+	function maybeCheckDependent( _, field, fieldId, e ) {
+		var $field, originalEvent;
+
+		$field = jQuery( field );
 		checkFieldsWithConditionalLogicDependentOnThis( fieldId, $field );
 
-		var originalEvent = getOriginalEvent( e );
+		originalEvent = getOriginalEvent( e );
 		checkFieldsWatchingLookup( fieldId, $field, originalEvent );
 		doCalculation( fieldId, $field );
 	}
 
 	function getOriginalEvent( e ) {
 		var originalEvent;
-		if ( typeof e.originalEvent !== 'undefined' || e.currentTarget.className.indexOf( 'frm_chzn' ) > -1 ) {
+		if ( typeof e.originalEvent !== 'undefined' || e.currentTarget.className.indexOf( 'frm_chzn' ) > -1 || e.currentTarget.className.indexOf( 'frm_slimselect' ) > -1 ) {
 			originalEvent = 'value changed';
 		} else {
 			originalEvent = 'other';
@@ -472,22 +730,97 @@ function frmProFormJS() {
 	 Conditional Logic Functions
 	 ******************************************************/
 
-	// Check if a changed field has other fields depending on it
+	/**
+	 * Check if a changed field has other fields depending on it.
+	 */
 	function checkFieldsWithConditionalLogicDependentOnThis( fieldId, changedInput ) {
 		if ( typeof __FRMRULES  === 'undefined' ||
 			typeof __FRMRULES[ fieldId ] === 'undefined' ||
 			__FRMRULES[ fieldId ].dependents.length < 1 ||
 			changedInput === null ||
-			typeof( changedInput ) === 'undefined'
+			typeof changedInput === 'undefined'
 		) {
 			return;
 		}
 
 		var triggerFieldArgs = __FRMRULES[ fieldId ];
-		var repeatArgs = getRepeatArgsFromFieldName( changedInput[ 0 ].name );
+		var repeatArgs       = getRepeatArgsFromFieldName( changedInput[ 0 ].name );
+
+		pendingDynamicFieldAjax = [];
 
 		for ( var i = 0, l = triggerFieldArgs.dependents.length; i < l; i++ ) {
 			hideOrShowFieldById( triggerFieldArgs.dependents[ i ], repeatArgs );
+		}
+
+		processPendingAjax();
+	}
+
+	function processPendingAjax() {
+		var fieldsToProcess, postData, data, formId, form;
+
+		if ( ! pendingDynamicFieldAjax.length ) {
+			return;
+		}
+
+		// Copy pendingDynamicFieldAjax as it gets reset to [] every time checkFieldsWithConditionalLogicDependentOnThis is called.
+		fieldsToProcess = pendingDynamicFieldAjax.slice();
+		postData        = [];
+
+		for ( data in fieldsToProcess ) {
+			postData.push( fieldsToProcess[ data ].data );
+		}
+
+		formId = fieldsToProcess[0].args.depFieldArgs.formId;
+
+		function processDynamicField( html, depFieldArgs, onCurrentPage ) {
+			var $fieldDiv, $optContainer, $listInputs, listVal;
+
+			if ( onCurrentPage ) {
+				$fieldDiv = jQuery( '#' + depFieldArgs.containerId );
+				addLoadingIcon( $fieldDiv );
+
+				$optContainer = $fieldDiv.find( '.frm_opt_container, .frm_data_container' );
+				$optContainer.html( html );
+				$listInputs = $optContainer.children( 'input' );
+				listVal = $listInputs.val();
+				removeLoadingIcon( $optContainer );
+				if ( '' === html || '' === listVal ) {
+					hideDynamicField( depFieldArgs );
+				} else {
+					showDynamicField( depFieldArgs, $fieldDiv, $listInputs, true );
+				}
+			} else {
+				updateHiddenDynamicListField( depFieldArgs, html );
+			}
+		}
+
+		function ajaxHandler( response ) {
+			var i;
+			for ( i = 0; i < fieldsToProcess.length; i++ ) {
+				processDynamicField(
+					'undefined' === typeof response[ i ] ? '' : response[ i ],
+					fieldsToProcess[ i ].args.depFieldArgs,
+					fieldsToProcess[ i ].args.onCurrentPage
+				);
+			}
+		}
+
+		form = getFormById( formId );
+		if ( form ) {
+			postToAjaxUrl(
+				form,
+				{
+					action: 'frm_fields_ajax_get_data_arr',
+					postData: postData
+				},
+				ajaxHandler,
+				function( response ) {
+					console.error( response );
+				},
+				{
+					dataType: 'json'
+				}
+			);
 		}
 	}
 
@@ -510,7 +843,7 @@ function frmProFormJS() {
 		var childFieldNum = childFieldDivIds.length;
 		for ( var i = 0; i < childFieldNum; i++ ) {
 			depFieldArgs.containerId = childFieldDivIds[ i ];
-			addRepeatRow( depFieldArgs, childFieldDivIds[ i ] );
+			addRepeatRow( depFieldArgs, childFieldDivIds[ i ]);
 			hideOrShowSingleField( depFieldArgs );
 		}
 	}
@@ -644,7 +977,6 @@ function frmProFormJS() {
 	}
 
 	/**
-	 *
 	 * @param depFieldArgs
 	 * @param {bool} depFieldArgs.isRepeating
 	 * @param childFieldDivId
@@ -658,15 +990,27 @@ function frmProFormJS() {
 		}
 	}
 
+	/**
+	 * @param {object} depFieldArgs
+	 * @return {void}
+	 */
 	function hideOrShowSingleField( depFieldArgs ) {
-		var logicOutcomes = [],
+		var i, add,
+			logicOutcomes = [],
 			len = depFieldArgs.conditions.length;
 
-		for ( var i = 0; i < len; i++ ) {
-			logicOutcomes.push( checkLogicCondition( depFieldArgs.conditions[ i ], depFieldArgs ) );
+		for ( i = 0; i < len; i++ ) {
+			add = checkLogicCondition( depFieldArgs.conditions[ i ], depFieldArgs );
+			if ( add !== null ) {
+				// Prevent fields not on the page from being hidden without a chance.
+				logicOutcomes.push( add );
+			}
 		}
 
-		routeToHideOrShowField( depFieldArgs, logicOutcomes );
+		if ( logicOutcomes.length ) {
+			// Only continue if the field was found on the page.
+			routeToHideOrShowField( depFieldArgs, logicOutcomes );
+		}
 	}
 
 	function getRulesForSingleField( fieldId ) {
@@ -686,31 +1030,92 @@ function frmProFormJS() {
 	function checkLogicCondition( logicCondition, depFieldArgs ) {
 		var fieldId = logicCondition.fieldId,
 			logicFieldArgs = getRulesForSingleField( fieldId ),
-			fieldValue = getFieldValue( logicFieldArgs, depFieldArgs );
+			fieldValue = getFieldValue( logicFieldArgs, depFieldArgs, 'logic' );
+
+		if ( fieldValue === null ) {
+			// The field wasn't found.
+			return null;
+		}
 
 		return getLogicConditionOutcome( logicCondition, fieldValue, depFieldArgs, logicFieldArgs );
 	}
 
 	/**
-	 * Get the value from any field
+	 * Get the value from any field.
 	 *
-	 * @param logicFieldArgs
+	 * @param {object} logicFieldArgs
 	 * @param {string} logicFieldArgs.inputType
-	 * @param depFieldArgs
+	 * @param {object} depFieldArgs
+	 * @param {string} context
 	 * @returns {string}
      */
-	function getFieldValue( logicFieldArgs, depFieldArgs ) {
+	function getFieldValue( logicFieldArgs, depFieldArgs, context ) {
 		var fieldValue = '';
 
-		if ( logicFieldArgs.inputType === 'radio' || logicFieldArgs.inputType === 'checkbox' || logicFieldArgs.inputType === 'toggle' ) {
+		if ( 'name' === logicFieldArgs.fieldType ) {
+			fieldValue = getValueFromNameField( logicFieldArgs, depFieldArgs );
+		} else if ( logicFieldArgs.inputType === 'radio' || logicFieldArgs.inputType === 'checkbox' || logicFieldArgs.inputType === 'toggle' ) {
 			fieldValue = getValueFromRadioOrCheckbox( logicFieldArgs, depFieldArgs );
 		} else {
+			if ( isASingleLineTextLookup( logicFieldArgs ) && shouldTreatSingleLineTextLookupAsEmpty( logicFieldArgs, context ) ) {
+				// Consider a single line text look up empty until a lookup request has happened.
+				return '';
+			}
 			fieldValue = getValueFromTextOrDropdown( logicFieldArgs, depFieldArgs );
 		}
 
 		fieldValue = cleanFinalFieldValue( fieldValue );
 
 		return fieldValue;
+	}
+
+	/**
+	 * @since 6.8.4
+	 *
+	 * @param {object} args
+	 * @param {string} context Either 'logic' or 'lookup'.
+	 * @returns 
+	 */
+	function shouldTreatSingleLineTextLookupAsEmpty( args, context ) {
+		var container, field;
+
+		if ( 'logic' !== context ) {
+			return false;
+		}
+
+		container = document.getElementById( 'frm_field_' + args.fieldId + '_container' );
+		if ( ! container || container.getAttribute( 'frm-completed-text-lookup' ) ) {
+			return false;
+		}
+
+		field = container.querySelector( '#field_' + args.fieldKey );
+		return field && '' === field.defaultValue;
+	}
+
+	/**
+	 * @since 6.8.4
+	 *
+	 * @param {object} args
+	 * @return {boolean}
+	 */
+	function isASingleLineTextLookup( args ) {
+		return 'lookup' === args.fieldType && 'text' === args.inputType;
+	}
+
+	function getValueFromNameField( logicFieldArgs, depFieldArgs ) {
+		var inputName, inputs, nameValues;
+
+		inputName  = buildLogicFieldInputName( logicFieldArgs, depFieldArgs );
+		inputs     = document.querySelectorAll( '[name^="' + inputName + '"]' );
+		nameValues = [];
+
+		inputs.forEach(
+			function( input ) {
+				nameValues.push( input.value );
+			}
+		);
+
+		return nameValues.join( ' ' );
 	}
 
 	/**
@@ -740,6 +1145,10 @@ function frmProFormJS() {
 
 		if ( logicFieldInput === null ) {
 			logicFieldValue = parseTimeValue( logicFieldArgs, fieldCall );
+			if ( logicFieldValue === '' ) {
+				// Check for hidden fields.
+				logicFieldValue = getValueFromMultiSelectDropdown( logicFieldArgs, depFieldArgs );
+			}
 		} else {
 			logicFieldValue = logicFieldInput.value;
 		}
@@ -797,6 +1206,11 @@ function frmProFormJS() {
 		var logicFieldValue,
 			inputName = buildLogicFieldInputName( logicFieldArgs, depFieldArgs ),
 			logicFieldInputs = document.querySelectorAll( 'input[name^="' + inputName + '"]' );
+
+		if ( logicFieldInputs.length === 0 ) {
+			// Don't continue if the field doesn't exist.
+			return null;
+		}
 
 		if ( logicFieldArgs.inputType === 'checkbox' || logicFieldArgs.inputType === 'toggle' ) {
 			logicFieldValue = getValuesFromCheckboxInputs( logicFieldInputs );
@@ -924,6 +1338,8 @@ function frmProFormJS() {
 	}
 
 	function operators( op, a, b ) {
+		var theOperators;
+
 		a = prepareLogicValueForComparison( a );
 		b = prepareEnteredValueForComparison( a, b );
 
@@ -931,13 +1347,25 @@ function frmProFormJS() {
 			return true;
 		}
 
-		var theOperators = {
-			'==': function( c, d ) { return c === d; },
-			'!=': function( c, d ) { return c !== d; },
-			'<': function( c, d ) { return c > d; },
-			'<=': function( c, d ) { return c >= d;},
-			'>': function( c, d ) { return c < d; },
-			'>=': function( c, d ) { return c <= d; },
+		theOperators = {
+			'==': function( c, d ) {
+				return c === d;
+			},
+			'!=': function( c, d ) {
+				return c !== d;
+			},
+			'<': function( c, d ) {
+				return c > d;
+			},
+			'<=': function( c, d ) {
+				return c >= d;
+			},
+			'>': function( c, d ) {
+				return c < d;
+			},
+			'>=': function( c, d ) {
+				return c <= d;
+			},
 			'LIKE': function( c, d ) {
 				if ( ! d ) {
 					/* If no value, then assume no match */
@@ -960,12 +1388,41 @@ function frmProFormJS() {
 
 				return d.indexOf( c ) == -1;
 			},
+			// Starts with
+			'LIKE%': function( c, d ) {
+				if ( ! d ) {
+					/* If no value, then assume no match */
+					return false;
+				}
+
+				c = prepareLogicValueForLikeComparison( c );
+				d = prepareEnteredValueForLikeComparison( c, d );
+
+				return d.substr( 0, c.length ) === c;
+			},
+			// Ends with
+			'%LIKE': function( c, d ) {
+				if ( ! d ) {
+					/* If no value, then assume no match */
+					return false;
+				}
+
+				c = prepareLogicValueForLikeComparison( c );
+				d = prepareEnteredValueForLikeComparison( c, d );
+
+				return d.substr( -c.length ) === c;
+			}
 		};
+
+		if ( 'function' !== typeof theOperators[ op ]) {
+			op = '=='; // Fallback to Equals to.
+		}
+
 		return theOperators[ op ]( a, b );
 	}
 
 	function prepareLogicValueForComparison( a ) {
-		if ( String( a ).search( /^\s*(\+|-)?((\d+(\.\d+)?)|(\.\d+))\s*$/ ) !== -1 ) {
+		if ( shouldParseFloat( a ) ) {
 			a = parseFloat( a );
 		} else if ( typeof a === 'string' ) {
 			a = a.trim();
@@ -974,16 +1431,24 @@ function frmProFormJS() {
 		return a;
 	}
 
+	/**
+	 * @param {string} value
+	 * @returns {bool}
+	 */
+	function shouldParseFloat( value ) {
+		return String( value ).search( /^\s*(\+|-)?((\d+(\.\d+)?)|(\.\d+))\s*$/ ) !== -1;
+	}
+
 	function prepareEnteredValueForComparison( a, b ) {
 		if ( typeof b === 'undefined' || b === null || b === false ) {
 			b = '';
 		}
 
-		if ( jQuery.isArray( b ) && jQuery.inArray( String( a ), b ) > -1 ) {
+		if ( Array.isArray( b ) && jQuery.inArray( String( a ), b ) > -1 ) {
 			b = a;
 		}
 
-		if ( typeof a === 'number' && typeof b === 'string' ) {
+		if ( typeof a === 'number' && typeof b === 'string' && shouldParseFloat( b ) ) {
 			b = parseFloat( b );
 		}
 
@@ -1002,7 +1467,7 @@ function frmProFormJS() {
 		enteredValue = prepareValueForLikeComparison( enteredValue );
 
 		var currentValue = '';
-		if ( jQuery.isArray( enteredValue ) ) {
+		if ( Array.isArray( enteredValue ) ) {
 			for ( var i = 0, l = enteredValue.length; i < l; i++ ) {
 				currentValue = enteredValue[ i ].toLowerCase();
 				if ( currentValue.indexOf( logicValue ) > -1 ) {
@@ -1041,7 +1506,7 @@ function frmProFormJS() {
 			onCurrentPage = isFieldDivOnPage( depFieldArgs.containerId );
 		}
 
-		if ( action == 'show' ) {
+		if ( action === 'show' ) {
 			if ( depFieldArgs.fieldType === 'data' && depFieldArgs.hasOwnProperty( 'dataLogic' ) ) {
 				// Only update dynamic field options/value if it is dependent on another Dynamic field
 				updateDynamicField( depFieldArgs, onCurrentPage );
@@ -1130,9 +1595,25 @@ function frmProFormJS() {
 			// Set value, then show field
 			setValuesInsideFieldOnPage( depFieldArgs.containerId, depFieldArgs );
 			showFieldContainer( depFieldArgs.containerId );
+			triggerEvent( document, 'frmShowField' );
+			if ( depFieldArgs.inputType === 'rte' ) {
+				reInitializeRichText( 'field_' + depFieldArgs.fieldKey );
+			}
 		} else {
 			setValuesInsideFieldAcrossPage( depFieldArgs );
 		}
+	}
+
+	/**
+	 * @param {string} fieldId
+	 */
+	function reInitializeRichText( fieldId ) {
+		var isVisible = 'undefined' !== typeof tinyMCE.editors[ fieldId ] && ! tinyMCE.editors[ fieldId ].isHidden();
+		if ( ! isVisible ) {
+			return;
+		}
+		removeRichText( fieldId );
+		initRichText( fieldId );
 	}
 
 	/**
@@ -1158,16 +1639,21 @@ function frmProFormJS() {
 	function removeSubmitButtonFromHiddenList( depFieldArgs ) {
 		hiddenSubmitButtons = hiddenSubmitButtons.filter( function( button ) {
 			return button !== depFieldArgs.formKey;
-		} );
+		});
 	}
 
 	/**
 	 * Enable button with given selector.
 	 *
-	 * @param buttonSelector
+	 * @param {string} buttonSelector
+	 *
+	 * @returns {void}
 	 */
 	function enableButton( buttonSelector ) {
-		jQuery( buttonSelector ).prop( 'disabled', false );
+		var button = document.querySelector( buttonSelector );
+		if ( button && ! button.closest( '.frm_loading_form' ) ) {
+			button.disabled = false;
+		}
 	}
 
 	/**
@@ -1199,8 +1685,16 @@ function frmProFormJS() {
 		setValueForInputs( inputs, inContainer, depFieldArgs.formId );
 	}
 
+	/**
+	 * Gets inputs in field on page.
+	 *
+	 * @since 5.4 Accepted HTML element as param.
+	 *
+	 * @param {String|HTMLElement} containerId ID of container or container element.
+	 * @return {Array}
+	 */
 	function getInputsInFieldOnPage( containerId ) {
-		var container = document.getElementById( containerId );
+		var container = 'string' === typeof containerId ? document.getElementById( containerId ) : containerId;
 		return container.querySelectorAll( 'select[name^="item_meta"], textarea[name^="item_meta"], input[name^="item_meta"]' );
 	}
 
@@ -1246,29 +1740,34 @@ function frmProFormJS() {
 	}
 
 	function setValueForInputs( inputs, inContainer, formId, setRequired ) {
-		if ( inputs.length ) {
+		var input, prevInput, i;
 
-			var prevInput;
-			for ( var i = 0; i < inputs.length; i++ ) {
-				// Don't set the value if the field is in a section and it's conditionally hidden
-				if ( inContainer && isChildInputConditionallyHidden( inputs[ i ], formId ) ) {
-					continue;
-				}
+		if ( ! inputs.length ) {
+			return;
+		}
 
-				if ( setRequired === 'required' ) {
-					maybeAddRequiredTag( inputs[ i ] );
-				}
+		for ( i = 0; i < inputs.length; i++ ) {
+			input = inputs[ i ];
 
-				if ( skipSetValue( i, prevInput, inputs ) ) {
-					continue;
-				}
-
-				setDefaultValue( inputs[ i ] );
-				maybeSetWatchingFieldValue( inputs[ i ] );
-				maybeDoCalcForSingleField( inputs[ i ] );
-
-				prevInput = inputs[ i ];
+			// Don't set the value if the field is in a section and it's conditionally hidden
+			if ( inContainer && isChildInputConditionallyHidden( input, formId ) ) {
+				continue;
 			}
+
+			if ( setRequired === 'required' ) {
+				maybeAddRequiredTag( input );
+			}
+
+			if ( skipSetValue( i, prevInput, inputs ) ) {
+				continue;
+			}
+
+			setDefaultValue( input, inContainer );
+			maybeSetWatchingFieldValue( input );
+			setShownProduct( input );
+			maybeDoCalcForSingleField( input );
+
+			prevInput = input;
 		}
 	}
 
@@ -1277,13 +1776,16 @@ function frmProFormJS() {
 	 * required attributes if the field is required.
 	 */
 	function maybeAddRequiredTag( input ) {
+		var isRequired, isOptional;
+
 		if ( input.type === 'checkbox' || input.type === 'radio' || input.type === 'file' ) {
 			return;
 		}
-		var is_required = input.parentElement.className.indexOf( 'frm_required_field' ),
-			is_optional = input.className.indexOf( 'frm_optional' );
 
-		if ( is_required > -1 && is_optional === -1 ) {
+		isRequired = input.parentElement.className.indexOf( 'frm_required_field' );
+		isOptional = input.className.indexOf( 'frm_optional' );
+
+		if ( isRequired > -1 && isOptional === -1 ) {
 			input.setAttribute( 'aria-required', true );
 		}
 	}
@@ -1296,6 +1798,11 @@ function frmProFormJS() {
 		var typeArray = [ 'checkbox', 'radio' ];
 
 		if ( i < 1 || typeof prevInput === 'undefined' ) {
+			return false;
+		}
+
+		if ( null !== inputs[ i ].getAttribute( 'data-frmprice' ) ) {
+			// never skip calculating a product price.
 			return false;
 		}
 
@@ -1312,7 +1819,10 @@ function frmProFormJS() {
 	}
 
 	function showFieldContainer( containerId ) {
-		jQuery( '#' + containerId ).show();
+		var $container = jQuery( '#' + containerId ).show();
+		if ( $container.hasClass( 'frm_inside_container' ) && null === $container.find( 'select' ).val() ) {
+			$container.find( 'select' ).val( '' ).trigger( 'change' );
+		}
 	}
 
 	/**
@@ -1419,6 +1929,15 @@ function frmProFormJS() {
 		jQuery( buttonSelector ).prop( 'disabled', true );
 	}
 
+	function jsonParse( str ) {
+		try {
+			var obj = JSON.parse( str );
+			return obj;
+		} catch ( e ) {
+			return false;
+		}
+	}
+
 	function clearInputsInFieldOnPage( containerId ) {
 		var inputs = getInputsInFieldOnPage( containerId );
 		clearValueForInputs( inputs, 'required' );
@@ -1453,50 +1972,103 @@ function frmProFormJS() {
 		return document.querySelectorAll( '[id^="field_' + depFieldArgs.fieldKey + '-"]' );
 	}
 
-	function clearValueForInputs( inputs, required ) {
+	/**
+	 * Clears value of field inputs.
+	 *
+	 * @since 5.4 Added the third param.
+	 *
+	 * @param {Array}   inputs         Array of inputs.
+	 * @param {String}  required       Required string.
+	 * @param {Boolean} resetToDefault Is `true` if reset to default value. Otherwise, reset to empty value.
+	 */
+	function clearValueForInputs( inputs, required, resetToDefault ) {
+		var prevInput, blankSelect, valueChanged, l, i, input, defaultVal, reset, linkedRadioInput;
+
 		if ( inputs.length < 1 ) {
 			return;
 		}
 
-		var prevInput,
-			valueChanged = true;
+		valueChanged = true;
 
-		for ( var i = 0, l = inputs.length; i < l; i++ ) {
-			if ( inputs[ i ].className.indexOf( 'frm_dnc' ) > -1 ) {
-				prevInput = inputs[ i ];
+		l = inputs.length;
+		for ( i = 0; i < l; i++ ) {
+			input = inputs[ i ];
+
+			defaultVal = input.getAttribute( 'data-frmval' );
+			reset      = resetToDefault && defaultVal;
+
+			// Don't remove values from some fields.
+			if ( input.className.indexOf( 'frm_dnc' ) > -1 || input.name.indexOf( '[row_ids]' ) > -1 ) {
+				prevInput = input;
 				continue;
 			}
 
-			if ( i > 0 && prevInput.name != inputs[ i ].name && valueChanged === true ) {
+			if ( i > 0 && prevInput.name != input.name && valueChanged === true ) {
 				// Only trigger a change after all inputs in a field are cleared
 				triggerChange( jQuery( prevInput ) );
 			}
 
 			valueChanged = true;
 
-			if ( inputs[ i ].type === 'radio' || inputs[ i ].type === 'checkbox' ) {
-				inputs[ i ].checked = false;
-			} else if ( inputs[ i ].tagName === 'SELECT' ) {
-				if ( ( inputs[ i ].selectedIndex === 0 ) || ( inputs[ i ].selectedIndex === - 1 ) ) {
-					valueChanged = false;
+			if ( input.type === 'radio' || input.type === 'checkbox' ) {
+				if ( ! reset ) {
+					input.checked = false;
+				} else if ( 'radio' === input.type ) {
+					input.checked = defaultVal === input.value;
 				} else {
-					inputs[ i ].selectedIndex = 0;
+					resetCheckboxInputToValue( input, defaultVal );
 				}
 
-				var chosenId = inputs[ i ].id.replace( /[^\w]/g, '_' ); // match what the script is doing
-				var autocomplete = document.getElementById( chosenId + '_chosen' );
-				if ( autocomplete !== null ) {
-					jQuery( inputs[ i ] ).trigger( 'chosen:updated' );
+				maybeClearStarRatingInput( input );
+			} else if ( input.tagName === 'SELECT' ) {
+				if ( isSlimSelect( input ) ) {
+					setSlimValue( input, reset ? defaultVal : '' );
+				} else {
+					if ( ! reset ) {
+						blankSelect = input.selectedIndex === 0 && input.options[ 0 ].text.trim() === '';
+						if ( blankSelect || ( input.selectedIndex === -1 ) ) {
+							valueChanged = false;
+						} else {
+							input.selectedIndex = -1;
+						}
+					} else {
+						valueChanged = resetSelectInputToValue( input, defaultVal );
+					}
+
+					var chosenId = input.id.replace( /[^\w]/g, '_' ); // match what the script is doing
+					var autocomplete = document.getElementById( chosenId + '_chosen' );
+					if ( autocomplete !== null ) {
+						jQuery( input ).trigger( 'chosen:updated' );
+					}
 				}
-			} else if ( inputs[ i ].type === 'range' ) {
-				inputs[ i ].value = 0;
+			} else if ( input.type === 'range' ) {
+				if ( ! reset ) {
+					input.value = 0;
+				} else {
+					input.value = defaultVal;
+				}
+			} else if ( input.getAttribute( 'data-frmprice' ) !== null ) {
+				setHiddenProduct( input );
 			} else {
-				inputs[ i ].value = '';
+				if ( ! reset ) {
+					input.value = '';
+				} else {
+					input.value = defaultVal;
+				}
+
+				linkedRadioInput = input.id.indexOf( '-otext' ) > -1 ? document.getElementById( input.id.replace( '-otext', '' ) ) : null;
+				if ( linkedRadioInput && linkedRadioInput.checked === false ) {
+					input.classList.add( 'frm_pos_none' );
+				}
+
+				if ( null !== input.getAttribute( 'data-frmfile' ) ) {
+					clearDropzoneFiles( input );
+				}
 			}
 
 			if ( required === 'required' ) {
-				inputs[ i ].required = false;
-				inputs[ i ].setAttribute( 'aria-required', false );
+				input.required = false;
+				input.setAttribute( 'aria-required', false );
 			}
 
 			prevInput = inputs[ i ];
@@ -1505,6 +2077,162 @@ function frmProFormJS() {
 		// trigger a change for the final input in the loop
 		if ( valueChanged === true ) {
 			triggerChange( jQuery( prevInput ) );
+		}
+	}
+
+	function setSlimValue( input, value ) {
+		if ( value.length && '[' === value[0] && -1 !== value.indexOf( ',' ) && ']' === value[ value.length - 1 ] && 'multiple' === input.getAttribute( 'multiple' ) ) {
+			// Array values are stored as a JSON string.
+			value = JSON.parse( value );
+		}
+		input.slim.setSelected( value );
+	}
+
+	/**
+	 * Maybe clear star rating.
+	 *
+	 * @since 5.4
+	 *
+	 * @param {HTMLElement} input This should be the last input in star rating.
+	 */
+	function maybeClearStarRatingInput( input ) {
+		var starGroup, checkedInput;
+		if ( 'radio' !== input.type || ! input.matches( '.frm-star-group input:last-of-type' ) ) {
+			return;
+		}
+
+		starGroup    = input.closest( '.frm-star-group' );
+		checkedInput = starGroup.querySelector( 'input:checked' );
+		if ( checkedInput ) {
+			updateStars( checkedInput );
+		} else {
+			clearStars( starGroup, true );
+		}
+	}
+
+	/**
+	 * Resets checkbox input to a value.
+	 *
+	 * @since 5.4
+	 *
+	 * @param {HTMLElement} input Checkbox element.
+	 * @param {Object}      val   The value.
+	 */
+	function resetCheckboxInputToValue( input, val ) {
+		var i;
+
+		val = jsonParse( val );
+
+		if ( ! val ) {
+			return;
+		}
+
+		for ( i in val ) {
+			if ( val[ i ] === input.value ) {
+				input.checked = true;
+				return;
+			}
+		}
+
+		input.checked = false;
+	}
+
+	/**
+	 * Resets select input to a value.
+	 *
+	 * @since 5.4
+	 *
+	 * @param {HTMLElement}   input Select element.
+	 * @param {String|Object} val   The value. Is object if multiselect.
+	 * @return {Boolean}            Return `true` if value is changed.
+	 */
+	function resetSelectInputToValue( input, val ) {
+		if ( input.multiple ) {
+			return resetMultiSelectInputToValue( input, val );
+		}
+
+		var i,
+			valueChanged = false,
+			options = input.querySelectorAll( 'option' );
+
+		for ( i = 0; i < options.length; i++ ) {
+			if ( val === options[ i ].value && ! options[ i ].selected ) {
+				options[ i ].selected = true;
+				valueChanged = true;
+				continue;
+			}
+
+			if ( val !== options[ i ].value && options[ i ].selected ) {
+				options[ i ].selected = false;
+				valueChanged = true;
+			}
+		}
+
+		return valueChanged;
+	}
+
+	/**
+	 * Resets multiselect input to a value.
+	 *
+	 * @since 5.4
+	 *
+	 * @param {HTMLElement} input Select element.
+	 * @param {Object}      val   The value.
+	 * @return {Boolean}          Return `true` if value is changed.
+	 */
+	function resetMultiSelectInputToValue( input, val ) {
+		val = jsonParse( val );
+
+		if ( ! val ) {
+			return false;
+		}
+
+		var i, contained,
+			valueChanged = false,
+			options = input.querySelectorAll( 'option' );
+
+		for ( i = 0; i < options.length; i++ ) {
+			contained = objectContainValue( val, options[ i ].value );
+			if ( contained && ! options[ i ].selected ) {
+				options[ i ].selected = true;
+				valueChanged = true;
+				continue;
+			}
+
+			if ( ! contained && options[ i ].selected ) {
+				options[ i ].selected = false;
+				valueChanged = true;
+			}
+		}
+
+		return valueChanged;
+	}
+
+	/**
+	 * Checks if object contains a value.
+	 *
+	 * @since 5.4
+	 *
+	 * @param {Object} obj Object.
+	 * @param {Mixed}  val Value.
+	 * @return {Boolean}
+	 */
+	function objectContainValue( obj, val ) {
+		var x;
+
+		for ( x in obj ) {
+			if ( obj[ x ] === val ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	function clearDropzoneFiles( hiddenFileIdField ) {
+		var dropzoneElement = hiddenFileIdField.nextElementSibling;
+		if ( dropzoneElement && -1 !== dropzoneElement.className.indexOf( 'frm_dropzone' ) && 'object' === typeof dropzoneElement.dropzone && 'function' === typeof dropzoneElement.dropzone.removeAllFiles ) {
+			dropzoneElement.dropzone.removeAllFiles( true );
 		}
 	}
 
@@ -1580,8 +2308,9 @@ function frmProFormJS() {
 		return hiddenFields;
 	}
 
-	function setDefaultValue( input ) {
-		var $input = jQuery( input ),
+	function setDefaultValue( input, inContainer ) {
+		var placeholder, isMultipleSelect,
+			$input = jQuery( input ),
 			defaultValue = $input.data( 'frmval' );
 
 		if ( typeof defaultValue === 'undefined' && input.classList.contains( 'wp-editor-area' ) ) {
@@ -1589,7 +2318,10 @@ function frmProFormJS() {
 			var defaultField = document.getElementById( input.id + '-frmval' );
 			if ( defaultField !== null ) {
 				defaultValue = defaultField.value;
-				tinymce.get( input.id ).setContent( defaultValue );
+				var targetTinyMceEditor = tinymce.get( input.id );
+				if ( null !== targetTinyMceEditor ) {
+					targetTinyMceEditor.setContent( defaultValue );
+				}
 			}
 		} else if ( typeof defaultValue === 'undefined' && input.type === 'hidden' ) {
 			//with read only select input, value is in sibling select
@@ -1597,6 +2329,12 @@ function frmProFormJS() {
 			if ( $select.length > 0 ) {
 				defaultValue = $select.data( 'frmval' );
 			}
+		}
+
+		placeholder = defaultValue;
+		defaultValue = setDropdownPlaceholder( defaultValue, input );
+		if ( placeholder !== defaultValue ) {
+			placeholder = true;
 		}
 
 		if ( typeof defaultValue !== 'undefined' ) {
@@ -1608,25 +2346,51 @@ function frmProFormJS() {
 			} else if ( input.type === 'hidden' && input.name.indexOf( '[]' ) > -1 ) {
 				setHiddenCheckboxDefaultValue( input.name, defaultValue );
 
-			} else if ( input.type === 'hidden' && input.name.indexOf( '][' ) > -1 && numericKey.test( input.name ) ) {
+			// Set for hidden checkbox fields that aren't on the current page. Skip hidden fields in a repeater.
+			} else if ( ! inContainer && input.type === 'hidden' && input.name.indexOf( '][' ) > -1 && numericKey.test( input.name ) ) {
 				setHiddenCheckboxDefaultValue( input.name.replace( numericKey, '' ), defaultValue );
 
 			} else {
+				isMultipleSelect = false;
+
+				if ( placeholder && 'boolean' !== typeof placeholder && input.tagName === 'SELECT' && -1 !== input.className.indexOf( 'frm_chzn' ) ) {
+					placeholder = false;
+				}
+
+				if ( 'SELECT' === input.tagName && 'multiple' === input.getAttribute( 'multiple' ) ) {
+					isMultipleSelect = true;
+				}
+
 				if ( defaultValue.constructor === Object ) {
-					var addressType = input.getAttribute( 'name' ).split( '[' ).slice( -1 )[ 0 ];
-					if ( addressType !== null ) {
-						addressType = addressType.replace( ']', '' );
-						defaultValue = defaultValue[ addressType ];
-						if ( typeof defaultValue == 'undefined' ) {
-							defaultValue = '';
+					if ( ! isMultipleSelect ) {
+						var addressType = input.getAttribute( 'name' ).split( '[' ).slice( -1 )[ 0 ];
+						if ( addressType !== null ) {
+							addressType = addressType.replace( ']', '' );
+							defaultValue = defaultValue[ addressType ];
+							if ( typeof defaultValue === 'undefined' ) {
+								defaultValue = '';
+							}
 						}
 					}
 				}
 
-				input.value = defaultValue;
+				if ( isMultipleSelect ) {
+					selectMultiselectOptions( input, defaultValue );
+				} else {
+					if ( typeof defaultValue === 'object' ) {
+						// Don't replace a field shortcode with the id.
+						defaultValue = '[' + defaultValue + ']';
+					}
+
+					if ( isSlimSelect( input ) ) {
+						input.slim.setSelected( defaultValue );
+					} else {
+						input.value = defaultValue;
+					}
+				}
 			}
 
-			if ( input.tagName === 'SELECT' ) {
+			if ( ! placeholder && input.tagName === 'SELECT' ) {
 				maybeUpdateChosenOptions( input );
 				if ( input.value === '' ) {
 					setOtherSelectValue( input, defaultValue );
@@ -1637,11 +2401,53 @@ function frmProFormJS() {
 		}
 	}
 
+	function isSlimSelect( input ) {
+		return input.classList.contains( 'frm_slimselect' ) && 'object' === typeof input.slim;
+	}
+
+	function selectMultiselectOptions( select, values ) {
+		if ( isSlimSelect( select ) && 'function' === typeof Object.values ) {
+			select.slim.setSelected( Object.values( values ) );
+			return;
+		}
+
+		var valueKey, option;
+		for ( valueKey in values ) {
+			option = select.querySelector( 'option[value="' + values[ valueKey ] + '"]' );
+			if ( option ) {
+				option.selected = true;
+			}
+		}
+	}
+
+	/**
+	 * Select the option with placeholder if applicable.
+	 */
+	function setDropdownPlaceholder( defaultValue, input ) {
+		var placeholder;
+		if ( typeof defaultValue === 'undefined' && input.tagName === 'SELECT' ) {
+			placeholder = input.getAttribute( 'data-placeholder' );
+			if ( placeholder !== null ) {
+				defaultValue = '';
+			}
+		}
+		return defaultValue;
+	}
+
 	function setCheckboxOrRadioDefaultValue( inputName, defaultValue ) {
 		// Get all checkbox/radio inputs for this field
 		var radioInputs = document.getElementsByName( inputName ),
 			isSet = false,
 			firstInput = false;
+
+		if ( typeof defaultValue === 'object' ) {
+			// Convert the object to an array.
+			defaultValue = Object.keys( defaultValue ).map(
+				function( key ) {
+					return defaultValue[ key ];
+				}
+			);
+		}
 
 		// Loop through options and set the default value
 		for ( var i = 0, l = radioInputs.length; i < l; i++ ) {
@@ -1651,14 +2457,14 @@ function frmProFormJS() {
 
 			if ( radioInputs[ i ].type === 'hidden' ) {
 				// If field is read-only and there is a hidden input
-				if ( jQuery.isArray( defaultValue ) && defaultValue[ i ] !== null ) {
+				if ( Array.isArray( defaultValue ) && defaultValue[ i ] !== null ) {
 					radioInputs[ i ].value = defaultValue[ i ];
 				} else {
 					radioInputs[ i ].value = defaultValue;
 				}
 				isSet = true;
 			} else if ( radioInputs[ i ].value == defaultValue ||
-				( jQuery.isArray( defaultValue ) && defaultValue.indexOf( radioInputs[ i ].value ) > -1 ) ) {
+				( Array.isArray( defaultValue ) && defaultValue.indexOf( radioInputs[ i ].value ) > -1 ) ) {
 				// If input's value matches the default value, set checked to true
 
 				radioInputs[ i ].checked = true;
@@ -1679,7 +2485,15 @@ function frmProFormJS() {
 		// Get all the hidden inputs with the same name
 		var hiddenInputs = jQuery( 'input[name^="' + inputName + '"]' ).get();
 
-		if ( jQuery.isArray( defaultValue ) ) {
+		if ( typeof defaultValue === 'object' ) {
+			// Convert the object to an array.
+			defaultValue = Object.keys( defaultValue ).map(
+				function( key ) {
+					return defaultValue[ key ];
+				}
+			);
+		}
+		if ( Array.isArray( defaultValue ) ) {
 			for ( var i = 0, l = defaultValue.length; i < l; i++ ) {
 				if ( i in hiddenInputs ) {
 					hiddenInputs[ i ].value = defaultValue[ i ];
@@ -1721,7 +2535,7 @@ function frmProFormJS() {
 			typeof __FRMLOOKUP[ fieldId ] === 'undefined' ||
 			__FRMLOOKUP[ fieldId ].dependents.length < 1 ||
 			changedInput === null ||
-			typeof( changedInput ) === 'undefined'
+			typeof changedInput === 'undefined'
 		) {
 			return;
 		}
@@ -1739,9 +2553,11 @@ function frmProFormJS() {
 	 * Update all instances of a "watching" field
 	 *
 	 * @since 2.01.0
+	 *
 	 * @param {string} fieldId
 	 * @param {Object} parentRepeatArgs
 	 * @param {string} originalEvent
+	 * @return {void}
      */
 	function updateWatchingFieldById( fieldId, parentRepeatArgs, originalEvent ) {
 		var childFieldArgs = getLookupArgsForSingleField( fieldId );
@@ -1751,14 +2567,12 @@ function frmProFormJS() {
 			return;
 		}
 
-		if ( childFieldArgs.fieldType == 'lookup' ) {
+		if ( childFieldArgs.fieldType === 'lookup' ) {
 			updateLookupFieldOptions( childFieldArgs, parentRepeatArgs );
-		} else {
+		} else if ( originalEvent === 'value changed' ) {
 			// If the original event was NOT triggered from a direct value change to the Lookup field,
-			// do not update the text field value
-			if ( originalEvent === 'value changed' ) {
-				updateWatchingFieldValue( childFieldArgs, parentRepeatArgs );
-			}
+			// do not update the text field value.
+			updateWatchingFieldValue( childFieldArgs, parentRepeatArgs );
 		}
 	}
 
@@ -1779,7 +2593,7 @@ function frmProFormJS() {
 
 		for ( var i = 0, l = childFieldElements.length; i < l; i++ ) {
 			addRepeatRow( childFieldArgs, childFieldElements[ i ].id );
-			updateSingleLookupField( childFieldArgs, childFieldElements[ i ] );
+			updateSingleLookupField( childFieldArgs, childFieldElements[ i ]);
 		}
 	}
 
@@ -1810,7 +2624,7 @@ function frmProFormJS() {
 
 		for ( var i = 0, l = childFieldElements.length; i < l; i++ ) {
 			addRepeatRowForInput( childFieldElements[ i ].name, childFieldArgs );
-			updateSingleWatchingField( childFieldArgs, childFieldElements[ i ] );
+			updateSingleWatchingField( childFieldArgs, childFieldElements[ i ]);
 		}
 	}
 
@@ -1852,8 +2666,10 @@ function frmProFormJS() {
 	 * Update a standard field that is "watching" a Lookup
 	 *
 	 * @since 2.01.0
+	 *
 	 * @param {Object} childFieldArgs
 	 * @param {object} childElement
+	 * @return {void}
 	 */
 	function updateSingleWatchingField( childFieldArgs, childElement ) {
 		childFieldArgs.parentVals = getParentLookupFieldVals( childFieldArgs );
@@ -1907,7 +2723,7 @@ function frmProFormJS() {
 			return;
 		}
 
-		updateSingleWatchingField( childFieldArgs, input, 'value changed' );
+		updateSingleWatchingField( childFieldArgs, input );
 	}
 
 	/**
@@ -1942,8 +2758,8 @@ function frmProFormJS() {
 			parentValue = false;
 
 		for ( var i = 0, l = parentIds.length; i < l; i++ ) {
-			parentFieldArgs = getLookupArgsForSingleField( parentIds[ i ] );
-			parentValue = getFieldValue( parentFieldArgs, childFieldArgs );
+			parentFieldArgs = getLookupArgsForSingleField( parentIds[ i ]);
+			parentValue = getFieldValue( parentFieldArgs, childFieldArgs, 'lookup' );
 
 			// If any parents have blank values, don't waste time looking for values
 			if ( parentValue === '' || parentValue === false ) {
@@ -2007,11 +2823,14 @@ function frmProFormJS() {
 			disableLookup( childSelect );
 			disableFormPreLookup( childFieldArgs.formId );
 
-			getLookupValues( childFieldArgs, function( newOptions ) {
-				replaceSelectLookupFieldOptions( childFieldArgs, childSelect, newOptions );
-				triggerLookupOptionsLoaded( jQuery( childDiv ) );
-				enableFormAfterLookup( childFieldArgs.formId );
-			} );
+			getLookupValues(
+				childFieldArgs,
+				function( newOptions ) {
+					replaceSelectLookupFieldOptions( childFieldArgs, childSelect, newOptions );
+					triggerLookupOptionsLoaded( jQuery( childDiv ) );
+					enableFormAfterLookup( childFieldArgs.formId );
+				}
+			);
 		}
 	}
 
@@ -2059,13 +2878,13 @@ function frmProFormJS() {
 	 * @param {String} formId
 	 */
 	function enableFormAfterLookup( formId ) {
+		var form;
+
 		processesRunning--;
-
 		if ( processesRunning <= 0 ) {
-
-			var form = getFormById( formId );
+			form = getFormById( formId );
 			if ( form !== null ) {
-				frmFrontForm.removeSubmitLoading( jQuery( form ), 'enable', processesRunning );
+				removeSubmitLoading( form, formId, processesRunning );
 			}
 		}
 	}
@@ -2078,7 +2897,15 @@ function frmProFormJS() {
 	 * @returns {Element}
      */
 	function getFormById( formId ) {
-		return document.querySelector( '#frm_form_' + formId + '_container form' );
+		var form = document.querySelector( '#frm_form_' + formId + '_container form' );
+		if ( form === null ) {
+			// The order is switched on the back end.
+			form = document.getElementById( 'frm_form_' + formId + '_container' );
+			if ( form !== null ) {
+				form = form.closest( 'form' );
+			}
+		}
+		return form;
 	}
 
 	/**
@@ -2096,6 +2923,69 @@ function frmProFormJS() {
 	}
 
 	/**
+	 * @param {HTMLElement} element
+	 * @returns {bool}
+	 */
+	function isMultiSelect( element ) {
+		return element.tagName.toLowerCase() === 'select' && element.multiple;
+	}
+
+	/**
+	 * Gets selected options for a multiselect element.
+	 *
+	 * @param {HTMLElement} element
+	 * @returns {Array}
+	 */
+	function getSelectedOptions( element ) {
+		if ( isSlimSelect( element ) ) {
+			return element.slim.getSelected();
+		}
+
+		if ( ! isMultiSelect( element ) ) {
+			return element.value;
+		}
+
+		var i, option,
+			selectedOptions = [];
+		for ( i = 0; i < element.options.length; i++ ) {
+			option = element.options[i];
+			if ( option.selected ) {
+				selectedOptions.push( option.value );
+			}
+		}
+
+		return selectedOptions;
+	}
+
+	/**
+	 * Sets selected options for a dropdown element.
+	 *
+	 * @param {HTMLElement} element
+	 * @param {Array} values
+	 */
+	function setSelectedOptions( element, values ) {
+		var option;
+
+		if ( ! isMultiSelect( element ) ) {
+			element.value = values;
+			return;
+		}
+
+		// Reset all options to unselected
+		Array.from( element.options ).forEach( function( option ) {
+			option.selected = false;
+		});
+
+		// Set selected attribute for the specified values
+		values.forEach( function( value ) {
+			option = element.querySelector( 'option[value="' + value + '"]' );
+			if ( option ) {
+				option.selected = true;
+			}
+		});
+	}
+
+	/**
 	 * Replace the options in a Select Lookup field
 	 *
 	 * @since 2.01.0
@@ -2106,17 +2996,36 @@ function frmProFormJS() {
 	 * @param {Array} newOptions
 	 */
 	function replaceSelectLookupFieldOptions( fieldArgs, childSelect, newOptions ) {
-		var origVal = childSelect.value;
+		var origVal, i, optsLength, newOption, optionData;
+
+		// Get selected options
+		origVal = getSelectedOptions( childSelect );
 
 		// Remove old options
-		for ( var i = childSelect.options.length; i > 0; i-- ) {
+		for ( i = childSelect.options.length; i > 0; i-- ) {
 			childSelect.remove( i );
 		}
 
 		// Add new options
-		var optsLength = newOptions.length;
+		optsLength = newOptions.length;
+		optionData = [];
+
+		if ( '' === childSelect.options[0].value ) {
+			optionData.push({
+				text: childSelect.options[0].textContent,
+				value: childSelect.options[0].value,
+				placeholder: true
+			});
+		}
+
 		for ( i = 0; i < optsLength; i++ ) {
-			childSelect.options[ i + 1 ] = new Option( newOptions[ i ], newOptions[ i ], false, false );
+			newOption                    = new Option( newOptions[ i ], newOptions[ i ], false, false );
+			childSelect.options[ i + 1 ] = newOption;
+			optionData.push( newOption );
+		}
+
+		if ( childSelect.slim ) {
+			childSelect.slim.setData( optionData );
 		}
 
 		setSelectLookupVal( childSelect, origVal );
@@ -2126,15 +3035,29 @@ function frmProFormJS() {
 		maybeUpdateChosenOptions( childSelect );
 
 		// Trigger a change if the new value is different from the old value
-		if ( childSelect.value != origVal ) {
+		if ( getSelectedOptions( childSelect ).toString() !== origVal.toString() ) {
 			triggerChange( jQuery( childSelect ), fieldArgs.fieldKey );
 		}
 	}
 
-	// Set the value in a refreshed Lookup Field
+	/**
+	 * Set the value in a refreshed Lookup Field.
+	 *
+	 * @param {HTMLElement} childSelect
+	 * @param {Array|string} origVal
+	 * @returns {void}
+	 */
 	function setSelectLookupVal( childSelect, origVal ) {
+		if ( isSlimSelect( childSelect ) ) {
+			if ( ! valueIsSingleItemArrayWithEmptyString( origVal ) ) {
+				setSlimValue( childSelect, origVal );
+			}
+			return;
+		}
+
 		// Try setting the dropdown to the original value
-		childSelect.value = origVal;
+		setSelectedOptions( childSelect, origVal );
+
 		if ( childSelect.value === '' ) {
 			// If the original value is no longer present, try setting to default value
 			var defaultValue = childSelect.getAttribute( 'data-frmval' );
@@ -2142,6 +3065,16 @@ function frmProFormJS() {
 				childSelect.value = defaultValue;
 			}
 		}
+	}
+
+	/**
+	 * @since 6.8.3
+	 *
+	 * @param {Array|string} value
+	 * @returns {boolean}
+	 */
+	function valueIsSingleItemArrayWithEmptyString( value ) {
+		return Array.isArray( value ) && 1 === value.length && '' === value[0];
 	}
 
 	/**
@@ -2180,9 +3113,11 @@ function frmProFormJS() {
 	 * @param {object} childDiv
      */
 	function replaceCbRadioLookupOptions( childFieldArgs, childDiv ) {
-		var optContainer = childDiv.getElementsByClassName( 'frm_opt_container' )[ 0 ],
-			inputs = optContainer.getElementsByTagName( 'input' ),
-			currentValue = '';
+		var optContainer, inputs, currentValue, defaultValue, form, data, success;
+
+		optContainer = childDiv.getElementsByClassName( 'frm_opt_container' )[ 0 ];
+		inputs = optContainer.getElementsByTagName( 'input' );
+		currentValue = '';
 
 		addLoadingIconJS( childDiv, optContainer );
 
@@ -2192,41 +3127,44 @@ function frmProFormJS() {
 			currentValue = getValuesFromCheckboxInputs( inputs );
 		}
 
-		var defaultValue = jQuery( inputs[ 0 ] ).data( 'frmval' );
+		defaultValue = jQuery( inputs[ 0 ]).data( 'frmval' );
 		disableFormPreLookup( childFieldArgs.formId );
 
-		jQuery.ajax( {
-			type: 'POST',
-			url: frm_js.ajax_url,
-			data: {
-				action: 'frm_replace_cb_radio_lookup_options',
-				parent_fields: childFieldArgs.parents,
-				parent_vals: childFieldArgs.parentVals,
-				field_id: childFieldArgs.fieldId,
-				container_field_id: getContainerFieldId( childFieldArgs ),
-				row_index: childFieldArgs.repeatRow,
-				current_value: currentValue,
-				default_value: defaultValue,
-				nonce: frm_js.nonce,
-			},
-			success: function( newHtml ) {
-				optContainer.innerHTML = newHtml;
+		form = getFormById( childFieldArgs.formId );
 
-				removeLoadingIconJS( childDiv, optContainer );
+		data = {
+			action: 'frm_replace_cb_radio_lookup_options',
+			parent_fields: childFieldArgs.parents,
+			parent_vals: childFieldArgs.parentVals,
+			field_id: childFieldArgs.fieldId,
+			container_field_id: getContainerFieldId( childFieldArgs ),
+			row_index: childFieldArgs.repeatRow,
+			current_value: currentValue,
+			default_value: defaultValue,
+			nonce: frm_js.nonce
+		};
 
-				if ( inputs.length == 1 && inputs[ 0 ].value === '' ) {
-					maybeHideRadioLookup( childFieldArgs, childDiv );
-				} else {
-					maybeShowRadioLookup( childFieldArgs, childDiv );
-					maybeSetDefaultCbRadioValue( childFieldArgs, inputs, defaultValue );
-				}
+		success = function( newHtml ) {
+			var input;
+			optContainer.innerHTML = newHtml;
 
-				triggerChange( jQuery( inputs[ 0 ] ), childFieldArgs.fieldKey );
-				triggerLookupOptionsLoaded( jQuery( childDiv ) );
+			removeLoadingIconJS( childDiv, optContainer );
 
-				enableFormAfterLookup( childFieldArgs.formId );
-			},
-		} );
+			if ( inputs.length == 1 && inputs[ 0 ].value === '' ) {
+				maybeHideRadioLookup( childFieldArgs, childDiv );
+			} else {
+				maybeShowRadioLookup( childFieldArgs, childDiv );
+				maybeSetDefaultCbRadioValue( childFieldArgs, inputs, defaultValue );
+			}
+
+			input = inputs[0];
+			triggerChange( jQuery( input ), childFieldArgs.fieldKey );
+			triggerLookupOptionsLoaded( jQuery( childDiv ) );
+
+			enableFormAfterLookup( childFieldArgs.formId );
+		};
+
+		postToAjaxUrl( form, data, success );
 	}
 
 	/**
@@ -2249,7 +3187,7 @@ function frmProFormJS() {
 
 				maybeShowRadioLookup( childFieldArgs, childDiv );
 				triggerLookupOptionsLoaded( jQuery( childDiv ) );
-			} );
+			});
 		}
 	}
 
@@ -2258,21 +3196,27 @@ function frmProFormJS() {
 	 * @since 4.0.03
 	 */
 	function getLookupValues( childFieldArgs, callback ) {
-		jQuery.ajax( {
-			type: 'POST',
-			url: frm_js.ajax_url,
-			dataType: 'json',
-			data: {
+		disableFormPreLookup( childFieldArgs.formId );
+
+
+		postToAjaxUrl(
+			getFormById( childFieldArgs.formId ),
+			{
 				action: 'frm_replace_lookup_field_options',
 				parent_fields: childFieldArgs.parents,
 				parent_vals: childFieldArgs.parentVals,
 				field_id: childFieldArgs.fieldId,
-				nonce: frm_js.nonce,
+				nonce: frm_js.nonce
 			},
-			success: function( newOptions ) {
+			function( newOptions ) {
+				enableFormAfterLookup( childFieldArgs.formId );
 				callback( newOptions );
 			},
-		} );
+			false,
+			{
+				dataType: 'json'
+			}
+		);
 	}
 
 	/**
@@ -2342,6 +3286,7 @@ function frmProFormJS() {
 	 * @param {string} childFieldArgs.fieldId
 	 * @param {string} childFieldArgs.repeatRow
 	 * @param {object} childDiv
+	 * @return {void}
 	 */
 	function maybeShowRadioLookup( childFieldArgs, childDiv ) {
 		if ( isFieldCurrentlyShown( childDiv.id, childFieldArgs.formId ) ) {
@@ -2354,7 +3299,7 @@ function frmProFormJS() {
 			showFieldContainer( childDiv.id );
 		} else {
 			logicArgs.containerId = childDiv.id;
-			logicArgs.repeatRow = childFieldArgs.repeatRow;
+			logicArgs.repeatRow   = childFieldArgs.repeatRow;
 			hideOrShowSingleField( logicArgs );
 		}
 	}
@@ -2391,25 +3336,30 @@ function frmProFormJS() {
 
 			disableFormPreLookup( childFieldArgs.formId );
 
-			jQuery.ajax( {
-				type: 'POST',
-				url: frm_js.ajax_url,
-				data: {
+			postToAjaxUrl(
+				getFormById( childFieldArgs.formId ),
+				{
 					action: 'frm_get_lookup_text_value',
 					parent_fields: childFieldArgs.parents,
 					parent_vals: childFieldArgs.parentVals,
 					field_id: childFieldArgs.fieldId,
-					nonce: frm_js.nonce,
+					nonce: frm_js.nonce
 				},
-				success: function( newValue ) {
+				function( newValue ) {
+					var parentContainer = document.getElementById( 'frm_field_' + childFieldArgs.parents[0] + '_container' );
+					if ( parentContainer && ! parentContainer.getAttribute( 'frm-completed-text-lookup' ) ) {
+						parentContainer.setAttribute( 'frm-completed-text-lookup', 1 );
+						checkFieldsWithConditionalLogicDependentOnThis( childFieldArgs.parents[0], jQuery( parentContainer ).find( 'input' ) );
+					}
+
 					if ( ! isChildInputConditionallyHidden( childInput, childFieldArgs.formId ) && childInput.value != newValue ) {
 						insertValueInFieldWatchingLookup( childFieldArgs.fieldKey, childInput, newValue );
 					}
 
 					enableFormAfterLookup( childFieldArgs.formId );
 					checkQueueAfterLookupCompleted( childInput.id );
-				},
-			} );
+				}
+			);
 		}
 	}
 
@@ -2444,7 +3394,7 @@ function frmProFormJS() {
 			lookupQueues[ elementId ] = [];
 		}
 
-		lookupQueues[ elementId ].push( { childFieldArgs: childFieldArgs, childInput: childInput } );
+		lookupQueues[ elementId ].push({ childFieldArgs: childFieldArgs, childInput: childInput });
 	}
 
 	/**
@@ -2487,6 +3437,21 @@ function frmProFormJS() {
 	}
 
 	/**
+	 * Convert html entities back into their character values
+	 *
+	 * @param {string} string
+	 * @returns {string}
+	 */
+	function decodeEntities( string ) {
+		var decoded = string.replace( /&amp;/g, '&' )
+			.replace( /&lt;/g, '<' )
+			.replace( /&gt;/g, '>' )
+			.replace( /&quot;/g, '"' )
+			.replace( /&#039;/g, '\'' );
+		return decoded;
+	}
+
+	/**
 	 * Insert a new text field Lookup value
 	 *
 	 * @since 2.01.0
@@ -2495,8 +3460,7 @@ function frmProFormJS() {
 	 * @param {string} newValue
  	 */
 	function insertValueInFieldWatchingLookup( fieldKey, childInput, newValue ) {
-		newValue = newValue.replace( /&amp;/g, '&' );
-		childInput.value = newValue;
+		childInput.value = decodeEntities( newValue );
 		triggerChange( jQuery( childInput ), fieldKey );
 	}
 
@@ -2550,7 +3514,7 @@ function frmProFormJS() {
 	function cloneObjectForDynamicFields( depFieldArgs ) {
 		var dataLogic = {
 			actualValue: depFieldArgs.dataLogic.actualValue,
-			fieldId: depFieldArgs.dataLogic.fieldId,
+			fieldId: depFieldArgs.dataLogic.fieldId
 		};
 
 		var dynamicFieldArgs = {
@@ -2561,11 +3525,13 @@ function frmProFormJS() {
 			repeatRow: depFieldArgs.repeatRow,
 			dataLogic: dataLogic,
 			children: '',
-			inputType: depFieldArgs.inputType,
+			inputType: depFieldArgs.inputType
 		};
 
 		return dynamicFieldArgs;
 	}
+
+	pendingDynamicFieldAjax = [];
 
 	/**
 	 * Update a Dynamic List field
@@ -2577,41 +3543,26 @@ function frmProFormJS() {
 	 * @param {string} depFieldArgs.fieldId
  	 */
 	function updateDynamicListData( depFieldArgs, onCurrentPage ) {
+		var $fieldDiv;
+
 		if ( onCurrentPage ) {
-			var $fieldDiv = jQuery( '#' + depFieldArgs.containerId );
+			$fieldDiv = jQuery( '#' + depFieldArgs.containerId );
 			addLoadingIcon( $fieldDiv );
 		}
 
-		jQuery.ajax( {
-			type: 'POST',
-			url: frm_js.ajax_url,
+		pendingDynamicFieldAjax.push({
+			args: {
+				depFieldArgs: depFieldArgs,
+				onCurrentPage: onCurrentPage
+			},
 			data: {
-				action: 'frm_fields_ajax_get_data',
 				entry_id: depFieldArgs.dataLogic.actualValue,
 				current_field: depFieldArgs.fieldId,
 				hide_id: depFieldArgs.containerId,
 				on_current_page: onCurrentPage,
-				nonce: frm_js.nonce,
-			},
-			success: function( html ) {
-				if ( onCurrentPage ) {
-					var $optContainer = $fieldDiv.find( '.frm_opt_container, .frm_data_container' );
-					$optContainer.html( html );
-					var $listInputs = $optContainer.children( 'input' );
-					var listVal = $listInputs.val();
-
-					removeLoadingIcon( $optContainer );
-
-					if ( html === '' || listVal === '' ) {
-						hideDynamicField( depFieldArgs );
-					} else {
-						showDynamicField( depFieldArgs, $fieldDiv, $listInputs, true );
-					}
-				} else {
-					updateHiddenDynamicListField( depFieldArgs, html );
-				}
-			},
-		} );
+				nonce: frm_js.nonce
+			}
+		});
 	}
 
 	/**
@@ -2624,7 +3575,7 @@ function frmProFormJS() {
 	 * @param {string|Array} depFieldArgs.dataLogic.actualValue
 	 * @param {string} depFieldArgs.fieldId
 	 */
-	function updateDynamicFieldOptions( depFieldArgs, fieldElement ) {
+	function updateDynamicFieldOptions( depFieldArgs ) {
 		var $fieldDiv = jQuery( '#' + depFieldArgs.containerId ),
 			$fieldInputs = $fieldDiv.find( 'select[name^="item_meta"], input[name^="item_meta"]' ),
 			prevValue = getFieldValueFromInputs( $fieldInputs ),
@@ -2633,10 +3584,9 @@ function frmProFormJS() {
 
 		addLoadingIcon( $fieldDiv );
 
-		jQuery.ajax( {
-			type: 'POST',
-			url: frm_js.ajax_url,
-			data: {
+		postToAjaxUrl(
+			getFormById( depFieldArgs.formId ),
+			{
 				action: 'frm_fields_ajax_data_options',
 				trigger_field_id: depFieldArgs.dataLogic.fieldId,
 				entry_id: depFieldArgs.dataLogic.actualValue,
@@ -2645,9 +3595,9 @@ function frmProFormJS() {
 				container_id: depFieldArgs.containerId,
 				editing_entry: editingEntry,
 				prev_val: prevValue,
-				nonce: frm_js.nonce,
+				nonce: frm_js.nonce
 			},
-			success: function( html ) {
+			function( html ) {
 				var $optContainer = $fieldDiv.find( '.frm_opt_container, .frm_data_container' );
 				$optContainer.html( html );
 				var $dynamicFieldInputs = $optContainer.find( 'select, input[type="checkbox"], input[type="radio"]' );
@@ -2660,8 +3610,8 @@ function frmProFormJS() {
 					var valueChanged = dynamicFieldValueChanged( depFieldArgs, $dynamicFieldInputs, prevValue );
 					showDynamicField( depFieldArgs, $fieldDiv, $dynamicFieldInputs, valueChanged );
 				}
-			},
-		} );
+			}
+		);
 	}
 
 	function dynamicFieldValueChanged( depFieldArgs, $dynamicFieldInputs, prevValue ) {
@@ -2724,7 +3674,7 @@ function frmProFormJS() {
 		if ( currentHTML.indexOf( 'frm-loading-img' ) > -1 ) {
 			// Loading image already present
 		} else {
-			optContainer.style.display = 'none';
+			optContainer.classList.add( 'frm_hidden' );
 
 			var loadingIcon = document.createElement( 'span' );
 			loadingIcon.setAttribute( 'class', 'frm-loading-img' );
@@ -2745,7 +3695,7 @@ function frmProFormJS() {
 			loadingIcon.parentNode.removeChild( loadingIcon );
 		}
 
-		optContainer.style.display = 'block';
+		optContainer.classList.remove( 'frm_hidden' );
 	}
 
 	// Get the field value from all the inputs
@@ -2753,16 +3703,18 @@ function frmProFormJS() {
 		var fieldValue = [],
 			currentValue = '';
 
-		$inputs.each( function() {
-			currentValue = this.value;
-			if ( this.type === 'radio' || this.type === 'checkbox' ) {
-				if ( this.checked === true ) {
+		$inputs.each(
+			function() {
+				currentValue = this.value;
+				if ( this.type === 'radio' || this.type === 'checkbox' ) {
+					if ( this.checked === true ) {
+						fieldValue.push( currentValue );
+					}
+				} else if ( currentValue !== '' ) {
 					fieldValue.push( currentValue );
 				}
-			} else if ( currentValue !== '' ) {
-				fieldValue.push( currentValue );
 			}
-		} );
+		);
 
 		if ( fieldValue.length === 0 ) {
 			fieldValue = '';
@@ -2783,8 +3735,8 @@ function frmProFormJS() {
 			$fieldDiv.show();
 		}
 
-		if ( $fieldInputs.hasClass( 'frm_chzn' ) ) {
-			loadChosen();
+		if ( $fieldInputs.hasClass( 'frm_chzn' ) || $fieldInputs.hasClass( 'frm_slimselect' ) ) {
+			loadAutocomplete();
 		}
 
 		if ( valueChanged === true ) {
@@ -2804,7 +3756,7 @@ function frmProFormJS() {
 
 		var triggers = __FRMCALC.triggers;
 		if ( triggers ) {
-			jQuery( triggers.join() ).trigger( { type: 'change', selfTriggered: true } );
+			jQuery( triggers.join() ).trigger({ type: 'change', selfTriggered: true });
 		}
 
 		triggerCalcWithoutFields();
@@ -2842,7 +3794,7 @@ function frmProFormJS() {
 
 		var keys = calc.total;
 		var len = keys.length;
-		var pages = getStartEndPage( allCalcs.calc[ keys[ 0 ] ] );
+		var pages = getStartEndPage( allCalcs.calc[ keys[ 0 ] ]);
 
 		// loop through each calculation this field is used in
 		for ( var i = 0, l = len; i < l; i++ ) {
@@ -2873,7 +3825,7 @@ function frmProFormJS() {
 
 			formContainer = closest( fieldContainer, function( el ) {
 				return el.tagName === 'FORM';
-			} );
+			});
 
 			formId = formContainer.elements.namedItem( 'form_id' ).value;
 		}
@@ -3027,15 +3979,82 @@ function frmProFormJS() {
 		alert( alertMessage );
 	}
 
+	/**
+	 * Adjust a Date for timezone offset
+	 *
+	 * @param {Date} date
+	 * @returns {Date}
+	 */
+	function treatAsUTC( date ) {
+		var copy = new Date( date.valueOf() );
+		copy.setMinutes( copy.getMinutes() - copy.getTimezoneOffset() );
+		return copy;
+	}
+
+	/**
+	 * Try to change date strings and ints to Date objects before calculations
+	 *
+	 * @param {mixed} date
+	 * @returns {mixed}
+	 */
+	function normalizeDate( date ) {
+		switch ( typeof date ) {
+			case 'number': return new Date( date * 86400000 ); // 1000 * 60 * 60 * 24 (milliseconds per day)
+			case 'string': return new Date( date );
+			default:       return date;
+		}
+	}
+
+	/**
+	 * Calculate the difference between two dates.
+	 * This is triggered by the [age] and [date_calc] shortcodes.
+	 *
+	 * @param {mixed} a                    Field date.
+	 * @param {mixed} b                    Compare date.
+	 * @param {string} format              Either 'days' or 'years'.
+	 * @param {number|undefined} fieldId   This is defined by the datepicker add-on.
+	 * @param {number|undefined} compareId This is defined by the datepicker add-on.
+	 * @returns {int}
+	 */
+	function calculateDateDifference( a, b, format, fieldId, compareId ) {
+		a = normalizeDate( a );
+		b = normalizeDate( b );
+
+		switch ( format ) {
+			case 'days': {
+				if ( 'function' === typeof window.frmCalcDateDifferenceDays && fieldId && compareId ) {
+					return window.frmCalcDateDifferenceDays( treatAsUTC( a ), treatAsUTC( b ), fieldId, compareId );
+				}
+
+				return Math.floor( ( treatAsUTC( b ) - treatAsUTC( a ) ) / 86400000 ); // 1000 * 60 * 60 * 24 (milliseconds per day)
+			}
+
+			case 'years': default: {
+				var years = b.getFullYear() - a.getFullYear();
+				if ( b.getMonth() < a.getMonth() || b.getMonth() === a.getMonth() && b.getDate() < a.getDate() ) {
+					years--;
+				}
+
+				return years;
+			}
+		}
+	}
+
 	function doSingleCalculation( allCalcs, fieldKey, vals, triggerField ) {
-		var thisCalc = allCalcs.calc[ fieldKey ],
+		var currency, total, dec, updatedTotal,
+			thisCalc = allCalcs.calc[ fieldKey ],
 			thisFullCalc = thisCalc.calc,
 			totalField = jQuery( document.getElementById( 'field_' + fieldKey ) ),
 			fieldInfo = {
 				triggerField: triggerField,
 				inSection: false,
-				thisFieldCall: 'input[id^="field_' + fieldKey + '-"]',
+				thisFieldCall: 'input[id^="field_' + fieldKey + '-"]'
 			};
+
+		// exit early for sliders as there is no calculation for such types and avoid errors that might rise due to formatting the value
+		if ( totalField.attr( 'type' ) === 'range' ) {
+			return;
+		}
 
 		// TODO: update this to work more like conditional logic
 		if ( totalField.length < 1 && typeof triggerField !== 'undefined' ) {
@@ -3052,18 +4071,21 @@ function frmProFormJS() {
 		// loop through the fields in this calculation
 		thisFullCalc = getValsForSingleCalc( thisCalc, thisFullCalc, allCalcs, vals, fieldInfo );
 
-		var total = '';
+		total = '';
+		dec = '';
 
-		if ( thisCalc.calc_type === 'text' ) {
+		if ( 'function' === typeof window[ 'frmProGetCalcTotal' + thisCalc.calc_type ]) {
+			total = window[ 'frmProGetCalcTotal' + thisCalc.calc_type ].call( thisCalc, thisFullCalc );
+		} else if ( thisCalc.calc_type === 'text' ) {
 			total = thisFullCalc;
 		} else {
 			// Set the number of decimal places
-			var dec = thisCalc.calc_dec;
+			dec = thisCalc.calc_dec;
 
 			// allow .toFixed for reverse compatibility
 			if ( thisFullCalc.indexOf( ').toFixed(' ) > -1 ) {
 				var calcParts = thisFullCalc.split( ').toFixed(' );
-				if ( isNumeric( calcParts[ 1 ] ) ) {
+				if ( isNumeric( calcParts[ 1 ]) ) {
 					dec = calcParts[ 1 ];
 					thisFullCalc = thisFullCalc.replace( ').toFixed(' + dec, '' );
 				}
@@ -3089,49 +4111,260 @@ function frmProFormJS() {
 			}
 		}
 
-		if ( totalField.val() !== total ) {
-			totalField.val( total );
-			if ( triggerField === null || typeof triggerField === 'undefined' || totalField.attr( 'name' ) != triggerField.attr( 'name' ) ) {
-				triggerChange( totalField, fieldKey );
+		if ( thisCalc.is_currency === true && isNumeric( total ) ) {
+			currency = getCurrencyFromCalcRule( thisCalc );
+			if ( currency.decimals > 0 ) {
+				total = Math.round10( total, currency.decimals );
+				total = maybeAddTrailingZeroToPrice( total, currency );
+				dec = currency.decimals;
 			}
 		}
+
+		if ( totalField.val() === total ) {
+			setDisplayedTotal( totalField, total, currency );
+			return;
+		}
+
+		updatedTotal = false;
+		if ( ( isNumeric( dec ) || thisCalc.is_currency ) && [ 'number', 'text' ].indexOf( totalField.attr( 'type' ) ) > -1 ) {
+			if ( total.toString().slice( -1 ) == '0' && navigator.userAgent.toLowerCase().indexOf( 'firefox' ) > -1 ) {
+				// Change the input to text in Firefox. Otherwise, trailing decimals will fail.
+				totalField[0].setAttribute( 'type', 'text' );
+			}
+
+			if ( totalField.parent().is( '.frm_input_group.frm_with_box.frm_hidden' ) && 'string' === typeof total ) {
+				updatedTotal = true;
+				totalField.val( total.replace( ',', '.' ) );
+			}
+		}
+
+		if ( ! updatedTotal ) {
+			totalField.val( total );
+		}
+
+		triggerEvent( document, 'frmCalcUpdatedTotal', {
+			totalField: totalField,
+			total: total
+		});
+
+		if ( triggerField === null || typeof triggerField === 'undefined' || totalField.attr( 'name' ) != triggerField.attr( 'name' ) ) {
+			triggerChange( totalField, fieldKey );
+		}
+
+		setDisplayedTotal( totalField, total, currency );
+	}
+
+	/**
+	 * Show the total for frm_total fields.
+	 */
+	function setDisplayedTotal( totalField, total, currency ) {
+		var prepend, append,
+			showTotal = totalField.parent().prev();
+
+		if ( ! showTotal.hasClass( 'frm_total_formatted' ) ) {
+			return;
+		}
+
+		prepend = showTotal.data( 'prepend' );
+		append = showTotal.data( 'append' );
+		if ( typeof prepend === 'undefined' ) {
+			prepend = '';
+		}
+		if ( typeof append === 'undefined' ) {
+			append = '';
+		}
+
+		if ( typeof currency === 'object' ) {
+			total = formatCurrency( total, currency );
+			if ( currency.symbol_left === prepend ) {
+				prepend = '';
+			}
+			if ( currency.symbol_right === append ) {
+				append = '';
+			}
+		}
+
+		if ( prepend !== '' ) {
+			prepend = '<span class="frm_inline_pre">' + prepend + '</span>';
+		}
+
+		if ( append !== '' ) {
+			append = '<span class="frm_inline_pre">' + append + '</span>';
+		}
+
+		showTotal.html( prepend + '<span class="frm_inline_total">' + total + '</span>' + append );
 	}
 
 	function getValsForSingleCalc( thisCalc, thisFullCalc, allCalcs, vals, fieldInfo ) {
-		var fCount = thisCalc.fields.length;
-		for ( var f = 0, c = fCount; f < c; f++ ) {
-			var field = {
+		var fCount, f, field, date, findVar;
+
+		fCount = thisCalc.fields.length;
+
+		for ( f = 0; f < fCount; f++ ) {
+			field = {
 				triggerField: fieldInfo.triggerField,
 				thisFieldId: thisCalc.fields[ f ],
 				inSection: fieldInfo.inSection,
 				valKey: fieldInfo.inSection + '' + thisCalc.fields[ f ],
 				thisField: allCalcs.fields[ thisCalc.fields[ f ] ],
 				thisFieldCall: 'input' + allCalcs.fieldKeys[ thisCalc.fields[ f ] ],
+				formID: thisCalc.form_id
 			};
 
 			field = getCallForField( field, allCalcs );
-			if ( thisCalc.calc_type === 'text' ) {
+
+			if ( ! thisCalc.calc_type ) {
+				// Math calc type.
+				field.valKey = 'num' + field.valKey;
+				vals = getCalcFieldId( field, allCalcs, vals );
+
+				if ( typeof vals[ field.valKey ] === 'undefined' || isNaN( vals[ field.valKey ]) ) {
+					vals[ field.valKey ] = 0;
+
+					if ( field.thisField.type === 'date' ) {
+						date = tryToGetDateValue( field );
+						if ( null !== date ) {
+							vals[ field.valKey ] = Math.floor( date.getTime() / 86400000 );
+						} else {
+							thisFullCalc = '';
+						}
+					}
+				} else if ( 0 === vals[ field.valKey ] && field.thisField.type === 'date' && dateValueShouldBeClearedForDateCalculation( field, fieldInfo ) ) {
+					thisFullCalc = '';
+				}
+			} else {
+				// Text calc type.
 				field.valKey = 'text' + field.valKey;
 				vals = getTextCalcFieldId( field, vals );
 				if ( typeof vals[ field.valKey ] === 'undefined' ) {
 					vals[ field.valKey ] = '';
 				}
-			} else {
-				field.valKey = 'num' + field.valKey;
-				vals = getCalcFieldId( field, allCalcs, vals );
-				if ( typeof vals[ field.valKey ] === 'undefined' || isNaN( vals[ field.valKey ] ) ) {
-					vals[ field.valKey ] = 0;
-				}
-				if ( field.thisField.type === 'date' && vals[ field.valKey ] === 0 ) {
-					thisFullCalc = '';
-				}
 			}
 
-			var findVar = '[' + field.thisFieldId + ']';
-			findVar = findVar.replace( /([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1" );
-			thisFullCalc = thisFullCalc.replace( new RegExp( findVar, 'g' ), vals[ field.valKey ] );
+			if ( thisCalc.calc_type === 'text' ) {
+				thisFullCalc = replaceShortcodesWithShowOptions( thisFullCalc, vals, field );
+			}
+
+			findVar = '[' + field.thisFieldId + ']';
+			findVar = findVar.replace( /([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1' );
+			thisFullCalc = thisFullCalc.replace( new RegExp( findVar, 'g' ), vals[ field.valKey ]);
 		}
+
 		return thisFullCalc;
+	}
+
+	/**
+	 * Support show=label (for field with options), show=first and show=last (for name fields)
+	 * in text calculations.
+	 *
+	 * @param {String} fullCalc
+	 * @param {Array} vals
+	 * @param {Object} field
+	 * @returns {String}
+	 */
+	function replaceShortcodesWithShowOptions( fullCalc, vals, field ) {
+		fullCalc = replaceShowShortcode(
+			fullCalc, vals, field, 'label',
+			function() {
+				return getOptionLabelsFromValues( vals[ field.valKey ], field );
+			}
+		);
+
+		Array.prototype.forEach.call(
+			[ 'first', 'middle', 'last' ],
+			function( nameFieldPart ) {
+				fullCalc = replaceNameShortcode( fullCalc, vals, field, nameFieldPart );
+			}
+		);
+
+		return fullCalc;
+	}
+
+	function replaceNameShortcode( fullCalc, vals, field, show ) {
+		var valueCallback = function() {
+			var match = false;
+			document.querySelectorAll( field.thisFieldCall ).forEach(
+				function( input ) {
+					if ( show === input.id.substr( -show.length ) ) {
+						match = input;
+					}
+				}
+			);
+			return match ? match.value : '';
+		};
+		return replaceShowShortcode( fullCalc, vals, field, show, valueCallback );
+	}
+
+	function replaceShowShortcode( fullCalc, vals, field, show, valueCallback ) {
+		var findVar;
+
+		findVar = '[' + field.thisFieldId + ' show=' + show + ']';
+		if ( -1 === fullCalc.indexOf( findVar ) ) {
+			return fullCalc;
+		}
+
+		vals[ field.valKey + show ] = valueCallback();
+		findVar                     = findVar.replace( /([.*+?^=!:${}()|\[\]\/\\])/g, '\\$1' );
+		fullCalc                    = fullCalc.replace( new RegExp( findVar, 'g' ), vals[ field.valKey + show ]);
+
+		return fullCalc;
+	}
+
+	function tryToGetDateValue( field ) {
+		var $element = jQuery( field.thisField.key );
+		return $element.hasClass( 'hasDatepicker' ) ? $element.datepicker( 'getDate' ) : null;
+	}
+
+	/**
+	 * Check if a date value is ready for use in a calculation.
+	 */
+	function dateValueShouldBeClearedForDateCalculation( field, fieldInfo ) {
+		if ( fieldInfo.triggerField !== null ) {
+			if ( fieldInfo.triggerField.is( 'input' ) ) {
+				if ( datepickerFieldShouldBeClearedForDateCalculation( fieldInfo.triggerField ) ) {
+					return fieldShouldBeClearedForDateCalculation( field.thisFieldCall, field.thisField.key );
+				}
+				return '' === fieldInfo.triggerField.val();
+			}
+			return fieldInfo.triggerField.is( 'div' ) && fieldInfo.triggerField.end().is( 'input' ) && '' === fieldInfo.triggerField.end().val();
+		} else if ( fieldShouldBeClearedForDateCalculation( field.thisFieldCall, field.thisField.key ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	function datepickerFieldShouldBeClearedForDateCalculation( field ) {
+		var dateValue = field.hasClass( 'hasDatepicker' ) ? field.datepicker( 'getDate' ) : null;
+		return null !== dateValue && -72000000 !== dateValue.getTime();
+	}
+
+	function fieldShouldBeClearedForDateCalculation( fieldCall, fieldKey ) {
+		return 0 === fieldCall.indexOf( 'input' ) && 0 === fieldKey.indexOf( '[id=' ) && '' === jQuery( fieldKey ).val();
+	}
+
+	function getOptionLabelsFromValues( value, field ) {
+		var fieldId, options, split, labels, length, index;
+
+		fieldId = field.thisFieldId;
+		if ( 'undefined' === typeof __FRMCALC.options || 'undefined' === typeof __FRMCALC.options[ fieldId ]) {
+			return value;
+		}
+
+		options = __FRMCALC.options[ fieldId ];
+
+		if ( 'checkbox' === field.thisField.type ) {
+			split = value.split( ', ' );
+			labels = [];
+			length = split.length;
+			for ( index = 0; index < length; ++index ) {
+				if ( 'undefined' !== typeof options[ split[ index ] ]) {
+					labels.push( options[ split[ index ] ]);
+				}
+			}
+			return labels.join( ', ' );
+		}
+
+		return 'undefined' !== typeof options[ value ] ? options[ value ] : '';
 	}
 
 	/**
@@ -3186,13 +4419,7 @@ function frmProFormJS() {
 	}
 
 	function fieldCanDoCalc( fieldType ) {
-		var canDoCalc = false;
-
-		if ( fieldType === 'text' || fieldType === 'hidden' || fieldType === 'number' ) {
-			canDoCalc = true;
-		}
-
-		return canDoCalc;
+		return -1 !== [ 'text', 'hidden', 'number', 'textarea' ].indexOf( fieldType );
 	}
 
 	function getFieldKey( fieldHtmlId, fieldName ) {
@@ -3239,7 +4466,9 @@ function frmProFormJS() {
 
 		vals[ field.valKey ] = 0;
 
-		var calcField = getCalcField( field );
+		var currency,
+			calcField = getCalcField( field );
+
 		if ( calcField === false ) {
 			return vals;
 		}
@@ -3252,12 +4481,33 @@ function frmProFormJS() {
                 if ( d !== null ) {
 					vals[ field.valKey ] = Math.ceil( d / ( 1000 * 60 * 60 * 24 ) );
                 }
+			} else if ( 'data' === field.thisField.type ) {
+				vals[ field.valKey ] = 0;
+				if ( '' !== thisVal ) {
+					if ( 'SELECT' === this.tagName ) {
+						vals[ field.valKey ] = parseFloat( this.querySelector( 'option[value="' + thisVal + '"]' ).textContent );
+					} else if ( null !== this.closest( '.frm_checkbox' ) ) {
+						vals[ field.valKey ] = 0;
+						jQuery( this.closest( '.frm_opt_container' ).querySelectorAll( 'input:checked' ) ).each(
+							function() {
+								vals[ field.valKey ] += parseFloat( this.parentNode.textContent );
+							}
+						);
+					} else {
+						vals[ field.valKey ] = parseFloat( this.parentNode.textContent );
+					}
+				}
+			} else if ( this.hasAttribute( 'data-frmprice' ) || field.thisField.type === 'total' ) {
+				// data-frmprice means product field.
+				currency = getCurrency( field.formID );
+				vals[ field.valKey ] += parseFloat( ! currency ? thisVal : preparePrice( thisVal, currency ) );
 			} else {
 				var n = thisVal;
 
 				if ( n !== '' && n !== 0 ) {
 					n = n.trim();
-					n = parseFloat( n.replace( /,/g, '' ).match( /-?[\d\.]+$/ ) );
+					// Include e to support scientific notation like 10e2.
+					n = parseFloat( n.replace( /,/g, '' ).match( /-?[\d\.e]+$/ ) );
 				}
 
 				if ( typeof n === 'undefined' || isNaN( n ) || n === '' ) {
@@ -3265,7 +4515,7 @@ function frmProFormJS() {
 				}
 				vals[ field.valKey ] += n;
 			}
-		} );
+		});
 
 		return vals;
 	}
@@ -3295,7 +4545,7 @@ function frmProFormJS() {
 				vals[ field.valKey ] += sep + thisVal;
 				count++;
 			}
-		} );
+		});
 
 		return vals;
 	}
@@ -3313,7 +4563,7 @@ function frmProFormJS() {
 				sep = ', ';
 			}
 
-			var customSep = jQuery( document ).triggerHandler( 'frmCalSeparation', [ field.thisField, count ] );
+			var customSep = jQuery( document ).triggerHandler( 'frmCalSeparation', [ field.thisField, count ]);
 			if ( typeof customSep !== 'undefined' ) {
 				sep = customSep;
 			}
@@ -3324,7 +4574,18 @@ function frmProFormJS() {
 	function getCalcField( field ) {
 		var calcField;
 		if ( field.inSection === false ) {
+			if ( 'name' === field.thisField.type ) {
+				return getOffScreenFieldForName( field );
+			}
+
 			calcField = jQuery( field.thisFieldCall );
+			if ( ! calcField.length && -1 !== [ 'date', 'data' ].indexOf( field.thisField.type ) ) {
+				calcField = jQuery( field.thisField.key );
+				if ( ! calcField.length && 'data' === field.thisField.type ) {
+					// radio and checkbox fields have additional hyphenated values in their ids.
+					calcField = jQuery( field.thisField.key.replace( '="', '^=' ).replace( '"]', '-' ) + ']:checked' );
+				}
+			}
 		} else {
 			calcField = getSiblingField( field );
 		}
@@ -3333,7 +4594,49 @@ function frmProFormJS() {
 			calcField = false;
 		}
 
+		if ( calcField.length > 1 ) {
+			calcField = filterCalcField( calcField, field.thisFieldId );
+		}
+
 		return calcField;
+	}
+
+	/**
+	 * Filters calculation fields (elements) to be involved in the current calculation. This is so that elements that are in calcField just
+	 * because their id starts with a similar string while they don't relate to the calculation are removed from the list.
+	 *
+	 * Fixes #1337.
+	 *
+	 * @param {Object} $calcField    A jQuery object that contains a set of `elements to be involved in the current calculation.
+	 * @param {String} thisFieldCall The query selector used to select calculation elements.
+	 */
+	function filterCalcField( $calcField, thisFieldId ) {
+		return $calcField.filter( function() {
+			var target = 'OPTION' === this.nodeName ? this.closest( 'select' ) : this;
+			return target && target.name && target.name.indexOf( thisFieldId ) !== -1;
+		});
+	}
+
+	/**
+	 * Create an input with both first and last name.
+	 * This isn't actually added to the page, but is used for Name calculations.
+	 *
+	 * @param {Object} field
+	 * @returns {Object}
+	 */
+	function getOffScreenFieldForName( field ) {
+		var nameParts, input;
+
+		nameParts = [];
+		document.querySelectorAll( field.thisFieldCall ).forEach(
+			function( input ) {
+				nameParts.push( input.value );
+			}
+		);
+
+		input       = document.createElement( 'input' );
+		input.value = nameParts.join( ' ' );
+		return jQuery( input );
 	}
 
 	/**
@@ -3403,7 +4706,7 @@ function frmProFormJS() {
 
 		if ( container.length || repeatArgs.repeatRow !== '' ) {
 			if ( container.length ) {
-				fields = container.find( siblingFieldCall );
+				fields = container.find( siblingFieldCall + ',' + siblingFieldCall.replace( 'input[', 'select[' ) );
 			} else {
 				fields = jQuery( siblingFieldCall );
 			}
@@ -3435,7 +4738,15 @@ function frmProFormJS() {
 	}
 
 	function getNonSiblingField( field ) {
-		return jQuery( field.thisFieldCall );
+		var nonSiblingField = jQuery( field.thisFieldCall + ',' + field.thisFieldCall.replace( 'input[', 'select[' ) );
+		if ( ! nonSiblingField.length && 'input[' === field.thisFieldCall.substr( 0, 6 ) ) {
+			if ( 'undefined' !== typeof field.triggerField && field.triggerField.is( 'div' ) && field.triggerField.hasClass( 'frm_form_field' ) ) {
+				nonSiblingField = field.triggerField.find( field.thisFieldCall.replace( 'input[', 'textarea[' ) );
+			} else {
+				nonSiblingField = jQuery( field.thisFieldCall.replace( 'input[', 'textarea[' ) );
+			}
+		}
+		return nonSiblingField;
 	}
 
 	function getOptionValue( thisField, currentOpt ) {
@@ -3445,13 +4756,15 @@ function frmProFormJS() {
 		if ( isOtherOption( thisField, currentOpt ) ) {
 			thisVal = getOtherValueAnyField( thisField, currentOpt );
 		} else if ( currentOpt.type === 'checkbox' || currentOpt.type === 'radio' ) {
+
 			if ( currentOpt.checked ) {
-				thisVal = currentOpt.value;
+				// hasAttribute( 'data-frmprice' ) is a product field.
+				thisVal = currentOpt.hasAttribute( 'data-frmprice' ) ? currentOpt.dataset.frmprice : currentOpt.value;
 			} else {
 				thisVal = currentOpt.dataset.off;
 			}
 		} else {
-			thisVal = jQuery( currentOpt ).val();
+			thisVal = currentOpt.hasAttribute( 'data-frmprice' ) ? currentOpt.dataset.frmprice : jQuery( currentOpt ).val();
 		}
 
 		if ( typeof thisVal === 'undefined' ) {
@@ -3569,18 +4882,15 @@ function frmProFormJS() {
 			idParts = thisField.id.split( '-' );
 		idParts.pop(); //remove the last id
 		baseId = idParts.join( '-' );
+		otherText = document.querySelectorAll( '[id^=' + baseId + '-other][id$=otext]' );
 
-		if ( typeof( document.querySelectorAll ) === 'function' ) {
-			otherText = document.querySelectorAll( '[id^=' + baseId + '-other][id$=otext]' );
-
-			if ( otherText.length > 0 ) {
-				for ( i = 0; i < otherText.length; i++ ) {
-					if ( otherText[ i ].value === '' ) {
-						otherText[ i ].value = value;
-						parentInput = document.getElementById( otherText[ i ].id.replace( '-otext', '' ) );
-						if ( parentInput !== null ) {
-							parentInput.checked = true;
-						}
+		if ( otherText.length > 0 ) {
+			for ( i = 0; i < otherText.length; i++ ) {
+				if ( otherText[ i ].value === '' ) {
+					otherText[ i ].value = value;
+					parentInput = document.getElementById( otherText[ i ].id.replace( '-otext', '' ) );
+					if ( parentInput !== null ) {
+						parentInput.checked = true;
 					}
 				}
 			}
@@ -3623,10 +4933,30 @@ function frmProFormJS() {
 		checkConditionalLogic( 'pageLoad' );
 		doEditInPlaceCleanUp( form );
 		checkFieldsOnPage();
+		maybeShowMoreStepsButton();
 	}
 
 	function afterPageChanged() {
 		checkFieldsOnPage();
+		addTopAddRowBtnForRepeater();
+		maybeDisableCheckboxesWithLimit();
+		// make sure this comes last so that the total is calculated only after knowing the visible fields
+		calcProductsTotal();
+		maybeShowMoreStepsButton();
+		// calculations in a repeater need to be done again after page is changed to fix issue #3414
+		triggerChangeOnCalcTriggers();
+	}
+
+	function triggerChangeOnCalcTriggers() {
+		if ( 'undefined' === typeof __FRMCALC || 'undefined' === typeof __FRMCALC.fieldKeys ) {
+			return;
+		}
+
+		Object.values( __FRMCALC.fieldKeys ).forEach( function( key ) {
+			jQuery( key + ':not(label):not([type=hidden])' ).each( function() {
+				jQuery( this ).trigger({ type: 'change', selfTriggered: true });
+			});
+		});
 	}
 
 	/** Google Tables **/
@@ -3640,7 +4970,7 @@ function frmProFormJS() {
 	function generateSingleGoogleTable( opts, type ) {
 		google.load( 'visualization', '1.0', { packages: [ type ], callback: function() {
 			compileGoogleTable( opts );
-		} } );
+		} });
 	}
 
 	function compileGoogleTable( opts ) {
@@ -3748,15 +5078,31 @@ function frmProFormJS() {
 	/** Google Graphs **/
 
 	function generateGoogleGraphs( graphs ) {
-		for ( var i = 0, l = graphs.length; i < l; i++ ) {
-			generateSingleGoogleGraph( graphs[ i ] );
+		var l, i;
+		l = graphs.length;
+		for ( i = 0; i < l; i++ ) {
+			generateSingleGoogleGraph( graphs[ i ]);
+
+			if ( 'string' === typeof graphs[ i ].options.width && '%' === graphs[ i ].options.width.substr( -1 ) ) {
+				addResponsiveGraphListener( graphs[ i ]);
+			}
 		}
 	}
 
+	function addResponsiveGraphListener( graphData ) {
+		window.addEventListener(
+			'resize',
+			function() {
+				generateSingleGoogleGraph( graphData );
+			}
+		);
+	}
+
 	function generateSingleGoogleGraph( graphData ) {
-		google.load( 'visualization', '1.0', { packages: [ graphData.package ], callback: function() {
+		google.charts.load( 'current', { packages: [ graphData.package ] });
+		google.charts.setOnLoadCallback( function() {
 			compileGoogleGraph( graphData );
-		} } );
+		});
 	}
 
 	function compileGoogleGraph( graphData ) {
@@ -3775,7 +5121,7 @@ function frmProFormJS() {
 
 		var chart = new google.visualization[ type ]( chartDiv );
 		chart.draw( data, graphData.options );
-		jQuery( document ).trigger( 'frmDrawChart', [ chart, 'chart_' + graphData.graph_id, data ] );
+		jQuery( document ).trigger( 'frmDrawChart', [ chart, 'chart_' + graphData.graph_id, data ]);
 	}
 
 	function getGraphType( field ) {
@@ -3801,12 +5147,16 @@ function frmProFormJS() {
 	/** Repeating Fields **/
 
 	function removeRow() {
+		if ( ! confirmRowRemoval() ) {
+			return;
+		}
+
 		/*jshint validthis:true */
 		var rowNum = jQuery( this ).data( 'key' ),
 			sectionID = jQuery( this ).data( 'parent' ),
 			id = 'frm_section_' + sectionID + '-' + rowNum,
-			thisRow = jQuery( document.getElementById( id ) ),
-			fields = thisRow.find( 'input, select, textarea' ),
+			thisRow = jQuery( this ).parents( 'div[id^="frm_section_"]' ),
+			fields = thisRow.find( 'input, select, textarea, .frm_html_container' ),
 			formId = jQuery( this ).closest( 'form' ).find( 'input[name="form_id"]' ).val();
 
 		thisRow.fadeOut( 'slow', function() {
@@ -3814,37 +5164,159 @@ function frmProFormJS() {
 
 			fields.each( function() {
 				/* update calculations when a row is removed */
-				var fieldID = frmFrontForm.getFieldId( this, false );
+				var fieldID;
+				if ( this.matches( '.frm_html_container' ) ) {
+					fieldID = getHtmlFieldID( this );
+				} else {
+					fieldID = frmFrontForm.getFieldId( this, false );
+				}
+
 				if ( this.type != 'file' ) {
 					doCalculation( fieldID, jQuery( this ) );
 				}
 
 				var container = 'frm_field_' + fieldID + '-' + sectionID + '-' + rowNum + '_container';
 				removeFromHideFields( container, formId );
-			} );
+
+				// If the field is an RTE, remove the editor associated with it
+				//  this is done so that if/when the field is Added again it get initialized
+				if ( this.classList.contains( 'wp-editor-area' ) ) {
+					removeRichText( this.id );
+				}
+			});
 
 			showAddButton( sectionID );
+			maybeHideRemoveButtons( sectionID );
 
-			if ( typeof( frmThemeOverride_frmRemoveRow ) === 'function' ) {
+			/* eslint-disable camelcase */
+			if ( typeof frmThemeOverride_frmRemoveRow === 'function' ) {
 				frmThemeOverride_frmRemoveRow( id, thisRow );
 			}
+			/* eslint-enable camelcase */
 
 			jQuery( document ).trigger( 'frmAfterRemoveRow' );
-		} );
+		});
 
 		return false;
 	}
 
+	/**
+	 * When a repeater row is removed, check for the minimum number of rows and maybe hide remove buttons.
+	 *
+	 * @param {string|number} sectionID
+	 * @returns {void}
+	 */
+	function maybeHideRemoveButtons( sectionID ) {
+		var sectionContainer, repeatButtons, minRows, currentRows;
+
+		sectionContainer = document.querySelector( '#frm_field_' + sectionID + '_container' );
+		if ( ! sectionContainer ) {
+			return;
+		}
+
+		repeatButtons = sectionContainer.querySelector( '.frm_repeat_buttons[data-repeat-min]' );
+		if ( ! repeatButtons || ! repeatButtons.dataset.repeatMin ) {
+			return;
+		}
+
+		minRows = repeatButtons.dataset.repeatMin;
+		currentRows = document.querySelectorAll( '.frm_repeat_' + sectionID ).length;
+		if ( currentRows <= minRows ) {
+			hideRemoveButtons( sectionID );
+		}
+	}
+
+	/**
+	 * Gets the html field ID from the container in a repeater. Ex. frm_field_151-152-0_container (151 is the field ID in this case).
+	 *
+	 * @param {Array} field
+	 * @returns {Number}
+	 */
+	function getHtmlFieldID( field ) {
+		var parentIDParts;
+
+		parentIDParts = field.id.split( '_' );
+
+		if ( parentIDParts.length < 3 ) {
+			return 0;
+		}
+
+		parentIDParts = parentIDParts[2];
+		parentIDParts = parentIDParts.split( '-' );
+
+		if ( ! parentIDParts.length ) {
+			return 0;
+		}
+
+		return parentIDParts[0];
+	}
+
+	function confirmRowRemoval() {
+		if ( ! frm_js.repeaterRowDeleteConfirmation ) {
+			return true;
+		}
+		return confirm( frm_js.repeaterRowDeleteConfirmation );
+	}
+
 	function hideAddButton( sectionID ) {
-		jQuery( '#frm_field_' + sectionID + '_container .frm_add_form_row.frm_button' ).addClass( 'frm_hide_add_button' );
+		getRepeaterAddButtons( sectionID ).forEach(
+			function( button ) {
+				button.classList.add( 'frm_hide_add_button' );
+			}
+		);
 	}
 
 	function showAddButton( sectionID ) {
-		jQuery( '#frm_field_' + sectionID + '_container .frm_add_form_row.frm_button' ).removeClass( 'frm_hide_add_button' );
+		getRepeaterAddButtons( sectionID ).forEach(
+			function( button ) {
+				button.classList.remove( 'frm_hide_add_button' );
+			}
+		);
+	}
+
+	function getRepeaterAddButtons( sectionID ) {
+		return getFieldContainerChildren( sectionID, '.frm_add_form_row' );
+	}
+
+	function hideRemoveButtons( sectionID ) {
+		getRepeaterRemoveButtons( sectionID ).forEach(
+			function( button ) {
+				button.classList.add( 'frm_hide_remove_button' );
+			}
+		);
+	}
+
+	function showRemoveButtons( sectionID ) {
+		getRepeaterRemoveButtons( sectionID ).forEach(
+			function( button ) {
+				button.classList.remove( 'frm_hide_remove_button' );
+			}
+		);
+	}
+
+	function getRepeaterRemoveButtons( sectionID ) {
+		return getFieldContainerChildren( sectionID, '.frm_remove_form_row' );
+	}
+
+	/**
+	 * @param {string|number} fieldD 
+	 * @returns {HTMLElement|null}
+	 */
+	function getFieldContainer( fieldD ) {
+		return document.getElementById( 'frm_field_' + fieldD + '_container' );
+	}
+
+	function getFieldContainerChildren( fieldID, childSelector ) {
+		var container = getFieldContainer( fieldID );
+		if ( ! container ) {
+			return [];
+		}
+		return container.querySelectorAll( childSelector );
 	}
 
 	function addRow() {
 		/*jshint validthis:true */
+		var thisBtn, id, i, numberOfSections, lastRowIndex, stateField, state, form, data, success, error, extraParams;
 
 		// If row is currently being added, leave now
 		if ( currentlyAddingRow === true ) {
@@ -3854,109 +5326,185 @@ function frmProFormJS() {
 		// Indicate that a row is being added (so double clicking Add button doesn't cause problems)
 		currentlyAddingRow = true;
 
-		var id = jQuery( this ).data( 'parent' ),
-			i = 0,
-			numberOfSections = jQuery( '.frm_repeat_' + id ).length;
+		thisBtn = jQuery( this );
+		id = thisBtn.data( 'parent' );
+		i = 0;
+		numberOfSections = jQuery( '.frm_repeat_' + id ).length;
 
 		if ( numberOfSections > 0 ) {
-			var lastRowIndex = jQuery( '.frm_repeat_' + id + ':last' ).attr( 'id' ).replace( 'frm_section_' + id + '-', '' );
-			if ( lastRowIndex.indexOf( 'i' ) > -1 ) {
+			lastRowIndex = false;
+			document.querySelectorAll( '.frm_repeat_' + id ).forEach(
+				function( element ) {
+					var strippedId = element.id.replace( 'frm_section_' + id + '-', '' ),
+						parsedId;
+
+					if ( ! strippedId.length || 'i' === strippedId[0]) {
+						return;
+					}
+
+					parsedId = parseInt( strippedId );
+					// strippedId should be a unique number index.
+					// Since there is no "i" prefix, this is not an entry ID.
+					if ( parsedId && ( false === lastRowIndex || parsedId > lastRowIndex ) ) {
+						lastRowIndex = parsedId;
+					}
+				}
+			);
+
+			if ( false === lastRowIndex ) {
 				i = 1;
 			} else {
-				i = 1 + parseInt( lastRowIndex );
+				i = lastRowIndex + 1;
 			}
 		}
 
-		jQuery.ajax( {
-			type: 'POST',
-			url: frm_js.ajax_url,
-			dataType: 'json',
-			data: {
-				action: 'frm_add_form_row',
-				field_id: id,
-				i: i,
-				numberOfSections: numberOfSections,
-				nonce: frm_js.nonce,
-			},
-			success: function( r ) {
-				//only process row if row actually added
-				if ( r.html ) {
-					var html = r.html;
-					var item = jQuery( html ).addClass( 'frm-fade-in' );
-					jQuery( '.frm_repeat_' + id + ':last' ).after( item );
+		stateField = document.querySelector( 'input[name="frm_state"]' );
+		state = null !== stateField ? stateField.value : '';
 
-					if ( r.is_repeat_limit_reached ) {
-						hideAddButton( id );
-					}
+		form = jQuery( this ).closest( 'form' ).get( 0 );
+		data = {
+			action: 'frm_add_form_row',
+			field_id: id,
+			i: i,
+			numberOfSections: numberOfSections,
+			nonce: frm_js.nonce,
+			frm_state: state
+		};
+		success = function( r ) {
+			var html, item, checked, fieldID, fieldObject, repeatArgs, j, inputRanges;
 
-					var checked = [ 'other' ];
-					var fieldID, fieldObject;
-					var reset = 'reset';
+			//only process row if row actually added
+			if ( r.html ) {
+				html = r.html;
+				item = jQuery( html ).addClass( 'frm-fade-in' );
+				thisBtn.parents( '.frm_section_heading' ).append( item );
+				inputRanges = item[0].querySelectorAll( 'input[type=range]' );
+				for ( j = 0; j < inputRanges.length; j++ ) {
+					handleSliderEvent.call( inputRanges[j]);
+				}
 
-					var repeatArgs = {
-						repeatingSection: id.toString(),
-						repeatRow: i.toString(),
-					};
+				if ( r.is_repeat_limit_reached ) {
+					hideAddButton( id );
+				}
 
-					// hide fields with conditional logic
-					jQuery( html ).find( 'input, select, textarea' ).each( function() {
-						if ( this.type != 'file' ) {
+				if ( ! r.passes_repeat_min_check ) {
+					hideRemoveButtons( id );
+				} else {
+					showRemoveButtons( id );
+				}
 
-							// Readonly dropdown fields won't have a name attribute
-							if ( this.name === '' ) {
-								return true;
-							}
-							fieldID = this.name.replace( 'item_meta[', '' ).split( ']' )[ 2 ].replace( '[', '' );
-							if ( jQuery.inArray( fieldID, checked ) == -1 ) {
-								if ( this.id === false || this.id === '' ) {
-									return;
-								}
+				checked = [ 'other' ];
+				repeatArgs = {
+					repeatingSection: id.toString(),
+					repeatRow: i.toString()
+				};
 
-								fieldObject = jQuery( '#' + this.id );
-								checked.push( fieldID );
-								hideOrShowFieldById( fieldID, repeatArgs );
-								updateWatchingFieldById( fieldID, repeatArgs, 'value changed' );
-								// TODO: maybe trigger a change instead of running these three functions
-								checkFieldsWithConditionalLogicDependentOnThis( fieldID, fieldObject );
-								checkFieldsWatchingLookup( fieldID, fieldObject, 'value changed' );
-								doCalculation( fieldID, fieldObject );
-								reset = 'persist';
-							}
+				// hide fields with conditional logic
+				jQuery( html ).find( 'input, select, textarea' ).each( function() {
+						// Readonly dropdown fields won't have a name attribute
+						if ( this.name === '' ) {
+							return true;
 						}
-					} );
+						if ( this.type === 'file' ) {
+							fieldID = this.name.replace( 'file', '' ).split( '-' )[0];
+						} else {
+							fieldID = this.name.replace( 'item_meta[', '' ).split( ']' )[ 2 ].replace( '[', '' );
+						}
+						if ( jQuery.inArray( fieldID, checked ) == -1 ) {
+							if ( this.id === false || this.id === '' ) {
+								return;
+							}
 
-					jQuery( html ).find( '.frm_html_container' ).each( function() {
+							fieldObject = jQuery( '#' + this.id );
+							checked.push( fieldID );
+							hideOrShowFieldById( fieldID, repeatArgs );
+							updateWatchingFieldById( fieldID, repeatArgs, 'value changed' );
+							// TODO: maybe trigger a change instead of running these three functions
+							checkFieldsWithConditionalLogicDependentOnThis( fieldID, fieldObject );
+							checkFieldsWatchingLookup( fieldID, fieldObject, 'value changed' );
+							doCalculation( fieldID, fieldObject );
+							maybeDoCalcForSingleField( fieldObject.get( 0 ) );
+						}
+				});
+
+				jQuery( html ).find( '.frm_html_container' ).each(
+					function() {
 						// check heading logic
 						var fieldID = this.id.replace( 'frm_field_', '' ).split( '-' )[ 0 ];
 						checked.push( fieldID );
 						hideOrShowFieldById( fieldID, repeatArgs );
-					} );
+					}
+				);
 
-					loadDropzones( repeatArgs.repeatRow );
-					loadSliders();
+				loadDropzones( repeatArgs.repeatRow );
+				loadSliders();
 
-					// trigger autocomplete
-					loadChosen();
-				}
+				// trigger autocomplete
+				loadAutocomplete();
 
-				if ( typeof( frmThemeOverride_frmAddRow ) == 'function' ) {
-					frmThemeOverride_frmAddRow( id, r );
-				}
+				// load rich textboxes
+				jQuery( html ).find( '.frm_html_container' ).each( function() {
+					// check heading logic
+					var fieldID = this.id.replace( 'frm_field_', '' ).split( '-' )[ 0 ];
+					checked.push( fieldID );
+					hideOrShowFieldById( fieldID, repeatArgs );
+				});
 
-				jQuery( document ).trigger( 'frmAfterAddRow' );
+				// Find any RTEs in the new row/repeat and initialize the editor for them
+				//  there is an assumption here that tinyMCEPreInit.mceInit[0] referes to
+				//  an RTE that was initially loaded on the page. It's a safe assumption as
+				//  adding a row/repeat wouldn't have any RTEs if there wasn't one on the
+				//  page in the first place.
+				jQuery( html ).find( '.wp-editor-area' ).each( function() {
+					initRichText( this.id );
+				});
+			}
 
-				jQuery( '.frm_repeat_' + id ).each( function( i ) {
-					this.style.zIndex = 999 - i;
-				} );
+			/* eslint-disable camelcase */
+			if ( typeof frmThemeOverride_frmAddRow === 'function' ) {
+				frmThemeOverride_frmAddRow( id, r );
+			}
+			/* eslint-enable camelcase */
 
-				currentlyAddingRow = false;
-			},
-			error: function() {
-				currentlyAddingRow = false;
-			},
-		} );
+			jQuery( document ).trigger( 'frmAfterAddRow' );
+
+			jQuery( '.frm_repeat_' + id ).each( function( i ) {
+				this.style.zIndex = 999 - i;
+			});
+
+			currentlyAddingRow = false;
+		};
+
+		error = function() {
+			currentlyAddingRow = false;
+		};
+
+		extraParams = { dataType: 'json' };
+
+		postToAjaxUrl( form, data, success, error, extraParams );
 
 		return false;
+	}
+
+	function triggerToggleClickOnSpace( e ) {
+		if ( 32 === e.which ) {
+			this.click();
+		}
+	}
+
+	function removeRichText( id ) {
+		tinymce.EditorManager.execCommand( 'mceRemoveEditor', true, id );
+	}
+
+	function initRichText( id ) {
+		var key = Object.keys( tinyMCEPreInit.mceInit )[0],
+			orgSettings = tinyMCEPreInit.mceInit[ key ],
+			newValues = {
+				selector: '#' + id,
+				body_class: orgSettings.body_class.replace( key, id )
+			},
+			newSettings = Object.assign({}, orgSettings, newValues );
+		tinymce.init( newSettings );
 	}
 
 	/*****************************************************
@@ -3965,26 +5513,32 @@ function frmProFormJS() {
 
 	function editEntry() {
 		/*jshint validthis:true */
-		var $edit = jQuery( this ),
-			entryId = $edit.data( 'entryid' ),
-			prefix = $edit.data( 'prefix' ),
-			postId = $edit.data( 'pageid' ),
-			formId = $edit.data( 'formid' ),
-			cancel = $edit.data( 'cancel' ),
-			fields = $edit.data( 'fields' ),
+		var $edit         = jQuery( this ),
+			entryId       = $edit.data( 'entryid' ),
+			prefix        = $edit.data( 'prefix' ),
+			postId        = $edit.data( 'pageid' ),
+			formId        = $edit.data( 'formid' ),
+			cancel        = $edit.data( 'cancel' ),
+			fields        = $edit.data( 'fields' ),
 			excludeFields = $edit.data( 'excludefields' ),
-			$cont = jQuery( document.getElementById( prefix + entryId ) ),
-			orig = $cont.html();
+			startPage     = $edit.data( 'startpage' ),
+			$cont         = jQuery( document.getElementById( prefix + entryId ) ),
+			orig          = $cont.html();
 
 		$cont.html( '<span class="frm-loading-img" id="' + prefix + entryId + '"></span><div class="frm_orig_content" style="display:none">' + orig + '</div>' );
-		jQuery.ajax( {
+		jQuery.ajax({
 			type: 'POST',
-			url: frm_js.ajax_url,
+			url: getUrlForInPlaceEdit(),
 			dataType: 'html',
 			data: {
-				action: 'frm_entries_edit_entry_ajax', post_id: postId,
-				entry_id: entryId, id: formId, nonce: frm_js.nonce,
-				fields: fields, exclude_fields: excludeFields,
+				action: 'frm_entries_edit_entry_ajax',
+				post_id: postId,
+				entry_id: entryId,
+				id: formId,
+				nonce: frm_js.nonce,
+				fields: fields,
+				exclude_fields: excludeFields,
+				start_page: startPage
 			},
 			success: function( html ) {
 				$cont.children( '.frm-loading-img' ).replaceWith( html );
@@ -3997,9 +5551,71 @@ function frmProFormJS() {
 					jQuery( document ).on( 'change', '.frm-show-form input[name^="item_meta"], .frm-show-form select[name^="item_meta"], .frm-show-form textarea[name^="item_meta"]', frmFrontForm.fieldValueChanged );
 				}
 				checkFieldsOnPage( prefix + entryId );
-			},
-		} );
+				triggerEvent( document, 'frmInPlaceEdit' );
+			}
+		});
 		return false;
+	}
+
+	function getUrlForInPlaceEdit() {
+		var url         = frm_js.ajax_url,
+			queryParams = getQueryParamsForInPlaceEdit();
+
+		Array.prototype.forEach.call(
+			Object.keys( queryParams ),
+			function( queryParamKey ) {
+				url += -1 === url.indexOf( '?' ) ? '?' : '&';
+				url += queryParamKey + '=' + queryParams[ queryParamKey ];
+			}
+		);
+
+		return url;
+	}
+
+	function getQueryParamsForInPlaceEdit() {
+		var queryParams, queryString, pairs, keysToSkip, length, i, pair, key, value;
+
+		queryParams = {};
+		queryString = window.location.search.substring( 1 );
+		pairs       = queryString.split( '&' );
+		keysToSkip  = [
+			'action',
+			'start_page',
+			'nonce',
+			'post_id',
+			'entry_id',
+			'id',
+			'fields',
+			'doing_wp_cron'
+		];
+
+		length = pairs.length;
+		for ( i = 0; i < length; i++ ) {
+			pair = pairs[ i ].split( '=' );
+			key  = decodeURIComponent( pair[0]);
+
+			if ( -1 !== keysToSkip.indexOf( key ) ) {
+				continue;
+			}
+
+			value = decodeURIComponent( pair[1]);
+
+			// Check if the key already exists in the object.
+			if ( queryParams.hasOwnProperty( key ) ) {
+				// If it's an array, push the new value.
+				if ( Array.isArray( queryParams[ key ]) ) {
+					queryParams[ key ].push( value );
+				} else {
+					// If it's not an array, convert it to an array and push the new value.
+					queryParams[ key ] = [ queryParams[ key ], value ];
+				}
+			} else {
+				// If the key doesn't exist, create a new entry.
+				queryParams[ key ] = value;
+			}
+		}
+
+		return queryParams;
 	}
 
 	function cancelEdit() {
@@ -4031,15 +5647,16 @@ function frmProFormJS() {
 
 	function deleteEntry() {
 		/*jshint validthis:true */
-		var $link = jQuery( this ),
+		var entryId, prefix,
+			$link = jQuery( this ),
 			confirmText = $link.data( 'deleteconfirm' );
 
 		if ( confirm( confirmText ) ) {
-			var entryId = $link.data( 'entryid' ),
-				prefix = $link.data( 'prefix' );
+			entryId = $link.data( 'entryid' );
+			prefix = $link.data( 'prefix' );
 
 			$link.replaceWith( '<span class="frm-loading-img" id="frm_delete_' + entryId + '"></span>' );
-			jQuery.ajax( {
+			jQuery.ajax({
 				type: 'POST',
 				url: frm_js.ajax_url,
 				data: { action: 'frm_entries_destroy', entry: entryId, nonce: frm_js.nonce },
@@ -4048,14 +5665,14 @@ function frmProFormJS() {
 						var container = jQuery( document.getElementById( prefix + entryId ) );
 						container.fadeOut( 'slow', function() {
 							container.remove();
-						} );
+						});
 						jQuery( document.getElementById( 'frm_delete_' + entryId ) ).fadeOut( 'slow' );
-						jQuery( document ).trigger( 'frmEntryDeleted', [ entryId ] );
+						jQuery( document ).trigger( 'frmEntryDeleted', [ entryId ]);
 					} else {
 						jQuery( document.getElementById( 'frm_delete_' + entryId ) ).replaceWith( html );
 					}
-				},
-			} );
+				}
+			});
 		}
 		return false;
 	}
@@ -4096,13 +5713,19 @@ function frmProFormJS() {
 	 *********************************************/
 
 	function loadUniqueTimeFields() {
+		var timeFields, i, dateField;
+
 		if ( typeof __frmUniqueTimes === 'undefined' ) {
 			return;
 		}
 
-		var timeFields = __frmUniqueTimes;
-		for ( var i = 0; i < timeFields.length; i++ ) {
-			jQuery( document.getElementById( timeFields[ i ].dateID ) ).change( maybeTriggerUniqueTime );
+		timeFields = __frmUniqueTimes;
+		for ( i = 0; i < timeFields.length; i++ ) {
+			dateField = document.getElementById( timeFields[ i ].dateID );
+			jQuery( dateField ).on( 'change', maybeTriggerUniqueTime );
+			if ( '' !== dateField.value ) {
+				jQuery( dateField ).trigger( 'change' );
+			}
 		}
 	}
 
@@ -4120,17 +5743,45 @@ function frmProFormJS() {
 	 * General Helpers
 	 *********************************************/
 
-	function checkFieldsOnPage( chosenContainer ) {
+	function checkFieldsOnPage( containerId, event ) {
+		if ( 'undefined' === typeof event ) {
+			event = '';
+		}
 		checkPreviouslyHiddenFields();
 		loadDateFields();
 		loadCustomInputMasks();
 		loadSliders();
-		loadChosen( chosenContainer );
-		checkDynamicFields();
+		loadAutocomplete( containerId );
+		checkDynamicFields( event );
 		checkLookupFields();
-		triggerCalc();
+		// Use a timeout to avoid conflicts with Datepicker Calculationns.
+		// If this runs right away, the Datepicker Calculation function may not be available yet.
+		setTimeout( triggerCalc, 0 );
 		loadDropzones();
 		checkPasswordFields();
+		triggerLookupWatchUpdates();
+	}
+
+	function triggerLookupWatchUpdates() {
+		var i, fieldId, keys, value, $changedInput;
+
+		if ( typeof __FRMLOOKUP  === 'undefined' || document.querySelector( 'form input[name="id"]' ) ) {
+			return;
+		}
+
+		keys = Object.keys( __FRMLOOKUP );
+		for ( i = 0; i < keys.length; i++ ) {
+			fieldId = keys[ i ];
+			value   = __FRMLOOKUP[ fieldId ];
+			if ( value.dependents.length <= 0 ) {
+				continue;
+			}
+
+			$changedInput = jQuery( '#field_' + value.fieldKey );
+			if ( $changedInput.length ) {
+				checkFieldsWatchingLookup( fieldId, $changedInput, 'value changed' );
+			}
+		}
 	}
 
 	function checkPasswordFields() {
@@ -4150,21 +5801,253 @@ function frmProFormJS() {
 		}
 	}
 
+	/**
+	 * @param {string|undefined} containerId
+	 * @returns {void}
+	 */
+	function loadAutocomplete( containerId ) {
+		loadChosen( containerId );
+		loadSlimSelect( containerId );
+	}
+
+	/**
+	 * @param {string|undefined} chosenContainer
+	 * @returns {void}
+	 */
 	function loadChosen( chosenContainer ) {
-		if ( jQuery().chosen ) {
-			var opts = {
-				allow_single_deselect: true,
-				no_results_text: frm_js.no_results,
-				search_contains: true,
-			};
-			if ( typeof __frmChosen !== 'undefined' ) {
-				opts = '{' + __frmChosen + '}';
+		var opts;
+
+		if ( ! jQuery().chosen ) {
+			return;
+		}
+
+		opts = {
+			allow_single_deselect: true,
+			no_results_text: frm_js.no_results,
+			search_contains: true
+		};
+		if ( typeof __frmChosen !== 'undefined' ) {
+			opts = '{' + __frmChosen + '}';
+		}
+
+		if ( typeof chosenContainer !== 'undefined' ) {
+			jQuery( '#' + chosenContainer ).find( '.frm_chzn' ).chosen( opts );
+		} else {
+			jQuery( '.frm_chzn' ).chosen( opts );
+		}
+	}
+
+	function loadSlimSelect( containerId ) {
+		var container, dropdowns;
+
+		if ( 'undefined' === typeof SlimSelect ) {
+			return;
+		}
+
+		if ( 'undefined' !== typeof containerId ) {
+			container = document.getElementById( containerId );
+			if ( ! container ) {
+				return;
 			}
 
-			if ( typeof chosenContainer !== 'undefined' ) {
-				jQuery( '#' + chosenContainer ).find( '.frm_chzn' ).chosen( opts );
-			} else {
-				jQuery( '.frm_chzn' ).chosen( opts );
+			dropdowns = container.querySelectorAll( 'select.frm_slimselect' );
+		} else {
+			dropdowns = document.querySelectorAll( 'select.frm_slimselect' );
+		}
+
+		dropdowns.forEach(
+			function( autocompleteInput ) {
+				var emptyOption, allowDeselect, isMultiSelect, tabindex;
+
+				if ( 'none' === autocompleteInput.style.display || autocompleteInput.classList.contains( 'ss-main' ) || autocompleteInput.classList.contains( 'ss-content' ) ) {
+					// Skip anything that is already initialized.
+					return;
+				}
+
+				emptyOption   = autocompleteInput.querySelector( 'option[value=""]' );
+				allowDeselect = false;
+				isMultiSelect = 'multiple' === autocompleteInput.getAttribute( 'multiple' );
+
+				if ( emptyOption && '' === emptyOption.textContent.trim() ) {
+					allowDeselect = true;
+					if ( isMultiSelect ) {
+						emptyOption.parentElement.removeChild( emptyOption );
+					} else {
+						emptyOption.setAttribute( 'data-placeholder', 'true' );
+					}
+				} else if ( autocompleteInput.querySelector( 'option[data-placeholder="true"]' ) ) {
+					allowDeselect = true;
+				}
+
+				tabindex = autocompleteInput.getAttribute( 'tabindex' );
+
+				autocompleteInput.style.color = '';
+				new SlimSelect({
+					select: '#' + autocompleteInput.id,
+					settings: {
+						placeholderText: '',
+						searchText: frm_js.no_results,
+						searchPlaceholder: ' ', // Avoid default "Search" placeholder.
+						allowDeselect: allowDeselect,
+						closeOnSelect: ! isMultiSelect,
+						keepOrder: true
+					},
+					events: {
+						afterOpen: function() {
+							// Make some accessibility adjustments to the .ss-content pop up.
+							var ssContent, ssContentSearchInput, ssList, label;
+
+							ssContent = document.querySelector( '.ss-content[data-id="' + autocompleteInput.dataset.id + '"]' );
+							if ( ! ssContent ) {
+								return;
+							}
+
+							// The listbox role should be on the .ss-list element.
+							ssContent.removeAttribute( 'role' );
+
+							ssContentSearchInput = ssContent.querySelector( '.ss-search input' );
+							if ( ! ssContentSearchInput ) {
+								return;
+							}
+
+							ssContentSearchInput.removeAttribute( 'aria-label' );
+
+							ssList = ssContent.querySelector( '.ss-list' );
+							if ( ssList ) {
+								// Set a height so the list is scrollable.
+								ssList.style.height = getHeightForSlimSelectList( ssContent ) + 'px';
+								ssList.setAttribute( 'role', 'listbox' );
+							}
+
+							// The search input and list elements should have labels.
+							label = document.querySelector( 'label[for="' + autocompleteInput.id + '"]' );
+							if ( label ) {
+								ssContentSearchInput.setAttribute( 'aria-labelledby', label.id );
+								if ( ssList ) {
+									ssList.setAttribute( 'aria-labelledby', label.id );
+								}
+							}
+						}
+					}
+				});
+
+				if ( tabindex ) {
+					copyTabIndexAttributeToSlimSelectElement( autocompleteInput, tabindex );
+				}
+
+				makeSlimSelectAccessibilityChanges( autocompleteInput );
+				maybeApplySlimSelectAutoWidth( autocompleteInput, allowDeselect );
+
+				autocompleteInput.addEventListener(
+					'change',
+					function() {
+						// This listener is required to toggle the Other input, and for conditional logic based on this field.
+						jQuery( autocompleteInput ).trigger( 'change' );
+					}
+				);
+			}
+		);
+	}
+
+	function copyTabIndexAttributeToSlimSelectElement( autocompleteInput, tabindex ) {
+		var slimselectElement = getSlimSelectMainElement( autocompleteInput );
+		if ( slimselectElement ) {
+			slimselectElement.setAttribute( 'tabindex', tabindex );
+		}
+	}
+
+	function getSlimSelectMainElement( autocompleteInput ) {
+		return document.querySelector( '.ss-main[data-id="' + autocompleteInput.getAttribute( 'data-id' ) + '"]' );
+	}
+
+	/**
+	 * @param {HTMLElement} ssContent
+	 * @returns {number}
+	 */
+	function getHeightForSlimSelectList( ssContent ) {
+		var ssSearch, listHeight;
+
+		listHeight = jQuery( ssContent ).outerHeight();
+		ssSearch   = ssContent.querySelector( '.ss-search' );
+
+		if ( ssSearch ) {
+			listHeight -= jQuery( ssSearch ).outerHeight();
+		}
+
+		return listHeight;
+	}
+
+	/**
+	 * @since 6.8
+	 *
+	 * @param {HTMLElement} autocompleteInput
+	 * @returns {void}
+	 */
+	function makeSlimSelectAccessibilityChanges( autocompleteInput ) {
+		addAriaLabelledByToSlimSelectMainElement( autocompleteInput );
+		openSlimSelectOnLabelClick( autocompleteInput );
+	}
+
+	/**
+	 * If the autocomplete input is set to "Automatic width", use the target dropdown width as reference.
+	 *
+	 * @since 6.8.4
+	 *
+	 * @param {HTMLElement} autocompleteInput
+	 * @param {boolean} allowDeselect
+	 * @returns {void}
+	 */
+	function maybeApplySlimSelectAutoWidth( autocompleteInput, allowDeselect ) {
+		var slimselectElement, extraRequiredWidth;
+
+		if ( ! autocompleteInput.classList.contains( 'auto_width' ) ) {
+			return;
+		}
+
+		slimselectElement = getSlimSelectMainElement( autocompleteInput );
+		if ( slimselectElement ) {
+			// The Slim Select dropdown is a bit larger than a regular dropdown because of the "X" icon for deselecting.
+			// If we are not showing the "X", we don't need as much extra space.
+			extraRequiredWidth = allowDeselect ? 36 : 14;
+			slimselectElement.style.minWidth = ( jQuery( autocompleteInput ).outerWidth() + extraRequiredWidth ) + 'px';
+		}
+	}
+
+	/**
+	 * @since 6.8
+	 *
+	 * @param {HTMLElement} autocompleteInput
+	 * @returns {void}
+	 */
+	function addAriaLabelledByToSlimSelectMainElement( autocompleteInput ) {
+		var label, slimselectElement;
+
+		label = document.querySelector( 'label[for="' + autocompleteInput.id + '"]' );
+		if ( label ) {
+			slimselectElement = getSlimSelectMainElement( autocompleteInput );
+			if ( slimselectElement ) {
+				slimselectElement.setAttribute( 'aria-labelledby', label.id );
+			}
+		}
+	}
+
+	/**
+	 * @since 6.8
+	 *
+	 * @param {HTMLElement} autocompleteInput
+	 * @returns {void}
+	 */
+	function openSlimSelectOnLabelClick( autocompleteInput ) {
+		var label = document.querySelector( 'label[for="' + autocompleteInput.id + '"]' );
+		if ( label ) {
+			label.addEventListener( 'click', labelListener );
+			function labelListener() {
+				setTimeout(
+					function() {
+						autocompleteInput.slim.open();
+					},
+					0
+				);
 			}
 		}
 	}
@@ -4182,7 +6065,7 @@ function frmProFormJS() {
 
 	function updateStars( hovered ) {
 		var starGroup = hovered.parentElement,
-			stars = starGroup.childNodes,
+			stars = starGroup.children,
 			current = parseInt( hovered.value ),
 			starClass = 'star-rating',
 			selectLabel = false;
@@ -4190,7 +6073,7 @@ function frmProFormJS() {
 		starGroup.className += ' frm-star-hovered';
 
 		for ( var i = 0; i < stars.length; i++ ) {
-			if ( typeof stars[ i ].className !== 'undefined' && stars[ i ].className.indexOf( starClass ) > -1 ) {
+			if ( stars[ i ].matches( '.' + starClass ) ) {
 				if ( selectLabel ) {
 					stars[ i ].className += ' star-rating-hover';
 				} else {
@@ -4207,12 +6090,13 @@ function frmProFormJS() {
 		var input = this.previousSibling,
 			starGroup = input.parentElement;
 		starGroup.classList.remove( 'frm-star-hovered' );
-		var stars = starGroup.childNodes;
+		var stars = starGroup.children;
 		var selected = jQuery( starGroup ).find( 'input:checked' ).attr( 'id' );
 		var isSelected = '';
+		var starClass = 'star-rating';
 
 		for ( var i = stars.length - 1; i > 0; i-- ) {
-			if ( typeof stars[ i ].className !== 'undefined' && stars[ i ].className.indexOf( 'star-rating' ) > -1 ) {
+			if ( stars[ i ].matches( '.' + starClass ) ) {
 				stars[ i ].classList.remove( 'star-rating-hover' );
 				if ( isSelected === '' && typeof selected !== 'undefined' && stars[ i ].getAttribute( 'for' ) == selected ) {
 					isSelected = ' star-rating-on';
@@ -4224,11 +6108,59 @@ function frmProFormJS() {
 		}
 	}
 
+	/**
+	 * Clears star rating.
+	 *
+	 * @since 5.4
+	 *
+	 * @param {HTMLElement} starGroup    Star group element.
+	 * @param {Boolean}     noClearInput Whether to clear input value or not. Default is `false`.
+	 */
+	function clearStars( starGroup, noClearInput ) {
+		var labels, input;
+
+		labels = starGroup.querySelectorAll( '.star-rating-on' );
+		if ( labels && labels.length ) {
+			labels.forEach( function( el ) {
+				el.classList.remove( 'star-rating-on' );
+			});
+		}
+
+		if ( ! noClearInput ) {
+			input = starGroup.querySelector( 'input[type="radio"]:checked' );
+			if ( input ) {
+				input.checked = false;
+			}
+		}
+	}
+
+	function handleSliderEvent() {
+		var i, c, fieldKey, currency;
+
+		c = this.parentNode.children;
+		for ( i = 0; i < c.length; i++ ) {
+			if ( c[ i ].className !== 'frm_range_value' ) {
+				continue;
+			}
+
+			fieldKey = getFieldKey( this.id, this.name );
+			if ( 'undefined' !== typeof __FRMCALC && __FRMCALC.calc[ fieldKey ]) {
+				currency = getCurrencyFromCalcRule( __FRMCALC.calc[ fieldKey ]);
+				c[i].textContent = formatCurrency( normalizeTotal( this.value, currency ), currency );
+			} else {
+				c[i].textContent = this.value;
+			}
+
+			break;
+		}
+	}
+
 	function loadSliders() {
-		jQuery( document ).on( 'input change', 'input[data-frmrange]', function() {
-			var range = jQuery( this );
-			range.next( '.frm_range_value' ).html( range.val() );
-		} );
+		jQuery( document ).on( 'input change', 'input[data-frmrange]', handleSliderEvent );
+	}
+
+	function getCurrencyFromCalcRule( calcRule ) {
+		return 'undefined' !== typeof calcRule.custom_currency ? calcRule.custom_currency : getCurrency( calcRule.form_id );
 	}
 
 	function setInlineFormWidth() {
@@ -4237,7 +6169,7 @@ function frmProFormJS() {
 
 		if ( inlineForms.length ) {
 			for ( f = 0; f < inlineForms.length; f++ ) {
-				inlineForm = jQuery( inlineForms[ f ] );
+				inlineForm = jQuery( inlineForms[ f ]);
 				children = inlineForm.children( '.frm_form_field' );
 
 				if ( children.length <= 12 && ! fieldHasLayoutClass( children.last() ) ) {
@@ -4252,6 +6184,9 @@ function frmProFormJS() {
 			classList = field.attr( 'class' ),
 			layoutClasses = [ 'frm_full', 'half', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth' ];
 
+		if ( typeof classList === 'undefined' ) {
+			return false;
+		}
 		for ( i = 1; i <= 12; i++ ) {
 			if ( field.hasClass( 'frm' + i ) ) {
 				return true;
@@ -4259,7 +6194,7 @@ function frmProFormJS() {
 
 			if ( i === 12 ) {
 				for ( var c = 0; c < layoutClasses.length; c++ ) {
-					if ( classList.indexOf( layoutClasses[ c ] ) !== -1 ) {
+					if ( classList.indexOf( layoutClasses[ c ]) !== -1 ) {
 						return true;
 					}
 
@@ -4277,8 +6212,8 @@ function frmProFormJS() {
 		fieldCount = children.length + 1; // include the submit button
 		colCount = Math.max( 2, Math.ceil( 12 / fieldCount ) );
 		for ( i = 0; i < children.length; i++ ) {
-			if ( ! fieldHasLayoutClass( jQuery( children[ i ] ) ) ) {
-				jQuery( children[ i ] ).addClass( 'frm' + colCount );
+			if ( ! fieldHasLayoutClass( jQuery( children[ i ]) ) ) {
+				jQuery( children[ i ]).addClass( 'frm' + colCount );
 			}
 		}
 
@@ -4297,8 +6232,12 @@ function frmProFormJS() {
 		jQuery( '.frm_pro_form' ).fadeIn( 'slow' );
 	}
 
-	function checkDynamicFields() {
+	function checkDynamicFields( event ) {
 		if ( typeof __frmDepDynamicFields !== 'undefined' ) {
+			if ( 'pageLoad' === event && typeof __frmHideOrShowFields === 'undefined' ) {
+				clearHideFields();
+			}
+
 			frmProForm.checkDependentDynamicFields( __frmDepDynamicFields );
 		}
 	}
@@ -4318,7 +6257,7 @@ function frmProFormJS() {
 			input = input.eq( 0 );
 		}
 
-		input.trigger( { type: 'change', selfTriggered: true, frmTriggered: fieldKey } );
+		input.trigger({ type: 'change', selfTriggered: true, frmTriggered: fieldKey });
 	}
 
 	function loadCustomInputMasks() {
@@ -4348,7 +6287,7 @@ function frmProFormJS() {
 	function fadeOut( $remove ) {
 		$remove.fadeOut( 'slow', function() {
 			$remove.remove();
-		} );
+		});
 	}
 
 	function objectSearch( array, value ) {
@@ -4363,16 +6302,36 @@ function frmProFormJS() {
 	}
 
 	function isNumeric( obj ) {
-		return ! jQuery.isArray( obj ) && ( obj - parseFloat( obj ) + 1 ) >= 0;
+		return ! Array.isArray( obj ) && ( obj - parseFloat( obj ) + 1 ) >= 0;
 	}
 
 	function checkPasswordField() {
-		if ( this.className.indexOf( 'frm_strength_meter' ) > -1 ) {
-			var fieldId = this.name.replace( /\D/g, '' ),
-				checks = passwordChecks();
+		var fieldId,
+			fieldIdSplit,
+			checks,
+			split,
+			suffix,
+			check,
+			span;
 
-			for ( var check in checks ) {
-				var span = document.getElementById( 'frm-pass-' + check + '-' + fieldId );
+		/*jshint validthis:true */
+		if ( this.className.indexOf( 'frm_strength_meter' ) > -1 ) {
+			fieldId = this.name.substr( this.name.indexOf( '[' ) + 1 ).replace( /\]\[\d\]\[/, '-' );
+			if ( fieldId[ fieldId.length - 1 ] === ']' ) {
+				fieldId = fieldId.substr( 0, fieldId.length - 1 );
+			} 
+			fieldIdSplit = fieldId.split( '-' );
+
+			if ( fieldIdSplit.length === 2 ) {
+				fieldId = fieldIdSplit[1] + '-' + fieldIdSplit[0];
+			}
+
+			checks = passwordChecks();
+			split = this.id.split( '-' );
+			suffix = split.length > 1 && ! isNaN( split[ split.length - 1 ]) ? '-' + split[ split.length - 1 ] : '';
+
+			for ( check in checks ) {
+				span = document.getElementById( 'frm-pass-' + check + '-' + fieldId + suffix );
 				addOrRemoveVerifyPass( checks[ check ], this.value, span );
 			}
 		}
@@ -4384,7 +6343,7 @@ function frmProFormJS() {
 			number: /\d/,
 			uppercase: /[A-Z]/,
 			lowercase: /[a-z]/,
-			'special-char': /(?=.*[^a-zA-Z0-9])/,
+			'special-char': /(?=.*[^a-zA-Z0-9])/
 		};
 	}
 
@@ -4413,34 +6372,1266 @@ function frmProFormJS() {
 		}
 	}
 
+	function checkCheckboxSelectionLimit() {
+		/*jshint validthis:true */
+		var limit = parseInt( this.getAttribute( 'data-frmlimit' ) ),
+			checked = this.checked;
+
+		if ( ! limit ) {
+			return;
+		}
+
+		var allBoxes = jQuery( this ).parents( '.frm_opt_container' ).find( 'input[type="checkbox"]' );
+		if ( limit >= allBoxes.length ) {
+			return;
+		}
+
+		var checkedBoxes = allBoxes.filter( function() {
+			return this.checked;
+		});
+
+		if ( checked ) {
+			if ( checkedBoxes.length >= limit ) {
+				allBoxes.filter( function() {
+					return ! this.checked;
+				}).attr( 'disabled', 'disabled' );
+			}
+		} else {
+			allBoxes.prop( 'disabled', false );
+		}
+	}
+
+	function addTopAddRowBtnForRepeater() {
+		// Set up 'Add Row' buttons that will show up when all repeated fields have been removed.
+		// Do it this way while we await CSS4 selectors that can do sth like .frm_repeat_sec:first-of-class
+		jQuery( '.frm_section_heading:has(div[class*="frm_repeat_"])' ).each( function() {
+			var firstRepeatedSection = jQuery( this ).find( 'div[class*="frm_repeat_"]' ).first()[0];
+			var addButtonWrapper = document.createElement( 'div' );
+			addButtonWrapper.classList.add( 'frm_form_field', 'frm_hidden_container', 'frm_repeat_buttons', 'frm_hidden' );
+			addButtonWrapper.append( firstRepeatedSection.querySelector( '.frm_add_form_row' ).cloneNode( true ) );
+			firstRepeatedSection.parentNode.insertBefore( addButtonWrapper, firstRepeatedSection );
+		});
+	}
+
+	function maybeDisableCheckboxesWithLimit() {
+		// Disable unchecked ones after form submit error if limit is already reached.
+		jQuery( 'input[type="checkbox"][data-frmlimit]:not(:checked)' ).each( function() {
+			var limit = parseInt( this.getAttribute( 'data-frmlimit' ) );
+
+			if ( ! limit ) {
+				return;
+			}
+
+			var allBoxes = jQuery( this ).parents( '.frm_opt_container' ).find( 'input[type="checkbox"]' );
+			if ( limit >= allBoxes.length ) {
+				// Unreasonable limit
+				return;
+			}
+
+			var checkedBoxes = allBoxes.filter( function() {
+				return this.checked;
+			});
+
+			if ( limit > checkedBoxes.length ) {
+				return;
+			}
+
+			this.setAttribute( 'disabled', 'disabled' );
+		});
+	}
+
+	function checkQuantityFieldMinMax( input ) {
+		var val = parseFloat( input.value ? input.value.trim() : 0 ),
+			max = input.hasAttribute( 'max' ) ? parseFloat( input.getAttribute( 'max' ) ) : 0,
+			min = input.hasAttribute( 'min' ) ? parseFloat( input.getAttribute( 'min' ) ) : 0;
+
+		if ( isNaN( val ) ) {
+			return 0;
+		}
+
+		max = isNaN( max ) ? 0 : max;
+		min = isNaN( min ) ? 0 : ( min < 0 ? 0 : min );
+
+		if ( val < min ) {
+			input.value = min;
+			return min;
+		}
+
+		if ( 0 !== max && val > max ) {
+			input.value = max;
+			return max;
+		}
+
+		return val;
+	}
+
+	/**
+	 * @since 4.04.01
+	 */
+	function setHiddenProduct( input ) {
+		input.setAttribute( 'data-frmhidden', '1' );
+		triggerChange( jQuery( input ) );
+	}
+
+	/**
+	 * @since 4.04.01
+	 */
+	function setHiddenProductContainer( container ) {
+		if ( container.innerHTML.indexOf( 'data-frmprice' ) !== -1 ) {
+			jQuery( container ).find( 'input[data-frmprice], select:has([data-frmprice])' ).attr( 'data-frmhidden', '1' );
+		}
+	}
+
+	/**
+	 * @since 4.04.01
+	 */
+	function setShownProduct( input ) {
+		var wasHidden = input.getAttribute( 'data-frmhidden' );
+
+		if ( wasHidden !== null ) {
+			input.removeAttribute( 'data-frmhidden' );
+			triggerChange( jQuery( input ) );
+		}
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function calcProductsTotal( e ) {
+		var formTotals = [],
+			totalFields;
+
+		if ( typeof __FRMCURR  === 'undefined' ) {
+			return;
+		}
+
+		if ( undefined !== e && 'undefined' !== typeof e.target && ( 'keyup' === e.type || 'change' === e.type ) ) {
+			// an event has been fired
+			var el = e.target;
+			if ( el.hasAttribute( 'data-frmprice' ) && el instanceof HTMLInputElement && 'text' === el.type ) {
+				// user-defined product
+				el.setAttribute( 'data-frmprice', el.value.trim() );
+			}
+		}
+
+		totalFields = jQuery( '[data-frmtotal]' );
+		if ( ! totalFields.length ) {
+			return;
+		}
+
+		totalFields.each( function() {
+			var currency, formId, formatted,
+				total = 0,
+				totalField = jQuery( this ),
+				$form = totalField.closest( 'form' ),
+				isRepeatingTotal = isRepeatingFieldByName( this.name );
+
+			if ( ! $form.length ) {
+				return;
+			}
+
+			formId = $form.find( 'input[name="form_id"]' ).val();
+			currency = getCurrency( formId );
+
+			if ( typeof formTotals[ formId ] !== 'undefined' && ! isRepeatingTotal ) {
+				total = formTotals[ formId ];
+			} else {
+
+				$form.find( 'input[data-frmprice],select:has([data-frmprice])' ).each( function() {
+					var quantity, $this,
+						price = 0,
+						isUserDef = false,
+						isSingle = false;
+
+					// total fields inside repeaters are for their corresponding rows only.
+					if ( isRepeatingTotal && ! isRepeatingWithTotal( this, totalField[0]) ) {
+						return;
+					}
+
+					if ( this.hasAttribute( 'data-frmhigherpg' ) || isProductFieldHidden( this ) ) {
+						return;
+					}
+
+					if ( this.tagName === 'SELECT' ) {
+						if ( this.selectedIndex !== -1 ) {
+							price = this.options[ this.selectedIndex ].getAttribute( 'data-frmprice' );
+						}
+					} else {
+						isUserDef = 'text' === this.type;
+						isSingle = 'hidden' === this.type;
+						$this = jQuery( this );
+						if ( ( ! isUserDef && ! isSingle ) && ! $this.is( ':checked' ) ) {
+							return;
+						}
+						price = this.getAttribute( 'data-frmprice' );
+					}
+
+					if ( ! price ) {
+						price = 0;
+					} else {
+						price = preparePrice( price, currency );
+						quantity = getQuantity( isUserDef, this );
+						price = parseFloat( quantity ) * parseFloat( price );
+					}
+
+					total += price;
+				});
+
+				if ( ! isRepeatingTotal ) {
+					formTotals[ formId ] = total;
+				}
+			}
+
+			total = isNaN( total ) ? 0 : total;
+
+			// Set a decimal separator for currency if no default for it
+			currency.decimal_separator = currency.decimal_separator.trim(); // first remove unnecessary space(s)
+			if ( ! currency.decimal_separator.length ) {
+				currency.decimal_separator = '.';
+			}
+
+			total = normalizeTotal( total, currency );
+			totalField.val( total );
+
+			// because of e.g. fields that might be using this field for calculations
+			triggerChange( totalField );
+
+			total = formatCurrency( total, currency );
+			formatted = totalField.prev( '.frm_total_formatted' );
+			if ( formatted.length < 1 ) {
+				// In case paragraphs have been added to the form.
+				formatted = totalField.closest( '.frm_form_field' ).find( '.frm_total_formatted' );
+			}
+			if ( formatted.length ) {
+				formatted.html( total );
+			}
+		});
+	}
+
+	/**
+	 * Round total and maybe add trailing zeros so formatCurrency has a proper format to work with.
+	 */
+	function normalizeTotal( total, currency ) {
+		total = currency.decimals > 0 ? Math.round10( total, currency.decimals ) : Math.ceil( total );
+		return maybeAddTrailingZeroToPrice( total, currency );
+	}
+
+	/**
+	 * @since 4.05.01
+	 */
+	function formatCurrency( total, currency ) {
+		var leftSymbol, rightSymbol;
+		total = maybeAddTrailingZeroToPrice( total, currency );
+		total = maybeRemoveTrailingZerosFromPrice( total, currency );
+		total = addThousands( total, currency );
+		leftSymbol = currency.symbol_left + currency.symbol_padding;
+		rightSymbol = currency.symbol_padding + currency.symbol_right;
+		return leftSymbol + total + rightSymbol;
+	}
+
+	/**
+	 * @since 5.0.15
+	 */
+	function maybeRemoveTrailingZerosFromPrice( total, currency ) {
+		var split = total.split( currency.decimal_separator );
+		if ( 2 !== split.length || split[1].length <= currency.decimals ) {
+			return total;
+		}
+		if ( 0 === currency.decimals ) {
+			return split[0];
+		}
+		return split[0] + currency.decimal_separator + split[1].substr( 0, currency.decimals );
+	}
+
+	/**
+	 * @since 5.0.10
+	 */
+	function addRteRequiredMessages() {
+		var keys, length, index, key, field;
+		if ( 'undefined' === typeof __FRMRTEREQMESSAGES ) {
+			return;
+		}
+		keys = Object.keys( __FRMRTEREQMESSAGES );
+		length = keys.length;
+		for ( index = 0; index < length; ++index ) {
+			key = keys[ index ];
+			field = document.getElementById( key );
+			if ( field ) {
+				field.setAttribute( 'data-reqmsg', __FRMRTEREQMESSAGES[ key ]);
+			}
+		}
+	}
+
+	/**
+	 * @since 4.04.01
+	 *
+	 * This function is most suited for (product) fields that are
+	 * on their own page i.e. not hidden (in a multi-paged form).
+	 *
+	 * As for fields that are conditionally hidden - themselves or
+	 * their parent - and are not on their own page, the PHP side
+	 * handles them well; either their HTML is not included on the
+	 * page at all (e.g. fields in a conditionally hidden section)
+	 * or their value is empty & price is thus 0, so no worries here.
+	 */
+	function isProductFieldHidden( input ) {
+		return input.getAttribute( 'data-frmhidden' ) !== null;
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function isRepeatingWithTotal( input, total ) {
+		// .+ is safer than d+ because field keys might be used at times.
+		var regex = /item_meta\[.+?\]\[.+?\]/;
+
+		return isRepeatingFieldByName( input.name ) && ( total.name.match( regex )[0] === input.name.match( regex )[0]);
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function getCurrency( formId ) {
+		if ( typeof __FRMCURR  !== 'undefined' && typeof __FRMCURR[ formId ] !== 'undefined' ) {
+			return __FRMCURR[ formId ];
+		}
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function getQuantity( isUserDef, field ) {
+		var quantity, quantityFields, isRepeating, fieldID,
+			$this = jQuery( field );
+
+		fieldID = frmFrontForm.getFieldId( field, false );
+		if ( ! fieldID ) {
+			return 0;
+		}
+
+		isRepeating = isRepeatingFieldByName( field.name );
+
+		if ( isRepeating ) {
+			// .+ is safer than d+ because field keys might be used at times.
+			var match = field.name.match( /item_meta\[.+?\]\[.+?\]/ );
+			if ( null === match ) {
+				// very unlikely though
+				return 0;
+			}
+			// we may need this in getQuantityFields
+			$this.nameMatch = match[0];
+		}
+
+		quantity = getQuantityField( $this, fieldID, isRepeating );
+
+		if ( quantity ) {
+			quantity = checkQuantityFieldMinMax( quantity );
+		} else {
+			quantityFields = getQuantityFields( $this, isRepeating );
+			if ( 1 === quantityFields.length && '' === quantityFields[0].getAttribute( 'data-frmproduct' ).trim() ) {
+				quantity = checkQuantityFieldMinMax( quantityFields[0]);
+			} else {
+				// If there is no quantity field, assume 1.
+				quantity = 1;
+			}
+		}
+
+		if ( 0 === quantity && isUserDef ) {
+			// only user-defined fields may not have attached quantity fields
+			quantity = 1;
+		}
+
+		return quantity;
+	}
+
+	function getQuantityField( elementObj, fieldID, isRepeating ) {
+		var quantity,
+			quantityFields = elementObj.closest( 'form' ).find( '[data-frmproduct]' );
+
+		fieldID = fieldID.toString();
+
+		quantityFields.each( function() {
+			var ids;
+
+			if ( isRepeating && -1 === this.name.indexOf( elementObj.nameMatch ) ) {
+				return true;
+			}
+
+			ids = JSON.parse( this.getAttribute( 'data-frmproduct' ).trim() );
+			if ( '' === ids ) {
+				return true;
+			}
+
+			// convert to array if necessary cos of existing fields that are already using single product fields
+			ids = 'string' === typeof ids ? [ ids.toString() ] : ids;
+			if ( ids.indexOf( fieldID ) > -1 ) {
+				quantity = this;
+				return false;
+			}
+		});
+
+		return quantity;
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function getQuantityFields( elementObj, isRepeating ) {
+		var quantityFields;
+		if ( isRepeating ) {
+			quantityFields = elementObj.closest( 'form' ).find( '[name^="' + elementObj.nameMatch + '"]' + '[data-frmproduct]' );
+		} else {
+			// make sure the search is form-based (i.e. per form) cos there could be more than 1 form on the page
+			// not([id*="-"]) means : not inside a repeater
+			quantityFields = elementObj.closest( 'form' ).find( '[data-frmproduct]:not([id*="-"])' );
+		}
+
+		return quantityFields;
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function preparePrice( price, currency ) {
+		var matches;
+
+		if ( ! price ) {
+			return 0;
+		}
+		price = price + ''; // convert to string just to be sure
+
+		matches = price.match( /[0-9,.]*\.?\,?[0-9]+/g );
+		if ( null === matches ) {
+			return 0;
+		}
+
+		price = matches.length ? matches[ matches.length - 1 ] : 0;
+		if ( price ) {
+			price = maybeUseDecimal( price, currency );
+			price = price.replace( currency.thousand_separator, '' ).replace( currency.decimal_separator, '.' );
+		}
+
+		return price;
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function maybeUseDecimal( amount, currency ) {
+		var usedForDecimal, amountParts;
+		if ( currency.thousand_separator == '.' ) {
+			amountParts = amount.split( '.' );
+			usedForDecimal = ( 2 == amountParts.length && 2 == amountParts[1].length );
+			if ( usedForDecimal ) {
+				amount = amount.replace( '.', currency.decimal_separator );
+			}
+		}
+		return amount;
+	}
+
+	/**
+	 * @since 4.04
+	 */
+	function maybeAddTrailingZeroToPrice( price, currency ) {
+		if ( 'number' !== typeof price ) {
+			return price;
+		}
+
+		price += ''; // first convert to string
+		var pos = price.indexOf( '.' );
+
+		if ( pos === -1 ) {
+			price = price + '.00';
+		} else if ( price.substring( pos + 1 ).length < 2 ) {
+			price += '0';
+		}
+
+		return price.replace( '.', currency.decimal_separator );
+	}
+
+	/**
+	 * @since 4.04.04
+	 */
+	function addThousands( total, currency ) {
+		if ( currency.thousand_separator ) {
+			total = total.toString().replace( /\B(?=(\d{3})+(?!\d))/g, currency.thousand_separator );
+		}
+		return total;
+	}
+
+	/**
+	 * @since 5.1
+	 */
+	function setAutoHeightForTextArea() {
+		document.querySelectorAll( '.frm-show-form textarea' ).forEach(
+			function( element ) {
+				var minHeight, callback;
+
+				if ( typeof element.dataset.autoGrow === 'undefined' || element.getAttribute( 'frm-autogrow' ) ) {
+					return;
+				}
+
+				minHeight = getElementHeight( element );
+				element.style.overflowY = 'hidden';
+				element.style.transition = 'none';
+
+				callback = function() {
+					adjustHeight( element, minHeight );
+				};
+
+				callback();
+				element.addEventListener( 'input', callback );
+				window.addEventListener( 'resize', callback );
+				document.addEventListener( 'frmShowField', callback );
+				element.setAttribute( 'frm-autogrow', 1 );
+			}
+		);
+	}
+
+	function getElementHeight( element ) {
+		var clone, container, height;
+
+		clone = element.cloneNode( true );
+		clone.style.position = 'absolute';
+		clone.style.left = '-10000px';
+		clone.style.top = '-10000px';
+
+		container = jQuery( element ).closest( '.frm_forms' ).get( 0 );
+		container.appendChild( clone );
+
+		height = clone.clientHeight;
+
+		container.removeChild( clone );
+
+		return height;
+	}
+
+	/**
+	 * @since 5.1
+	 */
+	function adjustHeight( el, minHeight ) {
+		if ( minHeight >=  el.scrollHeight ) {
+			return;
+		}
+
+		el.style.height = 0;
+		el.style.height = Math.max( minHeight, el.scrollHeight ) + 'px';
+	}
+
+	function updateContentLength() {
+		function onChange( e ) {
+			var length, max, type,
+				messageEl = e.target.nextElementSibling,
+				countEl = messageEl.querySelector( 'span' );
+
+			if ( ! countEl ) {
+				return;
+			}
+
+			type = messageEl.getAttribute( 'data-max-type' );
+			max  = parseInt( messageEl.getAttribute( 'data-max' ) );
+			if ( 'word' === type ) {
+				length = e.target.value.split( /\s+/ ).filter(
+					function( word ) {
+						return word;
+					}
+				).length;
+			} else {
+				length = e.target.value.length;
+			}
+
+			countEl.innerText = length;
+
+			messageEl.classList.toggle( 'frm_limit_error', length > max );
+		}
+
+		document.addEventListener( 'input', function( e ) {
+			var target;
+			// loop parent nodes from the target to the delegation node
+			for ( target = e.target; target && target != this; target = target.parentNode ) {
+				if ( target.matches( 'textarea' ) && target.nextElementSibling && target.nextElementSibling.matches( '.frm_pro_max_limit_desc' ) ) {
+					onChange( e );
+					break;
+				}
+			}
+		}, false );
+	}
+
+	/**
+	 * Triggers custom event.
+	 *
+	 * @since 5.1
+	 * @since 5.3.3 Added the third parameter.
+	 *
+	 * @param {HTMLElement} element   Element.
+	 * @param {String}      eventType Event name.
+	 * @param {Object}      data      Data to add to the event.
+	 */
+	function triggerEvent( element, eventType, data ) {
+		var event;
+
+		if ( 'function' === typeof frmFrontForm.triggerCustomEvent ) {
+			frmFrontForm.triggerCustomEvent( element, eventType, data );
+			return;
+		}
+
+		if ( typeof window.CustomEvent === 'function' ) {
+			event = new CustomEvent( eventType );
+		} else if ( document.createEvent ) {
+			event = document.createEvent( 'HTMLEvents' );
+			event.initEvent( eventType, false, true );
+		} else {
+			return;
+		}
+
+		event.frmData = data;
+
+		element.dispatchEvent( event );
+	}
+
+	/**
+	 * Handles start over button.
+	 *
+	 * @since 5.4
+	 */
+	function startOverButton() {
+		/**
+		 * Gets all field inputs.
+		 *
+		 * @param {HTMLElement} formEl Form element.
+		 * @return {Array}
+		 */
+		function getInputs( formEl ) {
+			return getInputsInFieldOnPage( formEl );
+		}
+
+		/**
+		 * Resets field inputs.
+		 *
+		 * @param {HTMLElement} formEl Form element.
+		 */
+		function resetInputs( formEl ) {
+			var inputs = getInputs( formEl );
+
+			/**
+			 * Resets a single repeater.
+			 *
+			 * @param {HTMLElement} repeatBtns Repeater buttons.
+			 */
+			function resetRepeater( repeatBtns ) {
+				var repeater, items;
+
+				repeater = repeatBtns.parentElement;
+				items    = repeater.querySelectorAll( '.frm_repeat_sec, .frm_repeat_inline, .frm_repeat_grid' );
+				if ( ! items.length ) {
+					// Add the first row if all rows are deleted.
+					currentlyAddingRow = false;
+					repeatBtns.querySelector( '.frm_add_form_row' ).click();
+				} else if ( items.length > 1 ) {
+					// Remove all rows except the first one.
+					items.forEach( function( item, index ) {
+						if ( index ) {
+							item.parentElement.removeChild( item );
+						}
+					});
+				}
+			}
+
+			// Remove repeater sections.
+			formEl.querySelectorAll( '.frm_section_heading > .frm_repeat_buttons' ).forEach( resetRepeater );
+
+			// Clear field value.
+			clearValueForInputs( inputs, '', true );
+
+			// Remove "disabled" attribute added by limit selections option.
+			inputs.forEach( function( input ) {
+				if ( input.disabled && input.getAttribute( 'data-frmlimit' ) ) {
+					input.removeAttribute( 'disabled' );
+				}
+			});
+		}
+
+		/**
+		 * Checks if given form is a multiple pages form.
+		 *
+		 * @param {Number} formId Form Id.
+		 * @return {Boolean}
+		 */
+		function isMultiPagesForm( formId ) {
+			return document.getElementById( 'frm_page_order_' + formId ) || document.querySelector( '#frm_form_' + formId + '_container input[name="frm_next_page"]' );
+		}
+
+		/**
+		 * Reloads form.
+		 *
+		 * @param {Number}      formId Form ID.
+		 * @param {HTMLElement} formEl Form element.
+		 */
+		function reloadForm( formId, formEl ) {
+			formEl.classList.add( 'frm_loading_form' );
+			postToAjaxUrl(
+				formEl,
+				{
+					action: 'frm_load_form',
+					form: formId,
+					_ajax_nonce: frm_js.nonce
+				},
+				function( response ) {
+					var idValueMapping;
+					if ( ! response.success ) {
+						console.log( response );
+						return;
+					}
+
+					idValueMapping = getDefaultValuesFromForm( formEl );
+
+					jQuery( formEl.closest( '.frm_forms' ) ).replaceWith( response.data );
+
+					setDefaultValues( idValueMapping );
+					maybeShowMoreStepsButton();
+
+					if ( 'undefined' !== typeof __frmAjaxDropzone ) {
+						window.__frmDropzone = __frmAjaxDropzone;
+					}
+
+					checkConditionalLogic( 'pageLoad' );
+					checkFieldsOnPage( 'frm_form_' + formId + '_container' );
+
+					triggerCompletedEvent( formId );
+				},
+				function( response ) {
+					console.log( response );
+				}
+			);
+		}
+
+		/**
+		 * Gets the default values of given form.
+		 *
+		 * @param {HTMLElement} formEl Form element.
+		 * @return {Object}            Object with keys are input IDs, values are the default values.
+		 */
+		function getDefaultValuesFromForm( formEl ) {
+			var inputs,
+				values = {};
+
+			inputs = formEl.querySelectorAll( '[data-frmval]' );
+			inputs.forEach( function( input ) {
+				values[ input.id ] = input.getAttribute( 'data-frmval' );
+			});
+
+			return values;
+		}
+
+		/**
+		 * Sets default values of fields in given form from the id value mapping built before.
+		 *
+		 * @param {Object} idValueMapping Object with keys are input IDs, values are the default values.
+		 */
+		function setDefaultValues( idValueMapping ) {
+			Object.keys( idValueMapping ).forEach( function( id ) {
+				var input = document.getElementById( id );
+				if ( ! input ) {
+					return;
+				}
+
+				input.setAttribute( 'data-frmval', idValueMapping[ id ]);
+
+				if ( 'checkbox' === input.type || 'radio' === input.type ) {
+					// Every checkbox and radio input has data-frmval, the one has value === data-frmval is the default.
+					if ( input.value === idValueMapping[ id ]) {
+						input.checked = true;
+					}
+					return;
+				}
+
+				input.value = idValueMapping[ id ];
+			});
+		}
+
+		/**
+		 * Checks if form has Save draft enabled.
+		 *
+		 * @param {HTMLElement} formEl Form element.
+		 * @return {Boolean}
+		 */
+		function hasSaveDraft( formEl ) {
+			return ! ! formEl.querySelector( '.frm_save_draft' );
+		}
+
+		/**
+		 * Deletes draft version.
+		 *
+		 * @param {Number}      formId Form ID.
+		 * @param {HTMLElement} formEl Form element.
+		 */
+		function deleteDraft( formId, formEl ) {
+			postToAjaxUrl(
+				formEl,
+				{
+					action: 'frm_delete_draft_entry',
+					form: formId,
+					_ajax_nonce: frm_js.nonce
+				}
+			);
+		}
+
+		function onClickStartOver( e ) {
+			e.preventDefault();
+
+			var formEl, formId, draftIdInput;
+			formEl = e.target.closest( 'form' );
+			if ( ! formEl ) {
+				return;
+			}
+
+			formId = formEl.querySelector( 'input[name="form_id"]' ).value;
+
+			if ( hasSaveDraft( formEl ) ) {
+				deleteDraft( formId, formEl );
+
+				// Clear draft inputs.
+				draftIdInput = formEl.querySelector( 'input[name="id"]' );
+				if ( draftIdInput ) {
+					draftIdInput.remove();
+				}
+
+				formEl.querySelector( 'input[name="frm_action"]' ).value = 'create';
+			}
+
+			if ( isMultiPagesForm( formId ) ) {
+				reloadForm( formId, formEl );
+			} else {
+				resetInputs( formEl );
+				triggerCompletedEvent( formId );
+			}
+		}
+
+		function triggerCompletedEvent( formId ) {
+			triggerEvent( document, 'frm_after_start_over', { formId: formId });
+		}
+
+		document.addEventListener( 'click', function( e ) {
+			var target;
+
+			// loop parent nodes from the target to the delegation node.
+			for ( target = e.target; target && target != this; target = target.parentNode ) {
+				if ( target.matches( '.frm_start_over' ) ) {
+					onClickStartOver.call( target, e );
+					break;
+				}
+			}
+		}, false );
+	}
+
+	function maybeShowMoreStepsButton() {
+		var i, listWrappers, listWrapper, rootlineSteps,
+			wrappingElementsCount, startIndex, hiddenSteps,
+			showMoreButtonLi, showMoreButton, hiddenStepsWrapper,
+			oldIE;
+
+		listWrappers = document.getElementsByClassName( 'frm_rootline' );
+		copyRootlines( listWrappers );
+		oldIE = isOldIEVersion( 10 );
+
+		for ( i = 0; i < listWrappers.length; i++ ) {
+			listWrapper = listWrappers[ i ];
+			if ( oldIE ) {
+				// Hide the rootlines in < IE 11.
+				listWrapper.className += ' frm_hidden';
+				continue;
+			}
+
+			rootlineSteps = listWrapper.children;
+
+			wrappingElementsCount = countOverflowPages( rootlineSteps );
+
+			if ( ! wrappingElementsCount ) {
+				continue;
+			}
+
+			showMoreButton = listWrapper.querySelector( '.frm_rootline_show_more_btn' );
+			if ( ! showMoreButton ) {
+				continue;
+			}
+
+			showMoreButton.addEventListener( 'click', showMoreSteps );
+
+			// Show the existing "..." button.
+			showMoreButtonLi = showMoreButton.parentNode;
+			showMoreButtonLi.className = showMoreButtonLi.className.replace( ' frm_hidden', '' );
+
+			// Don't count the overflow step in the HTML.
+			startIndex  = rootlineSteps.length - wrappingElementsCount > 1 ? rootlineSteps.length - wrappingElementsCount - 3 : 0;
+			hiddenSteps = [].slice.call( rootlineSteps, Math.max( startIndex, 1 ), rootlineSteps.length - 2 );
+
+			hiddenStepsWrapper = showMoreButtonLi.querySelector( '.frm_rootline_hidden_steps' );
+
+			hiddenSteps.forEach( function( hiddenStep ) {
+				hiddenStepsWrapper.appendChild( hiddenStep );
+			});
+
+			moveRootlineTitles( hiddenStepsWrapper, listWrapper, showMoreButton );
+
+			listWrapper.insertBefore( showMoreButtonLi, listWrapper.children[ listWrapper.children.length - 1 ]);
+
+			if ( listWrapper.children[ listWrapper.children.length - 1 ].className.indexOf( 'frm_current_page' ) !== -1 ) {
+				updateRootlineStyle( hiddenStepsWrapper );
+			}
+		}
+	}
+
+	/**
+	 * Check if the browser is IE. If it matches the max or is lower, return true.
+	 *
+	 * @param int max
+	 * @returns bool
+	 */
+	function isOldIEVersion( max ) {
+		var version,
+			myNav = navigator.userAgent.toLowerCase();
+		version = myNav.indexOf( 'msie' ) !== -1 ? parseInt( myNav.split( 'msie' )[1]) : false;
+		return version !== false && max >= version;
+	}
+
+	function countOverflowPages( rootlineSteps ) {
+		var j,
+			wrappingElementsCount = 0;
+
+		for ( j = 0; j < rootlineSteps.length; j++ ) {
+			if ( rootlineSteps[ j ].offsetTop !== rootlineSteps[0].offsetTop && rootlineSteps[ j ].className.indexOf( 'frm_rootline_show_hidden_steps_btn' ) === -1 ) {
+				wrappingElementsCount++;
+			}
+		}
+		return wrappingElementsCount;
+	}
+
+	function moveRootlineTitles( hiddenStepsWrapper, listWrapper, showMoreButton ) {
+		var currentPageTitle, currentStepTitle, rootlineGroup,
+			activeHiddenStepLink = hiddenStepsWrapper.querySelector( 'input:not(.frm_page_back):not(.frm_page_skip)' );
+
+		if ( activeHiddenStepLink ) {
+			currentPageTitle = activeHiddenStepLink.parentElement.querySelector( '.frm_rootline_title' );
+
+			maybeUpdateRootlineTitles( activeHiddenStepLink.parentElement.previousElementSibling, hiddenStepsWrapper );
+
+			showMoreButton.parentElement.className += ' active';
+			showMoreButton.className += ' active';
+		} else {
+			currentPageTitle = listWrapper.querySelector( '.frm_current_page' ).querySelector( '.frm_rootline_title' );
+		}
+
+		if ( ! currentPageTitle ) {
+			return;
+		}
+
+		currentStepTitle = currentPageTitle.textContent;
+		if ( ! currentStepTitle ) {
+			return;
+		}
+
+		// Add current step on top of rootline bar.
+		rootlineGroup = listWrapper.closest( '.frm_rootline_group' );
+
+		showCurrentHiddenStepText( currentStepTitle );
+	}
+
+	function showCurrentHiddenStepText( currentStepTitle ) {
+		var rootlineCurrentStep = document.createElement( 'span' );
+		rootlineCurrentStep.className = 'frm_rootline_title';
+		rootlineCurrentStep.textContent = currentStepTitle;
+		document.querySelector( '.frm_rootline_show_hidden_steps_btn' ).appendChild( rootlineCurrentStep );
+	}
+
+	function copyRootlines( listWrappers ) {
+		var i, listWrappers, listWrapper, rootlinesBackup;
+		rootlinesBackup = {};
+		for ( i = 0; i < listWrappers.length; i++ ) {
+			listWrapper = listWrappers[ i ];
+			rootlinesBackup[ listWrapper.closest( 'form' ).getAttribute( 'id' ) ] = listWrapper.cloneNode( true );
+		}
+		listWrappersOriginal = rootlinesBackup;
+	}
+
+	function maybeUpdateRootlineTitles( previousPageLink, hiddenStepsWrapper ) {
+		var i;
+		if ( previousPageLink ) {
+			i = 0;
+			while ( previousPageLink ) {
+				i++;
+				previousPageLink = previousPageLink.previousElementSibling;
+			}
+			updateRootlineStyle( hiddenStepsWrapper, i );
+		}
+	}
+
+	function updateRootlineStyle( hiddenStepsWrapper, uptoIndex ) {
+		var rootlineTitles, rootlineTitle;
+
+		if ( ! uptoIndex ) {
+			uptoIndex = hiddenStepsWrapper.children.length;
+		}
+		rootlineTitles = [].slice.call( hiddenStepsWrapper.children, 0, uptoIndex );
+		rootlineTitles.forEach( function( el ) {
+			rootlineTitle = el.querySelector( '.frm_rootline_title' );
+			if ( rootlineTitle ) {
+				rootlineTitle.className += ' frm_prev_page_title';
+			}
+		});
+	}
+
+	function showMoreSteps( e ) {
+		var hiddenStepsWrapper = e.target.parentElement.querySelector( 'ul' );
+		if ( hiddenStepsWrapper.className.indexOf( 'frm_hidden' ) > -1 ) {
+			hiddenStepsWrapper.className = hiddenStepsWrapper.className.replace( ' frm_hidden', '' );
+		} else {
+			hiddenStepsWrapper.className += ' frm_hidden';
+		}
+	}
+
+	/**
+	 * Maybe add polyfills.
+	 *
+	 * @since 5.4
+	 */
+	function maybeAddPolyfills() {
+		if ( ! Element.prototype.matches ) {
+			// IE9 supports matches but as msMatchesSelector instead.
+			Element.prototype.matches = Element.prototype.msMatchesSelector;
+		}
+
+		if ( ! Element.prototype.closest ) {
+			Element.prototype.closest = function( s ) {
+				var el = this;
+
+				do {
+					if ( el.matches( s ) ) {
+						return el;
+					}
+					el = el.parentElement || el.parentNode;
+				} while ( el !== null && el.nodeType === 1 );
+
+				return null;
+			};
+		}
+
+		// Element.remove().
+		( function( arr ) {
+			arr.forEach( function( item ) {
+				if ( item.hasOwnProperty( 'remove' ) ) {
+					return;
+				}
+				Object.defineProperty( item, 'remove', {
+					configurable: true,
+					enumerable: true,
+					writable: true,
+					value: function remove() {
+						this.parentNode.removeChild( this );
+					}
+				});
+			});
+		}([ Element.prototype, CharacterData.prototype, DocumentType.prototype ]) );
+
+		// NodeList.forEach().
+		if ( window.NodeList && ! NodeList.prototype.forEach ) {
+			NodeList.prototype.forEach = function( callback, thisArg ) {
+				thisArg = thisArg || window;
+				for ( var i = 0; i < this.length; i++ ) {
+					callback.call( thisArg, this[ i ], i, this );
+				}
+			};
+		}
+	}
+
+	function validateFieldValue() {
+		document.addEventListener( 'frm_validate_field_value', function( event ) {
+			if ( 'object' !== typeof event.frmData.field || 'object' !== typeof event.frmData.errors ) {
+				return;
+			}
+
+			if ( 'password' === event.frmData.field.type ) {
+				validatePasswordStrength( event.frmData.field, event.frmData.errors );
+			}
+		});
+	}
+
+	function validatePasswordStrength( field, errors ) {
+		var check, regex, checks;
+
+		if ( 'object' !== typeof window.frm_password_checks ) {
+			return;
+		}
+
+		if ( -1 === field.className.indexOf( 'frm_strong_pass' ) || 0 === field.id.indexOf( 'field_conf_' ) ) {
+			return;
+		}
+
+		checks = window.frm_password_checks;
+
+		for ( check in checks ) {
+			regex = checks[ check ].regex.slice( 1, checks[ check ].regex.length - 1 );
+			regex = new RegExp( regex );
+			if ( ! regex.test( field.value ) ) {
+				errors[ frmFrontForm.getFieldId( field ) ] = checks[ check ].message;
+				return;
+			}
+		}
+	}
+
+	function maybeTriggerCalc( event ) {
+		if ( event.persisted || ( window.performance && window.performance.getEntriesByType( 'navigation' )[0].type === 'back_forward' ) ) {
+			triggerCalc();
+		}
+	}
+
+	function showMoreStepsButtonEvents() {
+		var timeout;
+
+		window.addEventListener( 'resize', function() {
+			var i, listWrappers, listWrapper, form;
+			listWrappers = document.getElementsByClassName( 'frm_rootline' );
+			for ( i = 0; i < listWrappers.length; i++ ) {
+				listWrapper = listWrappers[ i ];
+				form = listWrapper.closest( 'form' );
+				form.querySelector( '.frm_rootline_group' ).replaceChild( listWrappersOriginal[ form.getAttribute( 'id' ) ], listWrapper );
+			}
+
+			clearTimeout( timeout );
+			timeout = setTimeout( maybeShowMoreStepsButton(), 100 );
+		});
+	}
+
+	function handleShowPasswordBtn() {
+		documentOn( 'click', '.frm_show_password_btn', function( event ) {
+			var input = event.target.closest( '.frm_show_password_wrapper' ).querySelector( 'input' ),
+				button = input.nextElementSibling;
+
+			if ( 'password' === input.type ) {
+				input.type = 'text';
+				button.setAttribute( 'data-show-password-label', button.title );
+				button.title = button.getAttribute( 'data-hide-password-label' );
+			} else {
+				input.type = 'password';
+				button.title = button.getAttribute( 'data-show-password-label' );
+			}
+
+			button.setAttribute( 'aria-label', button.title );
+		});
+	}
+
+	/**
+	 * Does the same as jQuery( document ).on( 'event', 'selector', handler ).
+	 *
+	 * @since 6.3.1
+	 *
+	 * @param {String}         event    Event name.
+	 * @param {String}         selector Selector.
+	 * @param {Function}       handler  Handler.
+	 * @param {Boolean|Object} options  Options to be added to `addEventListener()` method. Default is `false`.
+	 */
+	function documentOn( event, selector, handler, options ) {
+		if ( 'undefined' === typeof options ) {
+			options = false;
+		}
+
+		document.addEventListener( event, function( e ) {
+			var target;
+
+			// loop parent nodes from the target to the delegation node.
+			for ( target = e.target; target && target != this; target = target.parentNode ) {
+				if ( target && target.matches && target.matches( selector ) ) {
+					handler.call( target, e );
+					break;
+				}
+			}
+		}, options );
+	}
+
+	/**
+	 * @since 6.5.1
+	 */
+	function handleElementorPopupConflicts() {
+		var elementorPopupWrapper = document.querySelector( '.elementor-popup-modal' );
+
+		if ( null !== elementorPopupWrapper ) {
+			// Make dropzone items clickable.
+			elementorPopupWrapper.querySelectorAll( '.frm_dropzone' ).forEach( function( item ) {
+				item.classList.remove( 'dz-clickable' );
+			});
+
+			// Remove field chosen containers.
+			elementorPopupWrapper.querySelectorAll( '.frm_form_field .chosen-container' ).forEach( function( chosenContainer ) {
+				chosenContainer.remove();
+			});
+		}
+
+		loadDropzones();
+		loadAutocomplete();
+	}
+
+	function getAllFormClasses( input ) {
+		var formContainer, formClasses;
+
+		formContainer = input.closest( '.with_frm_style' );
+		if ( ! formContainer ) {
+			return [];
+		}
+
+		formClasses = [];
+		Array.prototype.forEach.call(
+			formContainer.className.split( ' ' ),
+			function( className ) {
+				var trimmedClassName = className.trim();
+				if ( '' !== trimmedClassName && 'frm_forms' !== trimmedClassName ) {
+					formClasses.push( trimmedClassName );
+				}
+			}
+		);
+
+		return formClasses;
+	}
+
 	return {
 		init: function() {
+			maybeAddPolyfills();
+
+			addEventListener( 'pageshow', maybeTriggerCalc );
+
 			jQuery( document ).on( 'frmFormComplete', afterFormSubmitted );
 			jQuery( document ).on( 'frmPageChanged', afterPageChanged );
+			jQuery( document ).on( 'frmAfterAddRow frmAfterRemoveRow', calcProductsTotal );
 
 			jQuery( document ).on( 'click', '.frm_trigger', toggleSection );
+			jQuery( document ).on( 'keydown', '.frm_trigger', toggleSection );
+
 			var $blankField = jQuery( '.frm_blank_field' );
 			if ( $blankField.length ) {
-				$blankField.closest( '.frm_toggle_container' ).prev( '.frm_trigger' ).click();
+				$blankField.closest( '.frm_toggle_container' ).prev( '.frm_trigger' ).trigger( 'click' );
 			}
 
 			jQuery( document ).on( 'click', '.frm_remove_link', removeFile );
 
 			jQuery( document ).on( 'focusin', 'input[data-frmmask]', function() {
-				jQuery( this ).mask( jQuery( this ).data( 'frmmask' ).toString(), { autoclear: false } );
-			} );
+				jQuery( this ).mask( jQuery( this ).data( 'frmmask' ).toString(), { autoclear: false });
+			});
 
 			jQuery( document ).on( 'frmFieldChanged', maybeCheckDependent );
 
 			jQuery( document ).on( 'keyup', 'input.frm_strength_meter', checkPasswordField );
+			jQuery( document ).on( 'keydown', '.frm_switch', triggerToggleClickOnSpace );
 
 			jQuery( document ).on( 'mouseenter click', '.frm-star-group input', loadStars );
 			jQuery( document ).on( 'mouseenter', '.frm-star-group .star-rating:not(.star-rating-readonly)', hoverStars );
 			jQuery( document ).on( 'mouseleave', '.frm-star-group .star-rating:not(.star-rating-readonly)', unhoverStars );
 
-			jQuery( document ).on( 'click', '.frm-show-form input[type="submit"], .frm-show-form input[name="frm_prev_page"], .frm_page_back, .frm_page_skip, .frm-show-form .frm_save_draft, .frm_prev_page, .frm_button_submit', setNextPage );
+			jQuery( document ).on(
+				'click',
+				'.frm-show-form input[type="submit"], .frm-show-form input[name="frm_prev_page"], .frm_page_back, .frm_page_skip, .frm-show-form .frm_save_draft, .frm_prev_page, .frm_button_submit, .frm_rootline_show_hidden_steps_btn .frm_rootline_single',
+				setNextPage
+			);
 
-            jQuery( document ).on( 'change', '.frm_other_container input[type="checkbox"], .frm_other_container input[type="radio"], .frm_other_container select', showOtherText );
+			jQuery( document ).on( 'change', '.frm_other_container input[type="checkbox"], .frm_other_container input[type="radio"], .frm_other_container select', showOtherText );
+			jQuery( document ).on( 'change', '.frm_switch_block input[type="checkbox"]', setToggleAriaChecked );
 
 			jQuery( document ).on( 'click', '.frm_remove_form_row', removeRow );
 			jQuery( document ).on( 'click', '.frm_add_form_row', addRow );
@@ -4451,7 +7642,7 @@ function frmProFormJS() {
 			jQuery( document ).on( 'click', '.frm_ajax_delete', deleteEntry );
 
 			// toggle collapsible entries shortcode
-			jQuery( '.frm_month_heading, .frm_year_heading' ).click( function() {
+			jQuery( '.frm_month_heading, .frm_year_heading' ).on( 'click', function() {
 				var content = jQuery( this ).children( '.ui-icon-triangle-1-e, .ui-icon-triangle-1-s' );
 				if ( content.hasClass( 'ui-icon-triangle-1-e' ) ) {
 					content.addClass( 'ui-icon-triangle-1-s' ).removeClass( 'ui-icon-triangle-1-e' );
@@ -4460,11 +7651,45 @@ function frmProFormJS() {
 					content.addClass( 'ui-icon-triangle-1-e' ).removeClass( 'ui-icon-triangle-1-s' );
 					jQuery( this ).next( '.frm_toggle_container' ).hide();
 				}
-			} );
+			});
+
+			// Elementor popup show event. Fix Elementor Popup && FF PRO fields( file upload | dynamic field ) conflicts
+			jQuery( document ).on( 'elementor/popup/show', handleElementorPopupConflicts );
+
+			addTopAddRowBtnForRepeater();
+
+			// Checkbox Selection Limit
+			jQuery( document ).on( 'click', 'input[type="checkbox"][data-frmlimit]', checkCheckboxSelectionLimit );
+
+			// Total field calc
+			jQuery( document ).on( 'change', '[type="checkbox"][data-frmprice],[type="radio"][data-frmprice],[type="hidden"][data-frmprice],select:has([data-frmprice])', calcProductsTotal );
+			jQuery( document ).on( 'keyup change', '[data-frmproduct],[type="text"][data-frmprice]', calcProductsTotal );
+
+			jQuery( document ).on( 'frmFormComplete frmPageChanged frmInPlaceEdit frmAfterAddRow', setAutoHeightForTextArea );
+
+			maybeDisableCheckboxesWithLimit();
 
 			setInlineFormWidth();
 			checkConditionalLogic( 'pageLoad' );
-			checkFieldsOnPage();
+			checkFieldsOnPage( undefined, 'pageLoad' );
+			processPendingAjax();
+
+			addRteRequiredMessages();
+			setAutoHeightForTextArea();
+			updateContentLength();
+
+			// make sure this comes last, particularly after checkConditionalLogic & checkFieldsOnPage
+			calcProductsTotal();
+
+			startOverButton();
+
+			maybeShowMoreStepsButton();
+
+			showMoreStepsButtonEvents();
+
+			validateFieldValue();
+
+			handleShowPasswordBtn();
 		},
 
 		savingDraft: function( object ) {
@@ -4493,19 +7718,20 @@ function frmProFormJS() {
 			var hiddenFields = getAllHiddenFields(),
 				len = hiddenFields.length;
 			for ( var i = 0, l = len; i < l; i++ ) {
-				var container = document.getElementById( hiddenFields[ i ] );
+				var container = document.getElementById( hiddenFields[ i ]);
 
 				//check for submit button
 				if ( container == null ) {
-					container = document.querySelector( '#' + hiddenFields[ i ] );
+					container = document.querySelector( '#' + hiddenFields[ i ]);
 					if ( container != null && hiddenFields[ i ].indexOf( 'frm_final_submit' ) > -1 ) {
-						hidePreviouslyHiddenSubmitButton( hiddenFields[ i ] );
+						hidePreviouslyHiddenSubmitButton( hiddenFields[ i ]);
 						continue;
 					}
 				}
 
 				if ( container !== null ) {
 					container.style.display = 'none';
+					setHiddenProductContainer( container );
 				}
 			}
 		},
@@ -4540,52 +7766,110 @@ function frmProFormJS() {
 		},
 
 		loadGoogle: function() {
-			if ( typeof google !== 'undefined' && google && google.load ) {
-				var graphs = __FRMTABLES,
-					packages = Object.keys( graphs );
+			var graphs, packages, i;
 
-				for ( var i = 0; i < packages.length; i++ ) {
-					if ( packages[ i ] === 'graphs' ) {
-						generateGoogleGraphs( graphs[ packages[ i ] ] );
-					} else {
-						generateGoogleTables( graphs[ packages[ i ] ], packages[ i ] );
-					}
+			if ( typeof google === 'undefined' || ! google || ! google.load ) {
+				setTimeout( frmProForm.loadGoogle, 30 );
+				return;
+			}
+
+			graphs = __FRMTABLES;
+			packages = Object.keys( graphs );
+
+			for ( i = 0; i < packages.length; i++ ) {
+				if ( packages[ i ] === 'graphs' ) {
+					generateGoogleGraphs( graphs[ packages[ i ] ]);
+				} else {
+					generateGoogleTables( graphs[ packages[ i ] ], packages[ i ]);
 				}
-			} else {
-				setTimeout( frmFrontForm.loadGoogle, 30 );
 			}
 		},
 
 		removeUsedTimes: function( obj, timeField ) {
-			var e = jQuery( obj ).parents( 'form:first' ).find( 'input[name="id"]' );
-			jQuery.ajax( {
-				type: 'POST',
-				url: frm_js.ajax_url,
-				dataType: 'json',
-				data: {
-					action: 'frm_fields_ajax_time_options',
-					time_field: timeField,
-					date_field: obj.id,
-					entry_id: ( e ? e.val() : '' ), date: jQuery( obj ).val(),
-					nonce: frm_js.nonce,
-				},
-				success: function( opts ) {
-					var $timeField = jQuery( document.getElementById( timeField ) );
-					$timeField.find( 'option' ).removeAttr( 'disabled' );
-					if ( opts.length > 0 ) {
-						for ( var i = 0, l = opts.length; i < l; i++ ) {
-							$timeField.find( 'option[value="' + opts[ i ] + '"]' ).attr( 'disabled', 'disabled' );
-						}
+			var $form, form, e, data, success, extraParams;
+
+			$form = jQuery( obj ).parents( 'form' ).first();
+			form = $form.get( 0 );
+			e = $form.find( 'input[name="id"]' );
+
+			data = {
+				action: 'frm_fields_ajax_time_options',
+				time_field: timeField,
+				date_field: obj.id,
+				entry_id: ( e ? e.val() : '' ), date: jQuery( obj ).val(),
+				nonce: frm_js.nonce
+			};
+
+			success = function( opts ) {
+				var $timeField = jQuery( document.getElementById( timeField ) );
+				$timeField.find( 'option' ).prop( 'disabled', false );
+				if ( opts.length > 0 ) {
+					for ( var i = 0, l = opts.length; i < l; i++ ) {
+						$timeField.get( 0 ).querySelectorAll( 'option[value="' + opts[ i ] + '"]' ).forEach(
+							function( option ) {
+								option.disabled = true;
+								if ( option.selected ) {
+									option.selected = false;
+								}
+							}
+						);
 					}
-				},
-			} );
+				}
+			};
+
+			extraParams = { dataType: 'json' };
+
+			postToAjaxUrl( form, data, success, false, extraParams );
 		},
 
 		changeRte: function( editor ) {
 			editor.on( 'change', function() {
 				var content = editor.getBody().innerHTML;
-				jQuery( '#' + editor.id ).val( content ).change();
-			} );
+				jQuery( '#' + editor.id ).val( content ).trigger( 'change' );
+			});
+		},
+
+		addFormidableClassToDatepicker: function( _, options ) {
+			if ( options.dpDiv ) {
+				Array.prototype.forEach.call(
+					getAllFormClasses( options.input.get( 0 ) ),
+					function( formClass ) {
+						options.dpDiv.get( 0 ).classList.add( formClass );
+					}
+				);
+
+				options.dpDiv.addClass( 'frm-datepicker' );
+				options.dpDiv.get( 0 ).setAttribute( 'is-formidable-datepicker', 1 );
+			}
+			return options;
+		},
+
+		removeFormidableClassFromDatepicker: function( _, options ) {
+			var dpDiv;
+			if ( options.dpDiv ) {
+				dpDiv = options.dpDiv.get( 0 );
+				dpDiv.removeAttribute( 'is-formidable-datepicker' );
+
+				// Delay it slightly so it doesn't use styling while it's fading out.
+				setTimeout(
+					function() {
+						if ( dpDiv.hasAttribute( 'is-formidable-datepicker' ) ) {
+							// Avoid removing it the class if the datepicker was immediately opened again.
+							return;
+						}
+
+						Array.prototype.forEach.call(
+							getAllFormClasses( options.input.get( 0 ) ),
+							function( formClass ) {
+								options.dpDiv.get( 0 ).classList.remove( formClass );
+							}
+						);
+
+						jQuery( dpDiv ).removeClass( 'frm-datepicker' );
+					},
+					400
+				);
+			}
 		}
 	};
 }
@@ -4593,4 +7877,13 @@ var frmProForm = frmProFormJS();
 
 jQuery( document ).ready( function() {
 	frmProForm.init();
-} );
+});
+
+( function() {
+	if ( ! Math.round10 ) {
+		// https://www.jacklmoore.com/notes/rounding-in-javascript/
+		Math.round10 = function( value, decimals ) {
+			return Number( Math.round( value + 'e' + decimals ) + 'e-' + decimals );
+		};
+	}
+}() );

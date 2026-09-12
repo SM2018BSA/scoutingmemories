@@ -1,4 +1,7 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
 class FrmShowForm extends WP_Widget {
 
@@ -7,39 +10,61 @@ class FrmShowForm extends WP_Widget {
 		parent::__construct( 'frm_show_form', __( 'Formidable Form', 'formidable' ), $widget_ops );
 	}
 
+	/**
+	 * @param array $args
+	 * @param array $instance
+	 *
+	 * @return void
+	 */
 	public function widget( $args, $instance ) {
-		$title = apply_filters( 'widget_title', empty( $instance['title'] ) ? '' : $instance['title'], $instance, $this->id_base );
+		$title = apply_filters( 'widget_title', ! empty( $instance['title'] ) ? $instance['title'] : '', $instance, $this->id_base );
 
-		echo FrmAppHelper::kses( $args['before_widget'], 'all' ); // WPCS: XSS ok.
+		FrmAppHelper::kses_echo( $args['before_widget'], 'all' );
 
 		echo '<div class="frm_form_widget">';
+
 		if ( $title ) {
-			echo FrmAppHelper::kses( $args['before_title'] . stripslashes( $title ) . $args['after_title'], 'all' ); // WPCS: XSS ok.
+			FrmAppHelper::kses_echo( $args['before_title'] . stripslashes( $title ) . $args['after_title'], 'all' );
 		}
 
 		$form_atts = array(
-			'id'          => isset( $instance['form'] ) ? $instance['form'] : 0,
+			'id'          => $instance['form'] ?? 0,
 			'title'       => false,
-			'description' => isset( $instance['description'] ) ? $instance['description'] : false,
+			'description' => $instance['description'] ?? false,
 		);
 
-		echo FrmFormsController::get_form_shortcode( $form_atts ); // WPCS: XSS ok.
+		echo FrmFormsController::get_form_shortcode( $form_atts ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 
 		echo '</div>';
-		echo FrmAppHelper::kses( $args['after_widget'], 'all' ); // WPCS: XSS ok.
+		FrmAppHelper::kses_echo( $args['after_widget'], 'all' );
 	}
 
+	/**
+	 * @param array $new_instance New settings for this instance as input by the user via
+	 *                            WP_Widget::form().
+	 * @param array $old_instance Old settings for this instance.
+	 *
+	 * @return array Settings to save or bool false to cancel saving.
+	 */
 	public function update( $new_instance, $old_instance ) {
 		return $new_instance;
 	}
 
+	/**
+	 * Outputs the settings update form.
+	 *
+	 * @param array $instance Current settings.
+	 *
+	 * @return string Default return is 'noform'.
+	 */
 	public function form( $instance ) {
 		$defaults = array(
 			'title'       => false,
 			'form'        => false,
 			'description' => false,
 		);
-		$instance = wp_parse_args( (array) $instance, $defaults );
+		$instance = wp_parse_args( $instance, $defaults );
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
 		?>
 		<p>
 			<label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>">
@@ -77,5 +102,7 @@ class FrmShowForm extends WP_Widget {
 			</label>
 		</p>
 		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+		return '';
 	}
 }

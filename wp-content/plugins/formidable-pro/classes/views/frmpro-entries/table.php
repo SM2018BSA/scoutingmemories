@@ -1,4 +1,9 @@
-<table class="form_results<?php echo ( $atts['style'] ? FrmFormsHelper::get_form_style_class() : '' ); ?>" id="form_results<?php echo (int) $atts['form']->id ?>" cellspacing="0">
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
+<table class="form_results<?php echo ( $atts['style'] ? FrmFormsHelper::get_form_style_class() : '' ); ?>" id="form_results<?php echo (int) $atts['form']->id; ?>" cellspacing="0">
     <thead>
     <tr>
     <?php if ( in_array( 'id', $atts['fields']) ) { ?>
@@ -28,16 +33,16 @@
     </thead>
     <tbody>
 <?php if ( empty( $atts['entries'] ) ) { ?>
-	<tr><td colspan="<?php echo count( $atts['form_cols'] ) ?>"><?php echo $atts['no_entries']; ?></td></tr>
+	<tr><td colspan="<?php echo count( $atts['form_cols'] ); ?>"><?php echo $atts['no_entries']; ?></td></tr>
 <?php
 } else {
     $class = 'odd';
 
 	foreach ( $atts['entries'] as $entry ) {
 ?>
-        <tr class="frm_<?php echo esc_attr( $class ) ?>">
+        <tr class="frm_<?php echo esc_attr( $class ); ?>">
         <?php if ( in_array( 'id', $atts['fields']) ) { ?>
-            <td><?php echo (int) $entry->id ?></td>
+            <td><?php echo (int) $entry->id; ?></td>
 		<?php
 		}
 
@@ -55,7 +60,7 @@
 		?>
 			<td><?php
 				if ( FrmProEntriesHelper::user_can_edit( $entry, $atts['form'] ) ) {
-        			?><a href="<?php echo esc_url( add_query_arg( array( 'frm_action' => 'edit', 'entry' => $entry->id ), $atts['permalink'] ) . $atts['anchor'] ); ?>"><?php echo $atts['edit_link']; ?></a><?php
+				?><a href="<?php echo esc_url( add_query_arg( array( 'frm_action' => 'edit', 'entry' => $entry->id ), $atts['permalink'] ) . $atts['anchor'] ); ?>"><?php echo $atts['edit_link']; ?></a><?php
 				}
 				?></td>
 <?php
@@ -65,7 +70,7 @@
 		?>
 		<td><?php
 			if ( FrmProEntriesHelper::user_can_delete( $entry ) ) {
-        ?><a href="<?php echo esc_url( add_query_arg( array( 'frm_action' => 'destroy', 'entry' => $entry->id ) ) ) ?>" class="frm_delete_link" data-frmconfirm="'<?php echo esc_attr( $atts['confirm'] ); ?>"><?php echo $atts['delete_link']; ?></a><?php
+        ?><a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'frm_action' => 'destroy', 'entry' => $entry->id ) ) ) ); ?>" class="frm_delete_link" data-frmconfirm="'<?php echo esc_attr( $atts['confirm'] ); ?>"><?php echo $atts['delete_link']; ?></a><?php
 			}
 		?></td>
 <?php

@@ -1,3 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/publish-box.php' );
+?>
 <div id="publishing-action">
 	<input name="original_publish" type="hidden" id="original_publish" value="<?php echo esc_attr( $label ); ?>" />
 	<input type="submit" name="<?php echo esc_attr( $name ); ?>" id="publish" class="button button-primary frm-button-primary" value="<?php echo esc_attr( $label ); ?>" />

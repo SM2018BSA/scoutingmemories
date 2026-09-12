@@ -1,4 +1,9 @@
 <?php
+
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.06.04
  */
@@ -34,12 +39,12 @@ class FrmProUsageController {
 	 */
 	public static function form( $form, $atts ) {
 		$saved_form = $atts['form'];
-		if ( isset( $saved_form->options['rootline'] ) && ! empty( $saved_form->options['rootline'] ) ) {
+		if ( ! empty( $saved_form->options['rootline'] ) ) {
 			$form['rootline'] = array(
 				'type'        => $saved_form->options['rootline'],
-				'titles_on'   => $saved_form->options['rootline_titles_on'],
-				'lines_off'   => $saved_form->options['rootline_lines_off'],
-				'numbers_off' => $saved_form->options['rootline_numbers_off'],
+				'titles_on'   => isset( $saved_form->options['rootline_titles_on'] ) ? $saved_form->options['rootline_titles_on'] : 0,
+				'lines_off'   => isset( $saved_form->options['rootline_lines_off'] ) ? $saved_form->options['rootline_lines_off'] : 0,
+				'numbers_off' => isset( $saved_form->options['rootline_numbers_off'] ) ? $saved_form->options['rootline_numbers_off'] : 0,
 			);
 			$form['rootline'] = json_encode( $form['rootline'] );
 		}

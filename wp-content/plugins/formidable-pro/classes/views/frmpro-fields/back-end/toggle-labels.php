@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <p>
 	<label>
 		<input type="checkbox" name="field_options[show_label_<?php echo absint( $field['id'] ); ?>]" value="1" <?php checked( $field['show_label'], 1 ); ?> id="field_options_show_label_<?php echo absint( $field['id'] ); ?>" />

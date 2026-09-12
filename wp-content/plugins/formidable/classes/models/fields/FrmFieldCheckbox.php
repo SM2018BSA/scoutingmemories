@@ -1,4 +1,7 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
 /**
  * @since 3.0
@@ -7,12 +10,14 @@ class FrmFieldCheckbox extends FrmFieldType {
 
 	/**
 	 * @var string
+	 *
 	 * @since 3.0
 	 */
 	protected $type = 'checkbox';
 
 	/**
 	 * @var bool
+	 *
 	 * @since 3.0
 	 */
 	protected $holds_email_values = true;
@@ -21,10 +26,14 @@ class FrmFieldCheckbox extends FrmFieldType {
 	 * Does the html for this field label need to include "for"?
 	 *
 	 * @var bool
+	 *
 	 * @since 3.06.01
 	 */
 	protected $has_for_label = false;
 
+	/**
+	 * @return string
+	 */
 	protected function input_html() {
 		return $this->multiple_input_html();
 	}
@@ -33,6 +42,18 @@ class FrmFieldCheckbox extends FrmFieldType {
 		return $this->include_front_form_file();
 	}
 
+	/**
+	 * @return bool[]
+	 */
+	protected function field_settings_for_type() {
+		return array(
+			'invalid' => true,
+		);
+	}
+
+	/**
+	 * @return string[]
+	 */
 	protected function new_field_settings() {
 		return array(
 			'options' => serialize(
@@ -44,23 +65,69 @@ class FrmFieldCheckbox extends FrmFieldType {
 		);
 	}
 
-	protected function extra_field_opts() {
-		$form_id = $this->get_field_column( 'form_id' );
-
+	/**
+	 * Get the type of field being displayed.
+	 *
+	 * @since 4.02.01
+	 *
+	 * @param array|object $field
+	 *
+	 * @return array
+	 */
+	public function displayed_field_type( $field ) {
 		return array(
-			'align' => FrmStylesController::get_style_val( 'check_align', ( empty( $form_id ) ? 'default' : $form_id ) ),
+			$this->type => true,
 		);
 	}
 
+	/**
+	 * @return array
+	 */
+	protected function extra_field_opts() {
+		return array(
+			'align' => '',
+		);
+	}
+
+	/**
+	 * @since 4.06
+	 *
+	 * @param array $args
+	 *
+	 * @return void
+	 */
+	protected function show_priority_field_choices( $args = array() ) {
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-fields/back-end/radio-images.php';
+	}
+
+	/**
+	 * @return string
+	 */
 	protected function include_front_form_file() {
 		return FrmAppHelper::plugin_path() . '/classes/views/frm-fields/front-end/checkbox-field.php';
 	}
 
+	/**
+	 * @return bool
+	 */
 	protected function show_readonly_hidden() {
 		return true;
 	}
 
 	protected function prepare_import_value( $value, $atts ) {
 		return $this->get_multi_opts_for_import( $value );
+	}
+
+	/**
+	 * Unset aria-invalid for checkboxes because it's not valid for checkboxes.
+	 * Instead aria-invalid is added to the checkbox group parent element.
+	 *
+	 * @since 6.25
+	 *
+	 * @param array $shortcode_atts
+	 * @param array $args
+	 */
+	public function set_aria_invalid_error( &$shortcode_atts, $args ) {
+		unset( $shortcode_atts['aria-invalid'] );
 	}
 }

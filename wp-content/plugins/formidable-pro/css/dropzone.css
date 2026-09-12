@@ -145,8 +145,9 @@
 	box-sizing: border-box;
 }
 
+.frm_dropzone.frm_single_upload,
 .frm_dropzone.dz-clickable {
-	min-height: 150px;
+	min-height: 60px;
 	margin-top:5px;
 	line-height:1.42857143;
 }
@@ -155,16 +156,18 @@
 	cursor: default;
 }
 
-.frm_dropzone.dz-clickable.frm_single_upload{
+.frm_dropzone.frm_single_upload {
 	max-width: 200px;
 }
 
-.frm_dropzone.dz-clickable.frm_single_upload.dz-started {
+.frm_dropzone.frm_single_upload.dz-started {
     max-width: 300px;
 }
 
 .frm_form_field.frm_full .frm_dropzone.dz-clickable.frm_single_upload,
-.frm_form_field.frm_full_upload .frm_dropzone.dz-clickable.frm_single_upload{
+.frm_form_field.frm_full_upload .frm_dropzone.dz-clickable.frm_single_upload,
+.frm_form_field.frm_full .frm_dropzone.dz-started.frm_single_upload,
+.frm_form_field.frm_full_upload .frm_dropzone.dz-started.frm_single_upload{
 	max-width:100%;
 }
 
@@ -182,11 +185,7 @@
 	display:none;
 	font-size:20px;
 	text-align: center;
-	margin: .5em 0 1em;
-}
-
-.frm_dropzone.dz-clickable.frm_single_upload .dz-message{
-	margin: 0 0 .5em 0;
+	margin: 0;
 }
 
 .frm_dropzone.frm_single_upload.dz-started .dz-message{
@@ -268,9 +267,8 @@
 }
 
 .frm_dropzone .dz-preview .dz-details .dz-filename {
-	max-width: 75%;
+	max-width: 65%;
 	text-overflow: ellipsis;
-	padding-right: 5px;
 }
 
 .frm_dropzone .dz-preview .dz-details .dz-filename a{
@@ -297,10 +295,7 @@
 	max-height: 60px;
 }
 .frm_dropzone .dz-preview.dz-success .dz-success-mark {
-	-webkit-animation: passing-through 3s cubic-bezier(0.77, 0, 0.175, 1);
-	-moz-animation: passing-through 3s cubic-bezier(0.77, 0, 0.175, 1);
 	-ms-animation: passing-through 3s cubic-bezier(0.77, 0, 0.175, 1);
-	-o-animation: passing-through 3s cubic-bezier(0.77, 0, 0.175, 1);
 	animation: passing-through 3s cubic-bezier(0.77, 0, 0.175, 1);
 }
 
@@ -369,7 +364,6 @@
 }
 
 .frm_compact .frm_dropzone.dz-clickable{
-	min-height:60px;
 	padding:0;
 	border:none;
 	background-color:transparent;
@@ -383,7 +377,19 @@
 	display:inline;
 }
 
-.frm_compact .frm_dropzone.frm_single_upload.dz-started .dz-message,
+.frm_upload_text button,
+.frm_compact_text button {
+	background: none !important;
+	color: inherit !important;
+	border: none !important;
+	padding: 0 !important;
+	font: inherit !important;
+	cursor: pointer !important;
+	outline: inherit !important;
+	height: auto !important;
+	white-space: break-spaces;
+}
+
 .frm_compact .frm_dropzone.dz-clickable.frm_single_upload .dz-message,
 .frm_compact .frm_dropzone.dz-clickable .dz-message{
 	font-size:14px;
@@ -396,6 +402,11 @@
 	box-shadow: 0 1px 1px #eeeeee;
 	vertical-align: middle;
 	margin: 0 0 1em;
+}
+
+.frm_compact .frm_dropzone.frm_single_upload.dz-started .dz-message,
+.frm_compact .frm_dropzone.frm_single_upload.dz-started.dz-clickable .dz-message {
+	display: none;
 }
 
 .frm_compact .frm_dropzone .frm_upload_icon:before{

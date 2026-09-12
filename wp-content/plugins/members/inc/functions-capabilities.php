@@ -4,11 +4,14 @@
  *
  * @package    Members
  * @subpackage Includes
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
+if (!defined('ABSPATH')) {
+    die('You are not allowed to call this page directly.');
+}
 
 # Register capabilities.
 add_action( 'init',                  'members_register_caps',         95 );
@@ -420,7 +423,7 @@ function members_get_hidden_caps() {
 		$caps[] = 'update_core';
 	}
 
-	return array_unique( $caps );
+	return array_values( array_unique( $caps ) );
 }
 
 /**

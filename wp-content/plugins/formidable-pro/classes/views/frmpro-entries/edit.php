@@ -1,6 +1,11 @@
-<form enctype="multipart/form-data" method="post" id="form_<?php echo esc_attr( $form->form_key ); ?>" class="frm-show-form">
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
+<form enctype="multipart/form-data" method="post" id="form_<?php echo esc_attr( $form->form_key ); ?>" class="frm-show-form" <?php FrmProFormsHelper::maybe_echo_antispam_token( $form->id ); ?>>
 <div id="form_entries_page" class="frm_wrap frm_single_entry_page">
-	<div class="frm_page_container frm_forms" id="frm_form_<?php echo (int) $form->id; ?>_container">
+	<div class="frm_forms" id="frm_form_<?php echo (int) $form->id; ?>_container">
 
 		<?php
 		FrmAppHelper::get_admin_header(
@@ -22,8 +27,8 @@
 
 		<div id="post-body-content">
 			<div class="frm-entry-container frm-fields <?php echo FrmFormsHelper::get_form_style_class($values); ?>">
-			<h2>
-				<?php esc_html_e( 'Edit Entry', 'formidable-pro' ); ?>
+			<h2 class="frm-entry-title">
+				<span><?php esc_html_e( 'Edit Entry', 'formidable-pro' ); ?></span>
 				<span class="frm-sub-label">
 					<?php
 					printf(
@@ -33,20 +38,14 @@
 					);
 					?>
 				</span>
-				<?php
-				FrmAppHelper::add_new_item_link(
-					array(
-						'new_link' => FrmAppHelper::maybe_full_screen_link( admin_url( 'admin.php?page=formidable-entries&frm_action=new&form=' . $form->id ) ),
-					)
-				);
-				?>
+				<?php FrmProEntriesHelper::get_entry_navigation( $id, $form->id, 'edit' ); ?>
 			</h2>
 
 			<?php
-			include( FrmAppHelper::plugin_path() . '/classes/views/frm-entries/errors.php' );
+			include FrmAppHelper::plugin_path() . '/classes/views/frm-entries/errors.php';
 
 			$form_action = 'update';
-			require( FrmAppHelper::plugin_path() . '/classes/views/frm-entries/form.php' );
+			require FrmAppHelper::plugin_path() . '/classes/views/frm-entries/form.php';
 			?>
 
 			<p>
@@ -59,7 +58,7 @@
 
 		<?php
 		$record = $entry;
-		require( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-entries/sidebar-edit.php' );
+		require FrmProAppHelper::plugin_path() . '/classes/views/frmpro-entries/sidebar-edit.php';
 		?>
 
 		</div>

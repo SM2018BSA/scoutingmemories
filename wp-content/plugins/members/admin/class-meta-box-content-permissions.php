@@ -4,14 +4,14 @@
  *
  * @package    Members
  * @subpackage Admin
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
-
 namespace Members\Admin;
 
+defined('ABSPATH') || exit;
 /**
  * Class to handle the content permissios meta box and saving the meta.
  *
@@ -93,6 +93,13 @@ final class Meta_Box_Content_Permissions {
 	 */
 	public function enqueue() {
 
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+		if ( $screen && method_exists( $screen, 'is_block_editor' ) && $screen->is_block_editor() ) {
+			wp_enqueue_style( 'members-admin' );
+			return;
+		}
+
 		wp_enqueue_script( 'members-edit-post' );
 		wp_enqueue_style( 'members-admin' );
 	}
@@ -111,8 +118,15 @@ final class Meta_Box_Content_Permissions {
 		if ( ! current_user_can( 'restrict_content' ) )
 			return;
 
+		// Classic meta boxes conflict with the block editor save state; use the document panel instead.
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+		if ( $screen && method_exists( $screen, 'is_block_editor' ) && $screen->is_block_editor() ) {
+			return;
+		}
+
 		// Add the meta box.
-		add_meta_box( 'members-cp', esc_html__( 'Content Permissions', 'members' ), array( $this, 'meta_box' ), $post_type, 'advanced', 'high' );
+		add_meta_box( 'members-cp', __( 'Content Permissions (Members)', 'members' ), array( $this, 'meta_box' ), $post_type, 'advanced', 'high' );
 	}
 
 	/**
@@ -124,13 +138,13 @@ final class Meta_Box_Content_Permissions {
 	 */
 	public function maybe_enable() {
 
-		// Get the post type object.
-		$type = get_post_type_object( get_current_screen()->post_type );
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 
-		// Only enable for public post types and non-attachments by default.
-		$enable = 'attachment' !== $type->name && $type->public;
+		if ( ! $screen || empty( $screen->post_type ) ) {
+			return false;
+		}
 
-		return apply_filters( "members_enable_{$type->name}_content_permissions", $enable );
+		return members_is_content_permissions_enabled_for_post_type( $screen->post_type );
 	}
 
 	/**
@@ -146,13 +160,13 @@ final class Meta_Box_Content_Permissions {
 		global $wp_roles;
 
 		// Get roles and sort.
-		 $_wp_roles = $wp_roles->role_names;
+		$_wp_roles = apply_filters( 'members_wp_roles', $wp_roles->role_names, members_get_post_for_content_permissions( $post ) );
 		asort( $_wp_roles );
 
 		// Get the roles saved for the post.
-		$roles = get_post_meta( $post->ID, '_members_access_role', false );
+		$roles = members_get_post_roles( $post->ID );
 
-		if ( ! $roles && $this->is_new_post )
+		if ( empty( $roles ) && $this->is_new_post )
 			$roles = apply_filters( 'members_default_post_roles', array(), $post->ID );
 
 		// Convert old post meta to the new system if no roles were found.
@@ -174,6 +188,14 @@ final class Meta_Box_Content_Permissions {
 						<span class="label"><?php esc_html_e( 'Roles', 'members' ); ?></span>
 					</a>
 				</li>
+				<?php if ( ! members_is_memberpress_active() ) : ?>
+					<li class="members-tab-title">
+						<a href="#members-tab-paid-memberships">
+							<svg width="15px" clip-rule="evenodd" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2" viewBox="0 0 640 512" xmlns="http://www.w3.org/2000/svg"><path d="m621.16 54.46c-38.79-16.27-77.61-22.46-116.41-22.46-123.17-.01-246.33 62.34-369.5 62.34-30.89 0-61.76-3.92-92.65-13.72-3.47-1.1-6.95-1.62-10.35-1.62-17.21 0-32.25 13.32-32.25 31.81v317.26c0 12.63 7.23 24.6 18.84 29.46 38.79 16.28 77.61 22.47 116.41 22.47 123.17 0 246.34-62.35 369.51-62.35 30.89 0 61.76 3.92 92.65 13.72 3.47 1.1 6.95 1.62 10.35 1.62 17.21 0 32.25-13.32 32.25-31.81v-317.25c-.01-12.64-7.24-24.6-18.85-29.47zm-573.16 77.76c20.12 5.04 41.12 7.57 62.72 8.93-5.88 29.39-31.72 51.54-62.72 51.54zm0 285v-47.78c34.37 0 62.18 27.27 63.71 61.4-22.53-1.81-43.59-6.31-63.71-13.62zm272-65.22c-44.19 0-80-42.99-80-96 0-53.02 35.82-96 80-96s80 42.98 80 96c0 53.03-35.83 96-80 96zm272 27.78c-17.52-4.39-35.71-6.85-54.32-8.44 5.87-26.08 27.5-45.88 54.32-49.28zm0-236.11c-30.89-3.91-54.86-29.7-55.81-61.55 19.54 2.17 38.09 6.23 55.81 12.66z" fill-rule="nonzero"/></svg>
+							<span class="label"><?php esc_html_e( 'Paid Memberships', 'members' ); ?></span>
+						</a>
+					</li>
+				<?php endif; ?>
 				<li class="members-tab-title">
 					<a href="#members-tab-cp-message">
 						<i class="dashicons dashicons-edit"></i>
@@ -212,6 +234,17 @@ final class Meta_Box_Content_Permissions {
 
 				</div>
 
+				<?php if ( ! members_is_memberpress_active() ) : ?>
+					<div id="members-tab-paid-memberships" class="members-tab-content">
+
+						<div class="memberpress-paid-memberships">
+							<p><?php echo wp_kses_post( __( 'To protect this block by paid membership or centrally with <br> a content protection rule, add MemberPress.', 'members' ) ); ?></p>
+							<p><a href="https://memberpress.com/plans/pricing/?utm_source=members_plugin&utm_medium=link&utm_campaign=in_plugin&utm_content=content_protection" target="_blank"><?php esc_html_e( 'Add MemberPress', 'members' ); ?></a></p>
+						</div>
+
+					</div>
+				<?php endif; ?>
+
 				<div id="members-tab-cp-message" class="members-tab-content">
 
 					<?php wp_editor(
@@ -219,7 +252,7 @@ final class Meta_Box_Content_Permissions {
 						'members_access_error',
 						array(
 							'drag_drop_upload' => true,
-							'editor_height'    => 200
+							'editor_height'    => 200,
 						)
 					); ?>
 
@@ -260,21 +293,35 @@ final class Meta_Box_Content_Permissions {
 		if ( ! isset( $_POST['members_cp_meta'] ) || ! wp_verify_nonce( $_POST['members_cp_meta'], 'members_cp_meta_nonce' ) )
 			return;
 
+		if ( ! current_user_can( 'restrict_content' ) || ! current_user_can( 'edit_post', $post_id ) )
+			return;
+
 		/* === Roles === */
 
 		// Get the current roles.
 		$current_roles = members_get_post_roles( $post_id );
 
-		// Get the new roles.
-		$new_roles = isset( $_POST['members_access_role'] ) ? $_POST['members_access_role'] : '';
+		// Get the checked roles from the meta box. The list sanitizer drops non-string entries,
+		// so a crafted nested-array payload cannot fatal members_sanitize_role() on PHP 8.
+		$posted    = isset( $_POST['members_access_role'] ) ? wp_unslash( $_POST['members_access_role'] ) : array();
+		$new_roles = is_array( $posted ) ? members_sanitize_access_role_meta_list( $posted ) : array();
 
-		// If we have an array of new roles, set the roles.
-		if ( is_array( $new_roles ) )
-			members_set_post_roles( $post_id, array_map( 'members_sanitize_role', $new_roles ) );
+		// The meta box only renders roles allowed by the members_wp_roles filter, so a stored role
+		// that was hidden from the UI (registered but filtered out) is absent from the checkboxes
+		// and would be silently deleted by members_set_post_roles(). Carry those forward. Deleted
+		// custom roles (orphans) are already retained by members_set_post_roles(), which only
+		// removes currently-registered roles.
+		$roles     = wp_roles()->role_names;
+		$displayed = array_keys( (array) apply_filters( 'members_wp_roles', $roles, members_get_post_for_content_permissions( $post ) ) );
 
-		// Else, if we have current roles but no new roles, delete them all.
-		elseif ( !empty( $current_roles ) )
-			members_delete_post_roles( $post_id );
+		foreach ( (array) $current_roles as $stored ) {
+			if ( is_string( $stored ) && '' !== $stored && isset( $roles[ $stored ] ) && ! in_array( $stored, $displayed, true ) ) {
+				$new_roles[] = members_sanitize_role( $stored );
+			}
+		}
+
+		// Set the merged role list (empty clears registered roles while leaving orphans intact).
+		members_set_post_roles( $post_id, array_values( array_unique( $new_roles ) ) );
 
 		/* === Error Message === */
 

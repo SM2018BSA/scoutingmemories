@@ -50,7 +50,7 @@ function frmRegBackEnd(){
 				jQuery('#frm_notification_settings').append(html);
 				jQuery('.frm_form_action_settings').fadeIn('slow');
 				jQuery('#frm_form_action_' + (parseInt(len)+1) + ' .widget-inside').css('display','block');
-				initiateMultiselect();
+				jQuery('#frm_form_action_' + (parseInt(len)+1) + ' .frm_multiselect' ).hide().each( frmDom.bootstrap.multiselect.init );
 			}
 		});
 	}
@@ -72,7 +72,7 @@ function frmRegBackEnd(){
 	 */
 	function showUserMetaTable() {
 		var table = document.getElementById( 'frm_user_meta_table' );
-		table.style.display = 'table';
+		table.style.display = 'block';
 	}
 
 
@@ -253,18 +253,6 @@ function frmRegBackEnd(){
 		} else {
 			permissionOptions.style.display = 'none';
 		}
-	}
-
-	/**
-	 * Initiate multi-select on Trigger this action after dropdown
-	 *
-	 * @since 2.0
-	 */
-	function initiateMultiselect(){
-		jQuery('.frm_multiselect').multiselect({
-			templates: {ul:'<ul class="multiselect-container frm-dropdown-menu"></ul>'},
-			buttonContainer: '<div class="btn-group frm-btn-group" />'
-		});
 	}
 
 	return{

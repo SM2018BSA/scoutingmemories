@@ -39,12 +39,20 @@ class Scouting_PDF_Embedder {
 
         // Handle legacy Gutenberg blocks, viewer markup, or standalone PDF links
         add_filter('the_content', array($this, 'filter_legacy_blocks'), 99);
+        add_filter('render_block', array($this, 'render_legacy_block'), 10, 2);
 
         // Filter media sent to editor in frontend/backend TinyMCE
         add_filter('media_send_to_editor', array($this, 'media_send_to_editor'), 20, 3);
 
         // Enqueue scripts & styles
         add_action('wp_enqueue_scripts', array($this, 'register_assets'));
+
+        // REST API stream endpoint (preferred on WP Engine over admin-ajax.php)
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
+
+        // Ajax proxy fallback for environments with cross-origin CORS constraints (e.g. localhost)
+        add_action('wp_ajax_scouting_pdf_proxy', array($this, 'proxy_pdf_stream'));
+        add_action('wp_ajax_nopriv_scouting_pdf_proxy', array($this, 'proxy_pdf_stream'));
     }
 
     /**
@@ -68,11 +76,21 @@ class Scouting_PDF_Embedder {
         // Fix smart quotes inside [pdf-embedder ...]
         $content = preg_replace_callback('/\[pdf[-_]embedder([^\]]*)\]/i', function($matches) {
             $cleaned = str_replace(
-                array('&#8220;', '&#8221;', '&#8243;', '&quot;', '&apos;', '&#039;', '?', '?', '?', '?'),
+                array('&#8220;', '&#8221;', '&#8243;', '&quot;', '&apos;', '&#039;', '‘', '’', '“', '”'),
                 '"',
                 $matches[1]
             );
             return '[pdf-embedder' . $cleaned . ']';
+        }, $content);
+
+        // Convert Gutenberg block comments for legacy pdfemb/pdf-embedder-viewer
+        $content = preg_replace_callback('/<!--\s*wp:pdfemb\/pdf-embedder-viewer\s*(\{.*?\})\s*-->.*?<!--\s*\/wp:pdfemb\/pdf-embedder-viewer\s*-->/is', function($matches) {
+            $data = json_decode($matches[1], true);
+            if (!empty($data['url'])) {
+                $title = !empty($data['title']) ? ' title="' . esc_attr($data['title']) . '"' : '';
+                return '[pdf-embedder url="' . esc_url($data['url']) . '"' . $title . ']';
+            }
+            return '';
         }, $content);
 
         return $content;
@@ -107,8 +125,109 @@ class Scouting_PDF_Embedder {
 
         wp_localize_script('scouting-pdf-viewer-js', 'ScoutingPdfConfig', array(
             'workerUrl' => SCOUTING_PDF_PLUGIN_URL . 'assets/vendor/pdf.worker.min.js',
-            'cMapUrl'   => SCOUTING_PDF_PLUGIN_URL . 'assets/vendor/cmaps/'
+            'cMapUrl'   => SCOUTING_PDF_PLUGIN_URL . 'assets/vendor/cmaps/',
+            'restUrl'   => rest_url('scouting-pdf/v1/stream'),
+            'ajaxUrl'   => admin_url('admin-ajax.php')
         ));
+    }
+
+    /**
+     * Register REST API routes (preferred on WP Engine for lighter footprint and caching)
+     */
+    public function register_rest_routes() {
+        register_rest_route('scouting-pdf/v1', '/stream', array(
+            'methods'             => 'GET',
+            'callback'            => array($this, 'rest_proxy_stream'),
+            'permission_callback' => '__return_true',
+            'args'                => array(
+                'pdf_url' => array(
+                    'required'          => true,
+                    'sanitize_callback' => 'esc_url_raw',
+                ),
+            ),
+        ));
+    }
+
+    /**
+     * WP REST API endpoint callback
+     */
+    public function rest_proxy_stream($request) {
+        $url = $request->get_param('pdf_url');
+        $this->handle_stream_request($url);
+    }
+
+    /**
+     * Ajax fallback handler for backwards compatibility
+     */
+    public function proxy_pdf_stream() {
+        if (empty($_GET['pdf_url'])) {
+            wp_die('Missing URL', 400);
+        }
+        $url = esc_url_raw($_GET['pdf_url']);
+        $this->handle_stream_request($url);
+    }
+
+    /**
+     * Safe streaming handler with WP Engine worker optimization & SSRF prevention
+     */
+    private function handle_stream_request($url) {
+        if (empty($url)) {
+            wp_die('Missing URL', 400);
+        }
+
+        $url = esc_url_raw($url);
+        $parsed = parse_url($url);
+        $allowed_hosts = array('storage.scoutingmemories.org', 'scoutingmemories.org', 'localhost', '127.0.0.1');
+
+        // Security check: restrict to trusted storage domains to eliminate SSRF
+        if (empty($parsed['host']) || !in_array(strtolower($parsed['host']), $allowed_hosts, true)) {
+            wp_die('Host not allowed', 403);
+        }
+
+        // Validate PDF extension
+        if (!preg_match('/\.pdf(\?.*)?$/i', $url)) {
+            wp_die('Only PDF files are supported', 400);
+        }
+
+        // On WP Engine production, conserve PHP-FPM workers by redirecting to Google Cloud Storage CDN directly
+        $is_wpe_production = (!empty($_SERVER['IS_WPE']) || (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'scoutingmemories.org') !== false || strpos($_SERVER['HTTP_HOST'], 'wpengine.com') !== false)));
+        if ($is_wpe_production && stripos($url, 'storage.scoutingmemories.org') !== false) {
+            $https_url = preg_replace('/^http:\/\//i', 'https://', $url);
+            wp_redirect($https_url, 302);
+            exit;
+        }
+
+        // For local development or non-production cross-origin testing, stream via cURL safely
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+
+        if (isset($_SERVER['HTTP_RANGE'])) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array('Range: ' . $_SERVER['HTTP_RANGE']));
+        }
+
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function($ch, $header) {
+            $len = strlen($header);
+            $parts = explode(':', $header, 2);
+            if (count($parts) === 2) {
+                $name = strtolower(trim($parts[0]));
+                if (in_array($name, array('content-type', 'content-length', 'accept-ranges', 'content-range', 'last-modified', 'etag'), true)) {
+                    header(trim($parts[0]) . ': ' . trim($parts[1]));
+                }
+            } elseif (preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d+)/', $header, $matches)) {
+                http_response_code(intval($matches[1]));
+            }
+            return $len;
+        });
+
+        // Set caching and CORS headers for EverCache and client caching
+        header('Cache-Control: public, max-age=86400, s-maxage=604800');
+        header('Access-Control-Allow-Origin: *');
+        curl_exec($ch);
+        curl_close($ch);
+        exit;
     }
 
     /**
@@ -196,6 +315,20 @@ class Scouting_PDF_Embedder {
     }
 
     /**
+     * Handle Gutenberg blocks from legacy PDF Embedder or modern block registrations
+     */
+    public function render_legacy_block($block_content, $block) {
+        if (!empty($block['blockName']) && ($block['blockName'] === 'pdfemb/pdf-embedder-viewer' || $block['blockName'] === 'scouting/pdf-viewer')) {
+            $url = !empty($block['attrs']['url']) ? $block['attrs']['url'] : '';
+            $title = !empty($block['attrs']['title']) ? $block['attrs']['title'] : '';
+            if (!empty($url)) {
+                return $this->build_viewer_html($url, $title);
+            }
+        }
+        return $block_content;
+    }
+
+    /**
      * Format media insertion in TinyMCE
      */
     public function media_send_to_editor($html, $id, $attachment) {
@@ -211,6 +344,14 @@ class Scouting_PDF_Embedder {
      */
     public function build_viewer_html($url, $title = '') {
         $this->enqueue_assets();
+
+        // Enforce HTTPS on SSL environments and upgrade legacy HTTP storage URLs to prevent Mixed Content blocking on WP Engine SSL
+        if (is_ssl() || stripos($url, 'storage.scoutingmemories.org') !== false) {
+            $url = preg_replace('/^http:\/\/storage\.scoutingmemories\.org/i', 'https://storage.scoutingmemories.org', $url);
+            if (is_ssl()) {
+                $url = set_url_scheme($url, 'https');
+            }
+        }
 
         $esc_url = esc_url($url);
         $clean_title = !empty($title) ? esc_html($title) : esc_html(basename(parse_url($url, PHP_URL_PATH)));

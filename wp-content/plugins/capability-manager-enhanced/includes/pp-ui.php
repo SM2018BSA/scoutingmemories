@@ -1,15 +1,35 @@
 <?php
+/*
+ * PublishPress Capabilities [Free]
+ *
+ * Capabilities UI: PublishPress Permissions integration
+ *
+ * This module also contains the Settings UI for Type-Specific Types / Taxonomies, which were previously a front end to PublishPress Permissions
+ *
+ */
 
 class Capsman_PP_UI {
 	function get_metagroup_caps( $default ) {
 		global $wpdb;
 
 		if ( defined( 'PRESSPERMIT_ACTIVE' ) ) {
-			$query = $wpdb->prepare( "SELECT role_name FROM $wpdb->ppc_roles AS r INNER JOIN $wpdb->pp_groups AS g ON g.ID = r.agent_id AND r.agent_type = 'pp_group' WHERE g.metagroup_type = 'wp_role' AND g.metagroup_id = %s", $default );
-			$pp_supplemental_roles = $wpdb->get_col( $query );
+			$pp_supplemental_roles = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT role_name FROM $wpdb->ppc_roles AS r INNER JOIN $wpdb->pp_groups AS g ON g.ID = r.agent_id AND r.agent_type = 'pp_group' WHERE g.metagroup_type = 'wp_role' AND g.metagroup_id = %s",
+					$default
+				)
+			);
 		} else {
-			$query = $wpdb->prepare( "SELECT role_name FROM $wpdb->pp_roles AS r INNER JOIN $wpdb->pp_groups AS g ON g.ID = r.group_id AND r.group_type = 'pp_group' AND r.scope = 'site' WHERE g.metagroup_type = 'wp_role' AND g.metagroup_id = %s", $default );
-			$pp_supplemental_roles = $wpdb->get_col( $query );
+			$pp_supplemental_roles = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT role_name FROM $wpdb->pp_roles AS r INNER JOIN $wpdb->pp_groups AS g ON g.ID = r.group_id AND r.group_type = 'pp_group' AND r.scope = 'site' WHERE g.metagroup_type = 'wp_role' AND g.metagroup_id = %s",
+					$default
+				)
+			);
+		}
+
+		if (!function_exists('pp_get_enabled_types') || !function_exists('pp_init_cap_caster')) {
+			return [];
 		}
 
 		$pp_filtered_types = pp_get_enabled_types('post');
@@ -25,191 +45,236 @@ class Capsman_PP_UI {
 			// i.e. If 'edit_posts' is in the pattern role, grant $type_obj->cap->edit_posts
 			$pp_metagroup_caps = array_merge( $pp_metagroup_caps, array_fill_keys( $pp_cap_caster->get_typecast_caps( $_role_name, 'site' ), true ) );
 		}
-	
+
 		return $pp_metagroup_caps;
 	}
-	
-	function show_capability_hints( $default ) {					
-		if ( capsman_get_pp_option('display_hints') ) {
-			$cme_id = 'capsman';
-		
-			echo '<ul class="ul-disc" style="margin-top:10px">';
-			
-			$pp_prefix = ( defined( 'PRESSPERMIT_VERSION') ) ? 'presspermit' : 'pp';
+
+	function show_capability_hints( $default ) {
+		if ( pp_capabilities_get_permissions_option('display_hints') ) {
+			echo '<ul class="ul-disc publishpress-caps-extra-hints" style="margin-top:10px;display:none">';
+
+			$pp_prefix = (defined('PPC_VERSION') && !defined('PRESSPERMIT_VERSION')) ? 'pp' : 'presspermit';
 
 			if ( defined( 'PPCE_VERSION' ) || ! defined( 'PRESSPERMIT_ACTIVE' ) || in_array( $default, array( 'subscriber', 'contributor', 'author', 'editor' ) ) ) {
 				echo '<li>';
 				if ( defined( 'PPCE_VERSION' ) || ! defined( 'PRESSPERMIT_ACTIVE' ) ) {
-					if ( capsman_get_pp_option( 'advanced_options' ) )
-						$parenthetical = ' (' . sprintf( __( 'see %1$sRole Usage%2$s: "Pattern Roles"', 'capsman-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-role-usage") . "'>", '</a>' ) . ')';
+					if ( pp_capabilities_get_permissions_option( 'advanced_options' ) )
+						$parenthetical = ' (' . sprintf( esc_html__( 'see %1$sRole Usage%2$s: "Pattern Roles"', 'capability-manager-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-role-usage") . "'>", '</a>' ) . ')';
 					else
-						$parenthetical = ' (' . sprintf( __( 'activate %1$sAdvanced settings%2$s, see Role Usage', 'capsman-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-settings&pp_tab=advanced") . "'>", '</a>' ). ')';
+						$parenthetical = ' (' . sprintf( esc_html__( 'activate %1$sAdvanced settings%2$s, see Role Usage', 'capability-manager-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-settings&pp_tab=advanced") . "'>", '</a>' ). ')';
 				} else
 					$parenthetical = '';
 
 				if ( defined( 'PRESSPERMIT_ACTIVE' ) )
-					printf( __( '"Posts" capabilities selected here also define type-specific role assignment for Permission Groups%s.', $cme_id ), $parenthetical ) ;
+					printf( esc_html__( '"Posts" capabilities selected here also define type-specific role assignment for Permission Groups%s.', 'capability-manager-enhanced' ), $parenthetical ) ;
 				else
-					printf( __( '"Posts" capabilities selected here also define type-specific role assignment for Permit Groups%s.', $cme_id ), $parenthetical ) ;
+					printf( esc_html__( '"Posts" capabilities selected here also define type-specific role assignment for Permit Groups%s.', 'capability-manager-enhanced' ), $parenthetical ) ;
 
 				echo '</li>';
 			}
-			
+
 			$status_hint = '';
 			if ( defined( 'PRESSPERMIT_ACTIVE' ) )
 				if ( defined( 'PPS_VERSION' ) )
-					$status_hint = sprintf( __( 'Capabilities for custom statuses can be manually added here. (See %sPermissions > Post Statuses%s for applicable names). %sSupplemental status-specific roles%s are usually more convenient, though.', $cme_id ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-statuses&show_caps=1") . "'>", '</a>', "<a href='" . admin_url("admin.php?page={$pp_prefix}-groups") . "'>", '</a>' ) ;
-				elseif ( capsman_get_pp_option( 'display_extension_hints' ) )
-					$status_hint = sprintf( __( 'Capabilities for custom statuses can be manually added here. Or activate the PP Custom Post Statuses extension to assign status-specific supplemental roles.', $cme_id ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-role-usage") . "'>", '</a>' ) ;
-			
+					$status_hint = sprintf( __( 'Capabilities for custom statuses can be manually added here. (See %sPermissions > Post Statuses%s for applicable names). %sSupplemental status-specific roles%s are usually more convenient, though.', 'capability-manager-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-statuses&show_caps=1") . "'>", '</a>', "<a href='" . admin_url("admin.php?page={$pp_prefix}-groups") . "'>", '</a>' ) ;
+				elseif ( pp_capabilities_get_permissions_option( 'display_extension_hints' ) )
+					$status_hint = sprintf( __( 'Capabilities for custom statuses can be manually added here. Or activate the PP Custom Post Statuses extension to assign status-specific supplemental roles.', 'capability-manager-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-role-usage") . "'>", '</a>' ) ;
+
 			elseif ( defined( 'PP_VERSION' ) )
-				$status_hint = sprintf( __( 'Capabilities for custom statuses can be manually added to a role here (see Conditions > Status > Capability Mapping for applicable names). However, it is usually more convenient to use Permit Groups to assign a supplemental status-specific role.', $cme_id ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-role-usage") . "'>", '</a>' ) ;
-			
+				$status_hint = sprintf( __( 'Capabilities for custom statuses can be manually added to a role here (see Conditions > Status > Capability Mapping for applicable names). However, it is usually more convenient to use Permit Groups to assign a supplemental status-specific role.', 'capability-manager-enhanced' ), "<a href='" . admin_url("admin.php?page={$pp_prefix}-role-usage") . "'>", '</a>' ) ;
+
 			if ( $status_hint )
-				echo "<li>$status_hint</li>";
+				echo "<li>" . esc_html($status_hint) . "</li>";
 
 			echo '</ul>';
 		}
 	}
-	
-	function pp_only_roles_ui( $default ) {
-		$support_pp_only_roles = defined('PRESSPERMIT_ACTIVE') || version_compare( PP_VERSION, '1.0-beta1.4', '>=');
-		?>
-		
-		<?php if ( $support_pp_only_roles && ! in_array( $default, array( /*'subscriber', 'contributor', 'author', 'editor',*/ 'administrator' ) ) ) : ?>
-		<div style="float:right">
-			<?php
-			pp_refresh_options();
-			$pp_only = (array) capsman_get_pp_option( 'supplemental_role_defs' );
-			$checked = ( in_array( $default, $pp_only ) ) ? 'checked="checked"': '';
-			?>
-			<label for="pp_only_role" title="<?php _e('Make role available for supplemental assignment to Permission Groups only', 'capsman-enhanced');?>"><input type="checkbox" name="pp_only_role" id="pp_only_role" value="1" <?php echo $checked;?>> <?php _e('hidden role', 'capsman-enhanced'); ?> </label>
-		</div>
-		<?php endif; ?>
-	<?php
-		return $support_pp_only_roles;
-	}
-	
+
 	// Note: CME can now impose type-specific capabilities without Press Permit Core active
 	function pp_types_ui( $defined_types ) {
-		?>
-		<dl>
-			<dt><?php _e('Type-Specific Capabilities', 'capsman-enhanced'); ?></dt>
-			<dd style="text-align:center;">
-				<?php
-				$caption = __( 'Ensure permissions can be controlled separately from other post types.', 'capsman-enhanced' );
-				echo "<p class='cme-hint'>$caption</p>";
-				
-				if ( defined( 'PRESSPERMIT_ACTIVE' ) && capsman_get_pp_option( 'display_hints' ) ) :?>
+        global $sidebar_metabox_state;
+
+        ?>
+        <div class="ppc-sidebar-panel-metabox meta-box-sortables ppc-post-types">
+            <?php $meta_box_state = (isset($sidebar_metabox_state['unique_capabilities_for_post_types'])) ? $sidebar_metabox_state['unique_capabilities_for_post_types'] : 'closed';  ?>
+            <div class="postbox ppc-sidebar-panel <?php echo esc_attr($meta_box_state); ?>">
+                <input
+                    name="ppc_metabox_state[unique_capabilities_for_post_types]"
+                    type="hidden"
+                    class="metabox-state"
+                    value="<?php echo esc_attr($meta_box_state); ?>"
+                />
+                <div class="postbox-header">
+                    <h2 class="hndle ui-sortable-handle"><?php esc_html_e('Unique Post Type Capabilities', 'capability-manager-enhanced'); ?></h2>
+                    <div class="handle-actions">
+                        <button type="button" class="handlediv">
+                            <span class="toggle-indicator"></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="inside" style="text-align:center;">
+                <?php
+				$learn_more_url = 'https://publishpress.com/knowledge-base/type-specific-capabilities/';
+				echo "<p class='cme-hint'>" . sprintf(
+					/* translators: %1$s and %2$s are link tags for 'Find out more.' */
+					esc_html__( 'Allow post type permissions to be controlled separately from other areas of WordPress. %1$sFind out more.%2$s', 'capability-manager-enhanced' ),
+					'<a href="' . esc_url( $learn_more_url ) . '" target="_blank" rel="noopener noreferrer">',
+					'</a>'
+				) . "</p>";
+
+				if ( defined( 'PRESSPERMIT_ACTIVE' ) && pp_capabilities_get_permissions_option( 'display_hints' ) ) :?>
 				<div class="cme-subtext" style="margin-top:0">
-				<?php /*_e( '(PP Filtered Post Types, Taxonomies)', 'capsman-enhanced' ); */?>
 				</div>
 				<?php endif;
-				
+
 				echo "<table style='width:100%'><tr>";
-				
-				$unfiltered = apply_filters( 'pp_unfiltered_post_types', array('forum','topic','reply','wp_block') );			// bbPress' dynamic role def requires additional code to enforce stored caps
-				$hidden = apply_filters( 'pp_hidden_post_types', array() );
-				
+
+				// bbPress' dynamic role def requires additional code to enforce stored caps
+				$unfiltered = apply_filters('presspermit_unfiltered_post_types', ['forum','topic','reply', 'customize_changeset']);
+				$unfiltered = (defined('PP_CAPABILITIES_NO_LEGACY_FILTERS')) ? $unfiltered : apply_filters('pp_unfiltered_post_types', $unfiltered);  // maintain legacy filter to support custom code
+
+				$hidden = apply_filters('presspermit_hidden_post_types', []);
+				$hidden = apply_filters('pp_hidden_post_types', $hidden);  // maintain legacy filter to support custom code
+
 				echo '<td style="width:50%">';
-				
+
 				$option_basename = 'enabled_post_types';
-				$enabled = get_option( 'pp_' . $option_basename, array( 'post' => true, 'page' => true ) );
-				
+				$pp_prefix = (defined('PPC_VERSION') && !defined('PRESSPERMIT_VERSION')) ? 'pp' : 'presspermit';
+
+				$enabled = get_option( $pp_prefix . '_' . $option_basename, array( 'post' => true, 'page' => true ) );
+
 				foreach( $defined_types as $key => $type_obj ) {
 					if ( ! $key )
 						continue;
 
 					if ( in_array( $key, $unfiltered ) )
 						continue;
-						
+
+					$key = sanitize_key($key);
+
 					$id = "$option_basename-" . $key;
 					?>
 					<div style="text-align:left">
 					<?php if ( ! empty( $hidden[$key] ) ) :?>
-						<input name="<?php echo($id);?>" type="hidden" id="<?php echo($id);?>" value="1" />
-						<input name="<?php echo("{$option_basename}-options[]");?>" type="hidden" value="<?php echo($key)?>" />
-					
-					<?php else: ?>
+						<input name="<?php echo(esc_attr($id));?>" type="hidden" id="<?php echo(esc_attr($id));?>" value="1" />
+						<input name="<?php echo(esc_attr($option_basename) . "-options[]");?>" type="hidden" value="<?php echo(esc_attr($key))?>" />
+
+					<?php else:
+						$type_tooltip = sprintf(__( 'The slug for this post type is %s', 'capability-manager-enhanced' ), '<strong>' . esc_html($key) . '</strong>' );
+						?>
 						<div class="agp-vspaced_input">
-						<label for="<?php echo($id);?>" title="<?php echo($key);?>">
-						<input name="<?php echo("{$option_basename}-options[]");?>" type="hidden" value="<?php echo($key)?>" />
-						<input name="<?php echo($id);?>" type="checkbox" id="<?php echo($id);?>" value="1" <?php checked('1', ! empty($enabled[$key]) );?> /> <?php echo($type_obj->label);?>
-						
-						<?php 
-						echo ('</label></div>');
+						<span class="ppc-tool-tip disabled"><label for="<?php echo(esc_attr($id));?>">
+						<input name="<?php echo(esc_attr($option_basename) . "-options[]");?>" type="hidden" value="<?php echo(esc_attr($key))?>" />
+						<input name="<?php echo(esc_attr($id));?>" type="checkbox" id="<?php echo(esc_attr($id));?>" autocomplete="off" value="1" <?php checked('1', ! empty($enabled[$key]) );?> /> <?php echo(esc_html($type_obj->label));?>
+
+						<?php
+						echo ('</label><span class="tool-tip-text">
+						<p>'. $type_tooltip .'</p>
+						<i></i>
+					</span></span></div>');
 
 					endif;  // displaying checkbox UI
-					
+
 					echo '</div>';
 				}
 				echo '</td>';
 				?>
 				</tr>
 				</table>
-				
-				<?php $define_create_posts_cap = get_option( 'pp_define_create_posts_cap' );?>
-				
-					<div style="margin-top:10px;margin-bottom:10px">
+
+				<?php
+
+				$define_create_posts_cap = get_option("{$pp_prefix}_define_create_posts_cap");?>
+
+					<div style="margin-top:20px;margin-bottom:10px" class="ppc-tool-tip">
 					<label for="pp_define_create_posts_cap">
-					<input name="pp_define_create_posts_cap" type="checkbox" id="pp_define_create_posts_cap" value="1" <?php checked('1', $define_create_posts_cap );?> title="<?php esc_attr( _e( 'Make selected post types require a different capability to add new posts.', 'capsman-enhanced') );?>" /> <?php _e('Use create_posts capability');?>
+					<input name="pp_define_create_posts_cap" type="checkbox" id="pp_define_create_posts_cap" autocomplete="off" value="1" <?php checked('1', $define_create_posts_cap );?> /> <?php esc_html_e('Use the "Create" capability for selected post types', 'capability-manager-enhanced');?>
+                    <div class="tool-tip-text"><p><?php esc_attr_e('This will cause a new capability to be required for creating posts, and enable a checkbox column here for role assignments. Normally, post creation is controlled by the "Edit" capability.', 'capability-manager-enhanced');?></p><i></i></div>
 					</label>
 					</div>
-				
-				
-				<input type="submit" name="update_filtered_types" value="<?php _e('Update', 'capsman-enhanced') ?>" class="button" />
-			</dd>
-		</dl>
+
+				<?php
+				do_action('pp-capabilities-type-specific-ui');
+				?>
+
+				<input type="submit" name="update_filtered_types" value="<?php esc_attr_e('Update', 'capability-manager-enhanced') ?>" class="button" />
+                </div>
+            </div>
+        </div>
 		<?php
 	}
-	
+
 	// Note: CME can now impose type-specific capabilities without Press Permit Core active
 	function pp_taxonomies_ui( $defined_taxonomies ) {
+        global $sidebar_metabox_state;
 		?>
-		<dl>
-			<dt><?php _e('Taxonomy-Specific Capabilities', 'capsman-enhanced'); ?></dt>
-			<dd style="text-align:center;">
+        <div class="ppc-sidebar-panel-metabox meta-box-sortables ppc-taxonomies" style="display:none;">
+            <?php $meta_box_state = (isset($sidebar_metabox_state['unique_capabilities_for_taxonomies'])) ? $sidebar_metabox_state['unique_capabilities_for_taxonomies'] : 'closed';  ?>
+            <div class="postbox ppc-sidebar-panel <?php echo esc_attr($meta_box_state); ?>">
+                <input
+                    name="ppc_metabox_state[unique_capabilities_for_taxonomies]"
+                    type="hidden"
+                    class="metabox-state"
+                    value="<?php echo esc_attr($meta_box_state); ?>"
+                />
+                <div class="postbox-header">
+                    <h2 class="hndle ui-sortable-handle"><?php esc_html_e('Unique Taxonomy Capabilities', 'capability-manager-enhanced'); ?></h2>
+                    <div class="handle-actions">
+                        <button type="button" class="handlediv">
+                            <span class="toggle-indicator"></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="inside" style="text-align:center;">
 				<?php
-				$caption = __( 'Ensure permissions can be controlled separately from other taxonomies.', 'capsman-enhanced' );
-				echo "<p class='cme-hint'>$caption</p>";
-				
+				echo "<p class='cme-hint'>" . esc_html__( 'Allow taxonomy permissions to be controlled separately from other areas of WordPress.', 'capability-manager-enhanced' ) . "</p>";
+
 				echo "<table style='width:100%'><tr>";
-				
+
 				$unfiltered = apply_filters( 'pp_unfiltered_taxonomies', array( 'post_status', 'topic-tag' ) );  // avoid confusion with Edit Flow administrative taxonomy
 				$hidden = apply_filters( 'pp_hidden_taxonomies', array() );
-				
+
 				echo '<td style="width:50%">';
 
+				$pp_prefix = (defined('PPC_VERSION') && !defined('PRESSPERMIT_VERSION')) ? 'pp' : 'presspermit';
+
 				$option_basename = 'enabled_taxonomies';
-				$option_name = 'pp_' . $option_basename;
-				
+				$option_name = $pp_prefix . '_' . $option_basename;
+
 				$enabled = get_option( $option_name, array() );
-				
+
 				foreach( $defined_taxonomies as $taxonomy => $type_obj ) {
 					if ( ! $taxonomy )
 						continue;
 
 					if ( in_array( $taxonomy, $unfiltered ) )
 						continue;
-					
+
+					$taxonomy = sanitize_key($taxonomy);
+
 					$id = "$option_basename-" . $taxonomy;
 					?>
 					<div style="text-align:left">
 					<?php if ( ! empty( $hidden[$taxonomy] ) ) :?>
-						<input name="<?php echo($id);?>" type="hidden" id="<?php echo($id);?>" value="1" />
-						<input name="<?php echo("{$option_basename}-options[]");?>" type="hidden" value="<?php echo($taxonomy)?>" />
-					
-					<?php else: ?>
-						<div class="agp-vspaced_input">
-						<label for="<?php echo($id);?>" title="<?php echo($taxonomy);?>">
-						<input name="<?php echo("{$option_basename}-options[]");?>" type="hidden" value="<?php echo($taxonomy)?>" />
-						<input name="<?php echo($id);?>" type="checkbox" id="<?php echo($id);?>" value="1" <?php checked('1', ! empty($enabled[$taxonomy]) );?> /> <?php echo($type_obj->label);?>
-						
-						<?php 
-						echo ('</label></div>');
+						<input name="<?php echo(esc_attr($id));?>" type="hidden" id="<?php echo(esc_attr($id));?>" value="1" />
+						<input name="<?php echo(esc_attr($option_basename) . '-options[]');?>" type="hidden" value="<?php echo(esc_attr($taxonomy))?>" />
+
+					<?php else:
+						$type_tooltip = sprintf(__( 'The slug for this taxonomy is %s', 'capability-manager-enhanced' ), '<strong>' . esc_html($taxonomy) . '</strong>' );
+						?>
+
+						<span class="ppc-tool-tip disabled"><label for="<?php echo(esc_attr($id));?>">
+						<input name="<?php echo(esc_attr($option_basename) . '-options[]');?>" type="hidden" value="<?php echo(esc_attr($taxonomy))?>" />
+						<input name="<?php echo(esc_attr($id));?>" type="checkbox" autocomplete="off" id="<?php echo(esc_attr($id));?>" value="1" <?php checked('1', ! empty($enabled[$taxonomy]) );?> /> <?php echo(esc_html($type_obj->label));?>
+
+						<?php
+						echo ('</label><span class="tool-tip-text">
+						<p>'. $type_tooltip .'</p>
+						<i></i>
+					</span></span></div>');
 
 					endif;  // displaying checkbox UI
-					
+
 					echo '</div>';
 				}
 				echo '</td>';
@@ -217,55 +282,78 @@ class Capsman_PP_UI {
 				?>
 				</tr>
 				</table>
-				
-				<input type="submit" name="update_filtered_taxonomies" value="<?php _e('Update', 'capsman-enhanced') ?>" class="button" />
-			</dd>
-		</dl>
-		
-		<dl>
-			<dt><?php _e('Detailed Taxonomy Capabilities', 'capsman-enhanced'); ?></dt>
-			<dd style="text-align:center;">
+
+				<input type="submit" name="update_filtered_taxonomies" value="<?php esc_attr_e('Update', 'capability-manager-enhanced') ?>" class="button" />
+                </div>
+            </div>
+        </div>
+
+        <div class="ppc-sidebar-panel-metabox meta-box-sortables ppc-detailed-taxonomies" style="display:none;">
+                <?php $meta_box_state = (isset($sidebar_metabox_state['detailed_capabilities_for_taxonomies'])) ? $sidebar_metabox_state['detailed_capabilities_for_taxonomies'] : 'closed';  ?>
+                <div class="postbox ppc-sidebar-panel <?php echo esc_attr($meta_box_state); ?>">
+                    <input
+                        name="ppc_metabox_state[detailed_capabilities_for_taxonomies]"
+                        type="hidden"
+                        class="metabox-state"
+                        value="<?php echo esc_attr($meta_box_state); ?>"
+                    />
+                    <div class="postbox-header">
+                        <h2 class="hndle ui-sortable-handle"><?php esc_html_e('Detailed Taxonomy Capabilities', 'capability-manager-enhanced'); ?></h2>
+                        <div class="handle-actions">
+                            <button type="button" class="handlediv">
+                                <span class="toggle-indicator"></span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="inside" style="text-align:center;">
+
 				<?php
-				$caption = __( 'Enforce Edit, Delete and Assign capabilities separately from Management capability.', 'capsman-enhanced' );
-				echo "<p class='cme-hint'>$caption</p>";
-				
+				echo "<p class='cme-hint'>" . esc_html__( 'Allow "Edit", "Delete" and "Assign" capabilities separately from the "Manage" capability.', 'capability-manager-enhanced' ) . "</p>";
+
 				echo "<table style='width:100%'><tr>";
-				
+
 				$unfiltered = apply_filters( 'pp_unfiltered_taxonomies', array( 'post_status', 'topic-tag' ) );  // avoid confusion with Edit Flow administrative taxonomy
 				$hidden = apply_filters( 'pp_hidden_taxonomies', array() );
-				
+
 				echo '<td style="width:50%">';
 
 				$option_basename = 'detailed_taxonomies';
 				$option_name = 'cme_' . $option_basename;
-				
+
 				$enabled = get_option( $option_name, array() );
-				
+
 				foreach( $defined_taxonomies as $taxonomy => $type_obj ) {
 					if ( ! $taxonomy )
 						continue;
 
 					if ( in_array( $taxonomy, $unfiltered ) )
 						continue;
-					
+
+					$taxonomy = sanitize_key($taxonomy);
+
 					$id = "$option_basename-" . $taxonomy;
 					?>
 					<div style="text-align:left">
 					<?php if ( ! empty( $hidden[$taxonomy] ) ) :?>
-						<input name="<?php echo($id);?>" type="hidden" id="<?php echo($id);?>" value="1" />
-						<input name="<?php echo("{$option_basename}-options[]");?>" type="hidden" value="<?php echo($taxonomy)?>" />
-					
-					<?php else: ?>
+						<input name="<?php echo(esc_attr($id));?>" type="hidden" id="<?php echo(esc_attr($id));?>" value="1" />
+						<input name="<?php echo(esc_attr($option_basename) . '-options[]');?>" type="hidden" value="<?php echo(esc_attr($taxonomy))?>" />
+
+					<?php else:
+						$type_tooltip = sprintf(__( 'The slug for this taxonomy is %s', 'capability-manager-enhanced' ), '<strong>' . esc_html($taxonomy) . '</strong>' );
+						 ?>
 						<div class="agp-vspaced_input">
-						<label for="<?php echo($id);?>" title="<?php echo($taxonomy);?>">
-						<input name="<?php echo("{$option_basename}-options[]");?>" type="hidden" value="<?php echo($taxonomy)?>" />
-						<input name="<?php echo($id);?>" type="checkbox" id="<?php echo($id);?>" value="1" <?php checked('1', ! empty($enabled[$taxonomy]) );?> /> <?php echo($type_obj->label);?>
-						
-						<?php 
-						echo ('</label></div>');
+						<span class="ppc-tool-tip disabled"><label for="<?php echo(esc_attr($id));?>">
+						<input name="<?php echo(esc_attr($option_basename) . '-options[]');?>" type="hidden" value="<?php echo(esc_attr($taxonomy))?>" />
+						<input name="<?php echo(esc_attr($id));?>" type="checkbox" autocomplete="off" id="<?php echo(esc_attr($id));?>" value="1" <?php checked('1', ! empty($enabled[$taxonomy]) );?> /> <?php echo(esc_html($type_obj->label));?>
+
+						<?php
+						echo ('</label><span class="tool-tip-text">
+						<p>'. $type_tooltip .'</p>
+						<i></i>
+					</span></span></div>');
 
 					endif;  // displaying checkbox UI
-					
+
 					echo '</div>';
 				}
 				echo '</td>';
@@ -273,10 +361,11 @@ class Capsman_PP_UI {
 				?>
 				</tr>
 				</table>
-				
-				<input type="submit" name="update_detailed_taxonomies" value="<?php _e('Update', 'capsman-enhanced') ?>" class="button" />
-			</dd>
-		</dl>
+
+				<input type="submit" name="update_detailed_taxonomies" value="<?php esc_attr_e('Update', 'capability-manager-enhanced') ?>" class="button" />
+                    </div>
+                </div>
+            </div>
 		<?php
 	}
 }

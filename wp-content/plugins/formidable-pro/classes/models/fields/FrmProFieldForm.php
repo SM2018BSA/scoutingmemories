@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
@@ -43,7 +47,7 @@ DEFAULT_HTML;
 	 */
 	public function show_primary_options( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/insert-form.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/insert-form.php';
 
 		parent::show_primary_options( $args );
 	}

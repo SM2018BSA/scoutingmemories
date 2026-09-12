@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 2.04
  */
@@ -55,12 +59,17 @@ class FrmProEntryValues extends FrmEntryValues {
 			$this->set_current_container( $field );
 		}
 
+		$is_included = true;
+
 		if ( ! empty( $this->include_fields ) ) {
 			$is_included = $this->is_self_or_parent_in_array( $field, $this->include_fields );
-		} else if ( ! empty( $this->exclude_fields ) ) {
-			$is_included = ! $this->is_self_or_parent_in_array( $field, $this->exclude_fields );
-		} else {
-			$is_included = true;
+		}
+
+		if ( ! empty( $this->exclude_fields ) ) {
+			$is_excluded = $this->is_self_or_parent_in_array( $field, $this->exclude_fields );
+			if ( $is_excluded ) {
+				$is_included = false;
+			}
 		}
 
 		if ( $field->type === 'end_divider' ) {
@@ -106,6 +115,6 @@ class FrmProEntryValues extends FrmEntryValues {
 			'exclude_fields' => $this->exclude_fields,
 		);
 
-		$this->field_values[ $field->id ] = new FrmProFieldValue( $field, $this->entry, $atts );
+		$this->field_values[ $field->id ] = new FrmProFieldValue( $field, $this->entry );
 	}
 }

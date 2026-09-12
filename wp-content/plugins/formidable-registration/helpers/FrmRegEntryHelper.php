@@ -23,13 +23,11 @@ class FrmRegEntryHelper{
 	 */
 	public static function get_posted_user_id( $form_id ) {
 		$user_id_field = self::get_user_id_field_for_form( $form_id );
-
+		$user_id = 0;
 		if ( $user_id_field && isset( $_POST['item_meta'][ $user_id_field ] ) ) {
-			$user_id = (int) $_POST['item_meta'][ $user_id_field ];
-		} else {
-			$user_id = 0;
+			$user_id = FrmAppHelper::get_post_param( 'item_meta' )[ $user_id_field ];
+			$user_id = (int) $user_id;
 		}
-
 		return $user_id;
 	}
 

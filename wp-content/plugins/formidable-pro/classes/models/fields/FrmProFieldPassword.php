@@ -1,9 +1,14 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
 class FrmProFieldPassword extends FrmFieldType {
+	use FrmProFieldAutocompleteField;
 
 	/**
 	 * @var string
@@ -20,6 +25,8 @@ class FrmProFieldPassword extends FrmFieldType {
 			'invalid'       => true,
 			'read_only'     => true,
 			'conf_field'    => true,
+			'prefix'        => true,
+			'autocomplete'  => true,
 		);
 
 		FrmProFieldsHelper::fill_default_field_display( $settings );
@@ -29,11 +36,59 @@ class FrmProFieldPassword extends FrmFieldType {
 	/**
 	 * @return array
 	 */
+	protected function get_filter_keys() {
+		return array( 'on', 'off', 'new-password', 'current-password' );
+	}
+
+	/**
+	 * @return array
+	 */
 	protected function extra_field_opts() {
 		return array(
 			'strong_pass' => 0,
 			'strength_meter' => 0,
+			'show_password'  => 0,
 		);
+	}
+
+	/**
+	 * @return array
+	 */
+	public function get_new_field_defaults() {
+		$field = parent::get_new_field_defaults();
+
+		// Setting `show_password` to 1 in the `extra_field_opts()` method will cause that option is always enabled.
+		$field['field_options']['show_password'] = 1;
+		$field['field_options']['invalid']       = __( 'Passwords must contain at least one special character', 'formidable-pro' );
+
+		return $field;
+	}
+
+	/**
+	 * @since 4.05
+	 */
+	protected function builder_text_field( $name = '' ) {
+		$html  = FrmProFieldsHelper::builder_page_prepend( $this->field );
+		$field = parent::builder_text_field( $name );
+
+		// Always display the show password button, then use CSS to hide it.
+		$this->maybe_add_show_password_html( $field, true );
+
+		return str_replace( '[input]', $field, $html );
+	}
+
+	/**
+	 * Modifies the field wrapper CSS classes on the form builder.
+	 *
+	 * @param string $classes Field wrapper CSS classes.
+	 * @return string
+	 */
+	protected function alter_builder_classes( $classes ) {
+		if ( ! FrmField::get_option( $this->field, 'show_password' ) ) {
+			$classes .= ' frm_disabled_show_password';
+		}
+
+		return $classes;
 	}
 
 	/**
@@ -56,9 +111,9 @@ class FrmProFieldPassword extends FrmFieldType {
 	 */
 	public function show_primary_options( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/password-options.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/password-options.php';
 
-		include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/confirmation.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/confirmation.php';
 
 		parent::show_primary_options( $args );
 	}
@@ -69,7 +124,7 @@ class FrmProFieldPassword extends FrmFieldType {
 	 */
 	public function show_after_default( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/confirmation-placeholder.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/confirmation-placeholder.php';
 	}
 
 	/**
@@ -116,13 +171,12 @@ class FrmProFieldPassword extends FrmFieldType {
 	}
 
 	public function front_field_input( $args, $shortcode_atts ) {
-		$input_html = parent::front_field_input( $args, $shortcode_atts );
-
+		$input_html            = parent::front_field_input( $args, $shortcode_atts );
 		$strength_meter_option = FrmField::get_option( $this->field, 'strength_meter' );
 
-		$parent_form = isset( $args['parent_form_id'] ) ? $args['parent_form_id'] : 0;
+		$this->maybe_add_show_password_html( $input_html );
 
-		if ( ! $strength_meter_option || ! empty( $parent_form ) ) {
+		if ( ! $strength_meter_option ) {
 			return $input_html;
 		}
 
@@ -131,14 +185,50 @@ class FrmProFieldPassword extends FrmFieldType {
 		if ( ! $is_confirmation_field ) {
 			$field_id = $args['field_id'];
 
-			$input_html .= '<div id="frm_password_strength_' . esc_attr( $field_id ) . '" class="frm-password-strength">';
-			foreach ( $this->password_checks() as $type => $check ) {
-				$input_html .= '<span id="frm-pass-' . esc_attr( $type ) . '-' . esc_attr( $field_id ) . '" class="frm-pass-req frm_icon_font">' . esc_html( $check['label'] ) . '</span>' . "\r\n";
-			}
-			$input_html .= '</div>';
+			$input_html .= $this->get_password_stength_html( $field_id );
 		}
 
 		return $input_html;
+	}
+
+	/**
+	 * Generates a password strength html.
+	 *
+	 * @since 6.8.4
+	 *
+	 * @param string $field_id
+	 * @param bool   $echo
+	 * @return string
+	 */
+	public function get_password_stength_html( $field_id, $echo = false ) {
+		return FrmAppHelper::clip(
+			function () use ( $field_id ) {
+				echo '<div id="frm_password_strength_' . esc_attr( $field_id ) . '" class="frm-password-strength">';
+
+				foreach ( $this->password_checks() as $type => $check ) {
+					echo '<span id="frm-pass-' . esc_attr( $type ) . '-' . esc_attr( $field_id ) . '" class="frm-pass-req">';
+					FrmProAppHelper::get_svg_icon( 'frm-cancel-circle-icon', 'frmsvg frm_cancel1_icon failed_svg', array( 'echo' => true ) );
+					FrmProAppHelper::get_svg_icon( 'frm-check-circle-icon', 'frmsvg frm_check1_icon passed_svg', array( 'echo' => true ) );
+					echo esc_html( $check['label'] ) . '</span>' . "\r\n";
+				}
+				echo '</div>';
+			},
+			$echo
+		);
+	}
+
+	/**
+	 * Maybe add show password HTML.
+	 *
+	 * @since 6.3.1
+	 *
+	 * @param string $input_html Input HTML.
+	 * @param bool   $force      Force adding show password HTML.
+	 */
+	private function maybe_add_show_password_html( &$input_html, $force = false ) {
+		if ( $force || FrmField::get_option( $this->field, 'show_password' ) ) {
+			$input_html = FrmProFieldsHelper::add_show_password_html( $input_html );
+		}
 	}
 
 	/**
@@ -161,10 +251,11 @@ class FrmProFieldPassword extends FrmFieldType {
 
 	/**
 	 * @since 3.03
+	 * @since 5.2.04 This method is public.
 	 *
 	 * @return array
 	 */
-	private function password_checks() {
+	public function password_checks() {
 		$checks = array(
 			'eight-char'   => array(
 				'label'    => __( 'Eight characters minimum', 'formidable-pro' ),
@@ -196,16 +287,21 @@ class FrmProFieldPassword extends FrmFieldType {
 		/**
 		 * @since 3.03
 		 */
-		return apply_filters( 'frm_password_checks', $checks, array(
-			'field' => $this->field,
-		) );
+		return apply_filters(
+			'frm_password_checks',
+			$checks,
+			array(
+				'field' => $this->field,
+			)
+		);
 	}
 
 	/**
 	 * @since 3.03
+	 * @since 5.2.04 This method is public.
 	 * @return boolean
 	 */
-	private function check_regex( $regex, $password ) {
+	public function check_regex( $regex, $password ) {
 		return preg_match( $regex, $password );
 	}
 }

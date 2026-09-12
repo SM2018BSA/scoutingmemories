@@ -31,16 +31,18 @@ class FrmRegLoginWidget extends WP_Widget {
 
 		$this->apply_style_setting( $instance, $shortcode_atts );
 
-		echo $args['before_widget'];
+		echo $args['before_widget']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 
 		$title = apply_filters( 'widget_title', empty( $instance['title'] ) ? '' : $instance['title'] );
 		if ( $title ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			echo $args['before_title'] . stripslashes( $title ) . $args['after_title'];
 		}
 
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		echo FrmRegShortcodesController::do_login_form_shortcode( $shortcode_atts );
 
-		echo $args['after_widget'];
+		echo $args['after_widget']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**
@@ -53,13 +55,17 @@ class FrmRegLoginWidget extends WP_Widget {
 	private function apply_style_setting( $instance, &$shortcode_atts ) {
 		if ( (string) $instance['style'] === '0' ) {
 			$shortcode_atts['style'] = 0;
-		} else if ( (string) $instance['style'] === '1' ) {
-			// Add nothing
-		} else {
+		} elseif ( (string) $instance['style'] !== '1' ) {
 			$shortcode_atts['class'] = 'frm_style_' . $instance['style'];
 		}
 	}
 
+	/**
+	 * @param array $new_instance
+	 * @param array $old_instance
+	 *
+	 * @return array
+	 */
 	public function update( $new_instance, $old_instance ) {
 		$new_instance['remember'] = isset( $new_instance['remember'] ) ? 1 : 0;
 		$new_instance['show_lost_password'] = isset( $new_instance['show_lost_password'] ) ? 1 : 0;
@@ -67,8 +73,13 @@ class FrmRegLoginWidget extends WP_Widget {
 		return $new_instance;
 	}
 
+	/**
+	 * @param array $instance
+	 *
+	 * @return string
+	 */
 	public function form( $instance ) {
-		//Defaults
+		// Defaults
 		$instance = wp_parse_args( (array) $instance, array(
 			'title'              => false,
 			'remember'           => true,
@@ -83,6 +94,8 @@ class FrmRegLoginWidget extends WP_Widget {
 			'show_lost_password' => false,
 		) );
 
-		include( FrmRegAppHelper::path() . '/views/login_widget_settings.php' );
+		include FrmRegAppHelper::path() . '/views/login_widget_settings.php';
+
+		return '';
 	}
 }

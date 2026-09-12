@@ -14,7 +14,7 @@ class FrmRegEntry {
 	/**
 	 * @since 2.0
 	 *
-	 * @var WP_Post
+	 * @var object
 	 */
 	private $registration_action = null;
 
@@ -93,7 +93,7 @@ class FrmRegEntry {
 		}
 
 		$action_var = isset( $_POST['frm_action'] ) ? 'frm_action' : 'action';
-		if ( $_POST[ $action_var ] === 'update' ) {
+		if ( isset( $_POST[ $action_var ] ) && $_POST[ $action_var ] === 'update' ) {
 			$this->form_action = 'update';
 		} else {
 			$this->form_action = 'create';
@@ -117,7 +117,7 @@ class FrmRegEntry {
 	 * @since 2.0
 	 */
 	private function init_global_messages() {
-		$global_settings       = new FrmRegGlobalSettings;
+		$global_settings       = new FrmRegGlobalSettings( array( 'current_form' => $this->form_id ) );
 		$this->global_messages = $global_settings->get_global_messages();
 	}
 
@@ -461,7 +461,7 @@ class FrmRegEntry {
 
 		if ( isset( $_POST['frm_register']['subsite_domain'] ) ) {
 
-			$subdomain_mapping = $_POST['frm_register']['subsite_domain'];
+			$subdomain_mapping = sanitize_text_field( wp_unslash( $_POST['frm_register']['subsite_domain'] ) );
 
 			if ( ( $subdomain_mapping === 'blog_title' && $this->field_needs_validation( $field->id, 'subsite_title', $errors ) ) ||
 				 ( $subdomain_mapping === 'username' && $this->field_needs_validation( $field->id, 'username', $errors ) ) ) {
@@ -480,7 +480,7 @@ class FrmRegEntry {
 	 *
 	 * @param string $subdomain
 	 *
-	 * @return int
+	 * @return int|null
 	 */
 	private function subsite_exists( $subdomain ) {
 		$subdomain = sanitize_title( $subdomain );
@@ -643,7 +643,16 @@ class FrmRegEntry {
 	 * @return bool
 	 */
 	private function is_field_mapped_to_setting( $field_id, $setting ) {
-		return ( isset( $_POST['frm_register'][ $setting ] ) && (int) $_POST['frm_register'][ $setting ] === (int) $field_id );
+		$frm_register_posted = FrmAppHelper::get_post_param( 'frm_register' );
+		if ( empty( $frm_register_posted[ $setting ] ) ) {
+			return false;
+		}
+		$setting_value = $frm_register_posted[ $setting ];
+		if ( ! is_numeric( $setting_value ) ) {
+			return false;
+		}
+
+		return (int) $setting_value === (int) $field_id;
 	}
 
 
@@ -790,7 +799,7 @@ class FrmRegEntry {
 	 */
 	private function get_posted_field_value( $field_id ) {
 		if ( is_numeric( $field_id ) && isset( $_POST['item_meta'][ $field_id ] ) ) {
-			$value = $_POST['item_meta'][ $field_id ];
+			$value = sanitize_text_field( wp_unslash( $_POST['item_meta'][ $field_id ] ) );
 		} else {
 			$value = '';
 		}
@@ -851,7 +860,7 @@ class FrmRegEntry {
 	 *
 	 * @since 2.02.01
 	 *
-	 * @param array $value
+	 * @param array $values
 	 * @param object $field
 	 *
 	 * @return array $value
@@ -913,7 +922,7 @@ class FrmRegEntry {
 
 		// Get all entry IDs (for parent and child entries)
 		$query     = $wpdb->prepare( "SELECT id, form_id FROM " . $wpdb->prefix . "frm_items WHERE parent_item_id=%d OR id=%d", $entry->id, $entry->id );
-		$entry_ids = $wpdb->get_results( $query );
+		$entry_ids = $wpdb->get_results( $query ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
 		foreach ( $entry_ids as $e ) {
 			// Update frm_items for parent and child entries
@@ -994,6 +1003,19 @@ class FrmRegEntry {
 			return $values;
 		}
 
+		$entry = FrmEntry::getOne( $entry_id );
+
+		// Don't overwrite values from drafts.
+		if ( ! $entry || ! empty( $entry->is_draft ) ) {
+			return $values;
+		}
+
+		$custom_value = self::get_values_for_specific_field( $field, $settings, $user_for_entry, $entry );
+		if ( null !== $custom_value ) {
+			$values['value'] = $custom_value;
+			return $values;
+		}
+
 		$user_meta_key = self::get_user_meta_key_for_field( $field->id, $settings );
 		if ( ! $user_meta_key ) {
 			return $values;
@@ -1011,16 +1033,35 @@ class FrmRegEntry {
 	}
 
 	/**
+	 * Gets values for specific field.
+	 *
+	 * @since 2.04
+	 *
+	 * @param object $field    Field data.
+	 * @param array  $settings Registration settings.
+	 * @param int    $user_id  User ID used for this entry.
+	 * @param object $entry    Entry data.
+	 *
+	 * @return mixed|null Return `null` will omit this result.
+	 */
+	private static function get_values_for_specific_field( $field, $settings, $user_id, $entry ) {
+		if ( 'name' === $field->type ) {
+			// user data is copied from item meta. since a user does not have a middle name we need to just use the item meta.
+			return FrmEntryMeta::get_entry_meta_by_field( $entry->id, $field->id );
+		}
+		return null;
+	}
+
+	/**
 	 * Get the user ID for the entry ID
 	 *
 	 * @since 2.0
+	 * @since 2.12 This function was made public.
 	 *
-	 * @param $entry_id int
-	 *
-	 * @return int $user_id
+	 * @param int $entry_id
+	 * @return int User ID.
 	 */
-	private static function get_user_for_entry( $entry_id ) {
-
+	public static function get_user_for_entry( $entry_id ) {
 		// Get user ID field for the entry
 		global $wpdb;
 		$table    = $wpdb->prefix . 'frm_item_metas m INNER JOIN ' . $wpdb->prefix . 'frm_fields f ON m.field_id=f.id';
@@ -1037,11 +1078,26 @@ class FrmRegEntry {
 		// If user doesn't exist, don't try to autopopulate form with their info
 		if ( $count ) {
 			return (int) $user_val;
-		} else {
-			return 0;
 		}
+
+		return 0;
 	}
 
+	/**
+	 * Get the entry ID associated with a user.
+	 *
+	 * @since 2.12
+	 *
+	 * @param WP_User $profile_user The current WP_User object.
+	 * @return int|null The entry ID or null if not found.
+	 */
+	public static function get_entry_for_user( $profile_user ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'frm_item_metas m INNER JOIN ' . $wpdb->prefix . 'frm_fields f ON m.field_id = f.id';
+		$where = array( 'm.meta_value' => $profile_user->ID, 'f.type' => 'user_id' );
+		return FrmDb::get_var( $table, $where, 'm.item_id' );
+	}
+	
 	/**
 	 * Get the user meta key for a given field and registration settings
 	 *
@@ -1081,5 +1137,257 @@ class FrmRegEntry {
 		}
 
 		return $user_meta_key;
+	}
+
+	/**
+	 * Hashes password if used for user reg and user isn't immediately created.
+	 *
+	 * Entry meta tracking the hashed password is also saved so we can determine if a password is hashed or not.
+	 *
+	 * @since 2.03
+	 *
+	 * @param int $entry_id Id of entry that's being updated or created.
+	 * @param int $form_id  Id of form
+	 */
+	public static function maybe_hash_password( $entry_id, $form_id ) {
+		$password_field_id = self::get_user_reg_password_field_id( $form_id );
+
+		if ( ! $password_field_id || ! is_numeric( $password_field_id ) ) {
+			return;
+		}
+
+		$password_from_entry   = self::get_password_from_entry( $entry_id, $password_field_id );
+		$metas                 = self::get_metas_without_a_field( $entry_id );
+		$saved_hashed_password = self::get_hashed_password( $metas, $password_field_id );
+
+		if ( $saved_hashed_password === $password_from_entry ) {
+			// The current password is hashed and meta already saved for it.  Or both the saved password and password from entry are empty.
+			return;
+		}
+
+		if ( $saved_hashed_password ) {
+			// Delete hashed password metas saved for this password field, since a new password has been entered.
+			self::delete_hashed_password_metas( $metas, $password_field_id );
+		}
+
+		if ( ! $password_from_entry ) {
+			// No password in the entry, so there's nothing to hash and save in the metas.
+			return;
+		}
+
+		self::save_hashed_password_in_metas( compact( 'password_from_entry', 'password_field_id', 'entry_id' ) );
+	}
+
+	/**
+	 * Returns the id of the user reg password field for a form or false, if there isn't one.
+	 *
+	 * @since 2.03
+	 *
+	 * @param int $form_id Id of form
+	 *
+	 * @return int|bool Id of user reg password field or false.
+	 */
+	private static function get_user_reg_password_field_id( $form_id ) {
+		$actions = FrmFormAction::get_action_for_form( $form_id, 'register' );
+
+		if ( ! $actions ) {
+			return false;
+		}
+
+		$action = reset( $actions );
+
+		return ! empty( $action->post_content ) && ! empty( $action->post_content['reg_password'] ) ? $action->post_content['reg_password'] : false;
+	}
+
+	/**
+	 * Gets the value from an entry for the password field used in user reg action.
+	 *
+	 *  @since 2.03
+	 *
+	 * @param int $entry_id          Id of entry.
+	 * @param int $password_field_id Id of password field.
+	 *
+	 * @return string|bool Password value from entry or false.
+	 */
+	private static function get_password_from_entry( $entry_id, $password_field_id ) {
+		$entry = FrmEntry::getOne( $entry_id, true );
+
+		return ! empty( $entry ) && ! empty( $entry->metas ) && ! empty( $entry->metas[ $password_field_id ] ) ? $entry->metas[ $password_field_id ] : false;
+	}
+
+	/**
+	 * Retrieves entry metas for a specified entry that aren't associated with a field.
+	 *
+	 * @since 2.03
+	 *
+	 * @param int $entry_id Id of the entry.
+	 *
+	 * @return mixed Metas for an entry with field id of 0.
+	 */
+	private static function get_metas_without_a_field( $entry_id ) {
+		$query = array(
+			'item_id'  => $entry_id,
+			'field_id' => 0,
+		);
+
+		return FrmEntryMeta::getAll( $query, ' ORDER BY it.created_at DESC', '', true );
+	}
+
+	/**
+	 * Retrieves hashed password from entry metas.
+	 *
+	 * @since 2.03
+	 *
+	 * @param array $metas             An array of item metas for an entry that aren't associated with a particular field.
+	 * @param int   $password_field_id Id of password field for user reg action for the entry.
+	 *
+	 * @return bool|mixed The hashed password, if there is one, or false.
+	 */
+	private static function get_hashed_password( $metas, $password_field_id ) {
+		if ( $metas ) {
+			foreach ( (array) $metas as $meta ) {
+				if ( ! empty( $meta->meta_value['hashed_password'] ) && ! empty( $meta->meta_value['password_field_id'] ) && $meta->meta_value['password_field_id'] === $password_field_id ) {
+					return $meta->meta_value['hashed_password'];
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Deletes entry metas that track hashed passwords.
+	 *
+	 * If a password field id is sent, only delete metas with that password field id.
+	 * Otherwise, delete all password metas.
+	 *
+	 * @since 2.03
+	 *
+	 * @param array $metas Meta values for an entry, with a field id equal to 0.
+	 * @param int|bool $password_field_id Id of password field or false, if all hashed password metas should be deleted.
+	 */
+	private static function delete_hashed_password_metas( $metas, $password_field_id = false ) {
+		if ( $metas ) {
+			foreach ( $metas as $meta ) {
+				if ( self::password_meta_should_be_deleted( $meta, $password_field_id ) ) {
+					self::delete_entry_meta( $meta->id );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Determines whether or not entry meta should be deleted.
+	 *
+	 * @since 2.03
+	 *
+	 * @param object $meta A meta value object.
+	 * @param bool|int $password_field_id The id of the password field to be deleted or false if all hashed passwords should be deleted.
+	 *
+	 * @return bool Whether a password meta should be deleted.
+	 */
+	private static function password_meta_should_be_deleted( $meta, $password_field_id = false ) {
+		if ( empty( $meta->meta_value['hashed_password'] ) || empty( $meta->id ) ) {
+			return false;
+		}
+
+		if ( $password_field_id ) {
+			return ! empty( $meta->meta_value['password_field_id'] ) && $password_field_id === $meta->meta_value['password_field_id'];
+		}
+
+		return true;
+	}
+
+	/**
+	 * Deletes the item meta with the specified id.
+	 *
+	 * @since 2.03
+	 *
+	 * @param int $meta_id Id of meta to be deleted.
+	 *
+	 * @return bool|int Return value of wpdb query. Number of meta rows deleted or false if error.
+	 */
+	private static function delete_entry_meta( $meta_id ) {
+		global $wpdb;
+		FrmEntryMeta::clear_cache();
+
+		return $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}frm_item_metas WHERE id=%d", $meta_id ) );
+	}
+
+	/**
+	 * Creates item meta to track a hashed password.
+	 *
+	 * @since 2.03
+	 *
+	 * @param $args An array with values for $password_from_entry, $password_field_id, and $entry_id.
+	 */
+	private static function save_hashed_password_in_metas( $args ){
+		$hashed_password = wp_hash_password( $args['password_from_entry'] );
+
+		$hashed_password_meta = array(
+			'hashed_password'   => $hashed_password,
+			'password_field_id' => $args['password_field_id'],
+		);
+
+		$hashed_password_meta = maybe_serialize( $hashed_password_meta );
+		FrmEntryMeta::add_entry_meta( $args['entry_id'], 0, '', $hashed_password_meta );
+		FrmEntryMeta::update_entry_meta( $args['entry_id'], $args['password_field_id'], null, $hashed_password );
+	}
+
+	/**
+	 * Sets password for user from hashed password when appropriate.
+	 *
+	 * @since 2.03
+	 *
+	 * @param object $entry Entry object.
+	 * @param object user $user User object.
+	 */
+	public static function maybe_set_password_from_hashed_password( $entry, $user ) {
+		$password_field_id = self::get_user_reg_password_field_id( $entry->form_id );
+
+		if ( ! $password_field_id || ! is_numeric( $password_field_id ) ) {
+			return;
+		}
+
+		$metas = self::get_metas_without_a_field( $entry->id );
+
+		$saved_hashed_password = self::get_hashed_password( $metas, $password_field_id );
+
+		if ( ! $saved_hashed_password ) {
+			return;
+		}
+
+		$password_from_entry = self::get_password_from_entry( $entry->id, $password_field_id );
+
+		if ( $password_from_entry === $saved_hashed_password ) {
+			self::set_hashed_password( $saved_hashed_password, $user->get_user_id() );
+		}
+
+		// Clean up all saved hashed password trackers for this entry.  The user has been created, so they're not needed.
+		self::delete_hashed_password_metas( $metas );
+	}
+
+	/**
+	 * Sets user's password to the saved hashed password.
+	 *
+	 * Needed when the user password was set with a previously hashed password, which would've been hashed again and therefore unusable.
+	 * From code for wp_set_password.
+	 *
+	 * @since 2.03
+	 *
+	 * @param string $hashed_password Password already hashed with wp_hash_password.
+	 * @param int    $user_id         Id of user whose password is being set.
+	 */
+	private static function set_hashed_password( $hashed_password, $user_id ) {
+		global $wpdb;
+
+		$wpdb->update(
+			$wpdb->users,
+			array(
+				'user_pass'           => $hashed_password,
+				'user_activation_key' => '',
+			),
+			array( 'ID' => $user_id )
+		);
 	}
 }

@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 class FrmProMathController {
 
 	/**
@@ -11,8 +15,11 @@ class FrmProMathController {
 	 * @return mixed|string
 	 */
 	public static function math_shortcode( $atts, $content = '' ) {
+		if ( '0' === $content ) {
+			return '0';
+		}
 
-		if ( ! $content || $content === '' ) {
+		if ( ! $content ) {
 			return '';
 		}
 
@@ -23,7 +30,10 @@ class FrmProMathController {
 				'thousands_sep' => ',',
 				'error'         => '',
 				'clean'         => 0,
-			), $atts, 'frm-math' );
+			),
+			$atts,
+			'frm-math'
+		);
 
 		$expression = self::get_math_expression_from_shortcode_content( $content, $atts );
 		if ( $expression === '' ) {
@@ -137,7 +147,16 @@ class FrmProMathController {
 	 */
 	private static function parse_math_string_into_array( $math_string ) {
 		$math_array = preg_split( '/([\+\-\*\/\(\)\%])/', $math_string, - 1, PREG_SPLIT_DELIM_CAPTURE );
-		$math_array = array_filter( $math_array, 'strlen' );
+		$math_array = array_filter(
+			$math_array,
+			/**
+			 * @param string $string
+			 * @return bool
+			 */
+			function ( $string ) {
+				return strlen( $string ) > 0;
+			}
+		);
 		$math_array = array_values( $math_array );
 		$math_array = self::set_negative_numbers( $math_array );
 
@@ -190,7 +209,7 @@ class FrmProMathController {
 			} elseif ( '(' === $element ) {
 				array_push( $operators, $element );
 			} elseif ( ')' === $element ) {
-				$status = self::process_right_paren_in_postfix_conversion( $output, $operators, $element );
+				$status = self::process_right_paren_in_postfix_conversion( $output, $operators );
 				if ( false === $status ) {
 					return 'error';
 				}
@@ -329,18 +348,16 @@ class FrmProMathController {
 		foreach ( $postfix_array as $index => $element ) {
 			if ( is_numeric( $element ) ) {
 				array_push( $stack, $element );
-			} else {
-				if ( count( $stack ) >= 2 ) {
+			} elseif ( count( $stack ) >= 2 ) {
 					$operand2 = array_pop( $stack );
 					$operand1 = array_pop( $stack );
 					$result   = self::evaluate_simple_math_expression( $operand1, $operand2, $element );
-					if ( ! is_numeric( $result ) ) {
-						return 'error';
-					}
-					array_push( $stack, $result );
-				} else {
+				if ( ! is_numeric( $result ) ) {
 					return 'error';
 				}
+					array_push( $stack, $result );
+			} else {
+				return 'error';
 			}
 		}
 		if ( count( $stack ) === 1 ) {

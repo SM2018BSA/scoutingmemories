@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 2.03.05
  */
@@ -42,7 +46,9 @@ class FrmProFieldFactory {
 	 */
 	public static function create_settings( $db_row ) {
 		$type = $db_row->type;
-		$field_options = (array) maybe_unserialize( $db_row->field_options );
+		$field_options = $db_row->field_options;
+		FrmProAppHelper::unserialize_or_decode( $field_options );
+		$field_options = (array) $field_options;
 
 		switch ( $type ) {
 			case 'text':
@@ -67,24 +73,28 @@ class FrmProFieldFactory {
 	public static function get_field_type_class( $class, $field_type ) {
 		if ( empty( $class ) ) {
 			$type_classes = array(
-				'address'  => 'FrmProFieldAddress',
-				'break'    => 'FrmProFieldBreak',
+				'address'     => 'FrmProFieldAddress',
+				'break'       => 'FrmProFieldBreak',
 				'credit_card' => 'FrmProFieldCreditCard',
-				'data'     => 'FrmProFieldData',
-				'date'     => 'FrmProFieldDate',
-				'divider'  => 'FrmProFieldDivider',
+				'data'        => 'FrmProFieldData',
+				'date'        => 'FrmProFieldDate',
+				'divider'     => 'FrmProFieldDivider',
 				'end_divider' => 'FrmProFieldEndDivider',
-				'file'     => 'FrmProFieldFile',
-				'form'     => 'FrmProFieldForm',
-				'lookup'   => 'FrmProFieldLookup',
-				'password' => 'FrmProFieldPassword',
-				'range'    => 'FrmProFieldRange',
-				'rte'      => 'FrmProFieldRte',
-				'scale'    => 'FrmProFieldScale',
-				'star'     => 'FrmProFieldStar',
-				'tag'      => 'FrmProFieldTag',
-				'time'     => 'FrmProFieldTime',
-				'toggle'   => 'FrmProFieldToggle',
+				'file'        => 'FrmProFieldFile',
+				'form'        => 'FrmProFieldForm',
+				'lookup'      => 'FrmProFieldLookup',
+				'password'    => 'FrmProFieldPassword',
+				'product'     => 'FrmProFieldProduct',
+				'quantity'    => 'FrmProFieldQuantity',
+				'range'       => 'FrmProFieldRange',
+				'rte'         => 'FrmProFieldRte',
+				'scale'       => 'FrmProFieldScale',
+				'star'        => 'FrmProFieldStar',
+				'summary'     => 'FrmProFieldSummary',
+				'tag'         => 'FrmProFieldTag',
+				'time'        => 'FrmProFieldTime',
+				'toggle'      => 'FrmProFieldToggle',
+				'total'       => 'FrmProFieldTotal',
 			);
 
 			$class = isset( $type_classes[ $field_type ] ) ? $type_classes[ $field_type ] : '';

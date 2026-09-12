@@ -88,6 +88,7 @@ class FrmRegMessagesHelper {
 			'empty_password',
 			'invalid_username',
 			'incorrect_password',
+			FrmRegLoginController::$login_limit_error,
 		);
 	}
 }

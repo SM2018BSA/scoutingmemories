@@ -1,3 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/where_row.php' );
+?>
 <div id="frm_where_field_<?php echo esc_attr( $where_key ); ?>" class="frm_where_row">
     <select id="where_field_id" class="frm_insert_where_options" name="options[where][<?php echo esc_attr( $where_key ); ?>]">
 		<option value=""><?php esc_html_e( '&mdash; Select &mdash;' ) ?></option>

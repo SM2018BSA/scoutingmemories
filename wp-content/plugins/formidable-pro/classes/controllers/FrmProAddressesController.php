@@ -1,10 +1,14 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 class FrmProAddressesController extends FrmProComboFieldsController {
 
 	public static function show_in_form( $field, $field_name, $atts ) {
-        $errors = isset( $atts['errors'] ) ? $atts['errors'] : array();
-        $html_id = $atts['html_id'];
+		$errors = isset( $atts['errors'] ) ? $atts['errors'] : array();
+		$html_id = $atts['html_id'];
 
 		$defaults = self::empty_value_array();
 		self::fill_values( $field['value'], $defaults );
@@ -12,7 +16,7 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 
 		$sub_fields = self::get_sub_fields( $field );
 
-		include( FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/input.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/input.php';
 	}
 
 	public static function add_optional_class( $class, $field ) {
@@ -27,8 +31,7 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 				'classes' => '',
 				'label'   => 1,
 				'atts'    => array(
-					'x-autocompletetype' => 'address-line1',
-					'autocompletetype'   => 'address-line1',
+					'autocomplete'   => 'address-line1',
 				),
 			),
 			'line2' => array(
@@ -37,8 +40,7 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 				'optional' => true,
 				'label' => 1,
 				'atts' => array(
-					'x-autocompletetype' => 'address-line2',
-					'autocompletetype'   => 'address-line2',
+					'autocomplete'   => 'address-line2',
 				),
 			),
 			'city'  => array(
@@ -46,8 +48,7 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 				'classes' => 'frm_third frm_first',
 				'label'   => 1,
 				'atts'    => array(
-					'x-autocompletetype' => 'city',
-					'autocompletetype'   => 'city',
+					'autocomplete'   => 'address-level2',
 				),
 			),
 			'state' => array(
@@ -55,8 +56,7 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 				'classes' => 'frm_third',
 				'label'   => 1,
 				'atts'    => array(
-					'x-autocompletetype' => 'state',
-					'autocompletetype'   => 'state',
+					'autocomplete'   => 'address-level1',
 				),
 			),
 			'zip'   => array(
@@ -64,8 +64,7 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 				'classes' => 'frm_third',
 				'label'   => 1,
 				'atts'   => array(
-					'x-autocompletetype' => 'postal-zip',
-					'autocompletetype'   => 'postal-zip',
+					'autocomplete'   => 'postal-code',
 				),
 			),
 		);
@@ -88,11 +87,27 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 				'label'   => 1,
 				'options' => FrmFieldsHelper::get_countries(),
 				'atts'    => array(
-					'x-autocompletetype' => 'country-name',
-					'autocompletetype'   => 'country-name',
+					'autocomplete'   => 'country-name',
 				),
 			);
 		}
+
+		// Include the placeholder with the sub field.
+		foreach ( $fields as $name => $f ) {
+			if ( isset( $field['placeholder'] ) && isset( $field['placeholder'][ $name ] ) ) {
+				$fields[ $name ]['placeholder'] = $field['placeholder'][ $name ];
+			}
+		}
+
+		/**
+		 * Filter sub fields so an Address field can be customized.
+		 *
+		 * @since 5.2.06
+		 *
+		 * @param array $fields
+		 * @param array $field
+		 */
+		$fields = apply_filters( 'frm_address_sub_fields', $fields, $field );
 
 		return $fields;
 	}
@@ -110,8 +125,26 @@ class FrmProAddressesController extends FrmProComboFieldsController {
 		return $headings;
 	}
 
+	/**
+	 * @return array Empty address data to use as defaults.
+	 */
 	public static function empty_value_array() {
-		return array( 'line1' => '', 'line2' => '', 'city' => '', 'state' => '', 'zip' => '', 'country' => '' );
+		/**
+		 * @since 5.2.07
+		 *
+		 * @param array $empty_value_array array of empty address data.
+		 */
+		return apply_filters(
+			'frm_address_empty_value_array',
+			array(
+				'line1'   => '',
+				'line2'   => '',
+				'city'    => '',
+				'state'   => '',
+				'zip'     => '',
+				'country' => '',
+			)
+		);
 	}
 
 	/**

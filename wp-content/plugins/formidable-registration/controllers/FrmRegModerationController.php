@@ -28,7 +28,7 @@ class FrmRegModerationController {
 	 * @param object $entry
 	 */
 	public static function moderate_user( $user, $settings, $entry ) {
-		self::set_user_role_to_pending( $user->get_user_id() );
+		self::set_user_role_to_pending( $user );
 
 		self::add_moderation_user_meta( $settings, $user, $entry );
 
@@ -40,13 +40,17 @@ class FrmRegModerationController {
 	 * Set a user's role to pending
 	 *
 	 * @since 2.0
+	 * @since 2.08 Changed parameter from int to FrmRegUser object.
 	 *
-	 * @param int $user_id
+	 * @param FrmRegUser $user FrmRegUser object.
 	 */
-	private static function set_user_role_to_pending( $user_id ) {
+	private static function set_user_role_to_pending( $user ) {
 		self::add_pending_role();
 
-		wp_update_user( array( 'ID' => $user_id, 'role' => 'pending' ) );
+		$wp_user = $user->get_user();
+		if ( $wp_user instanceof WP_User ) {
+			$wp_user->set_role( 'pending' );
+		}
 	}
 
 	/**
@@ -169,7 +173,7 @@ class FrmRegModerationController {
 		$key = preg_replace( '/[^a-z0-9]/i', '', $key );
 
 		$raw_query = "SELECT ID FROM $wpdb->users WHERE user_activation_key = %s AND user_login = %s";
-		$key_user      = $wpdb->get_row( $wpdb->prepare( $raw_query, $key, $user->user_login ) );
+		$key_user  = $wpdb->get_row( $wpdb->prepare( $raw_query, $key, $user->user_login ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
 		if ( (int) $key_user->ID === $user->ID ) {
 			$is_match = true;
@@ -205,12 +209,12 @@ class FrmRegModerationController {
     */
 	public static function create_ajax_url( $params ) {
 		if ( is_array( $params ) && isset( $params['action'] ) && $params['action'] ) {
+			$params['lang'] = apply_filters( 'wpml_current_language', null );
 			$site_url = admin_url( 'admin-ajax.php' );
 			$ajax_url = add_query_arg( $params, $site_url );
 		} else {
 			$ajax_url = false;
 		}
-
 		return $ajax_url;
 	}
 
@@ -255,8 +259,8 @@ class FrmRegModerationController {
 	 *
 	 * @since 2.0
 	 *
-	 * @param int $user_id
-	 * @param array|boolean $moderation
+	 * @param int           $user_id
+	 * @param array|bool $moderation
 	 *
 	 * @return string
 	 */
@@ -264,7 +268,7 @@ class FrmRegModerationController {
 		// Get redirect URL from form settings
 		$form_settings = self::get_registration_settings_for_user( $user_id );
 		if ( isset( $form_settings['reg_redirect'] ) && $form_settings['reg_redirect'] ) {
-			$redirect = get_permalink( $form_settings['reg_redirect'] );
+			$redirect = FrmRegAppHelper::get_page_url( $form_settings['reg_redirect'] );
 		} else {
 			$redirect = FrmRegLoginController::login_page_url( 'wordpress' );
 		}
@@ -339,8 +343,9 @@ class FrmRegModerationController {
 			$user_role = 'subscriber';
 		}
 
-		// Officially activate user
-		$user->set_role( $user_role );
+		// Officially activate user.
+		$user->remove_role( 'pending' );
+		$user->add_role( $user_role );
 	}
 
 	/**
@@ -386,7 +391,7 @@ class FrmRegModerationController {
 		if ( isset( $_GET['frm_message'] ) && $_GET['frm_message'] == 'complete'
 		     && isset( $_GET['user'] ) && is_numeric( $_GET['user'] ) ) {
 
-			$user = new WP_User( $_GET['user'] );
+			$user = new WP_User( intval( $_GET['user'] ) );
 
 			$settings = self::get_registration_settings_for_user( $user->ID );
 			if ( empty( $settings ) ) {

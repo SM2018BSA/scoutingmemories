@@ -1,13 +1,13 @@
 <?php
 /**
  * Plugin Name: Members
- * Plugin URI:  https://themehybrid.com/plugins/members
+ * Plugin URI:  https://members-plugin.com/
  * Description: A user and role management plugin that puts you in full control of your site's permissions. This plugin allows you to edit your roles and their capabilities, clone existing roles, assign multiple roles per user, block post content, or even make your site completely private.
- * Version:     2.1.0
- * Author:      Justin Tadlock
- * Author URI:  https://themehybrid.com
+ * Version:     3.2.26
+ * Requires PHP: 7.4
+ * Author:      MemberPress
+ * Author URI:  https://memberpress.com
  * Text Domain: members
- * Domain Path: /lang
  *
  * The members plugin was created because the WordPress community is lacking a solid permissions
  * plugin that is both open source and works completely within the confines of the APIs in WordPress.
@@ -23,14 +23,21 @@
  *
  * You should have received a copy of the GNU General Public License along with this program; if not,
  * write to the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
- *
- * @package   Members
- * @version   2.1.0
- * @author    Justin Tadlock <justintadlock@gmail.com>
- * @copyright Copyright (c) 2009 - 2018, Justin Tadlock
- * @link      https://themehybrid.com/plugins/members
- * @license   http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
+/**
+ * * * * * * * * * * * * * * * * * * * * * * *
+ *                                           *
+ * Reporting a Security Vulnerability        *
+ *                                           *
+ * Please disclose any security issues or    *
+ * vulnerabilities to security@caseproof.com *
+ *                                           *
+ * * * * * * * * * * * * * * * * * * * * * * *
+ */
+
+if (!defined('ABSPATH')) {
+    die('You are not allowed to call this page directly.');
+}
 
 /**
  * Singleton class for setting up the plugin.
@@ -47,7 +54,7 @@ final class Members_Plugin {
 	 * @access public
 	 * @var    string
 	 */
-	private $php_version = '5.3.0';
+	private $php_version = '7.4.0';
 
 	/**
 	 * Plugin directory path.
@@ -105,7 +112,11 @@ final class Members_Plugin {
 	 * @access private
 	 * @return void
 	 */
-	private function __construct() {}
+	private function __construct() {
+		require_once(__DIR__ . '/vendor-prefixed/autoload.php');
+
+		add_action( 'plugins_loaded', array( $this, 'init_growth_tools' ) );
+	}
 
 	/**
 	 * Magic method to output a string if trying to use the object as a string.
@@ -211,12 +222,22 @@ final class Members_Plugin {
 		// Load template files.
 		require_once( $this->dir . 'inc/template.php' );
 
+		// Administrator Rescue (Magic Link) – must load outside is_admin() for wp-login.php.
+		require_once( $this->dir . 'inc/class-rescue-magic-link.php' );
+
+		// Notifications (cannot be included inside is_admin() check or cron won't work)
+		require_once( $this->dir . 'admin/class-notifications.php' );
+
+		// Block editor REST saves run outside is_admin(); post meta + REST routes must load on every request.
+		require_once( $this->dir . 'admin/class-content-permissions-editor.php' );
+
 		// Load admin files.
 		if ( is_admin() ) {
 
 			// General admin functions.
 			require_once( $this->dir . 'admin/functions-admin.php' );
 			require_once( $this->dir . 'admin/functions-help.php'  );
+			require_once( $this->dir . 'admin/class-review-prompt.php'  );
 
 			// Plugin settings.
 			require_once( $this->dir . 'admin/class-settings.php' );
@@ -226,21 +247,31 @@ final class Members_Plugin {
 			require_once( $this->dir . 'admin/class-user-edit.php'    );
 			require_once( $this->dir . 'admin/class-user-new.php'     );
 
-			// Edit posts.
-			require_once( $this->dir . 'admin/class-meta-box-content-permissions.php' );
-
 			// Role management.
 			require_once( $this->dir . 'admin/class-manage-roles.php'          );
 			require_once( $this->dir . 'admin/class-roles.php'                 );
 			require_once( $this->dir . 'admin/class-role-edit.php'             );
 			require_once( $this->dir . 'admin/class-role-new.php'              );
+			require_once( $this->dir . 'admin/class-role-export.php'           );
+			require_once( $this->dir . 'admin/class-role-import.php'           );
 			require_once( $this->dir . 'admin/class-meta-box-publish-role.php' );
 			require_once( $this->dir . 'admin/class-meta-box-custom-cap.php'   );
+			require_once( $this->dir . 'admin/class-meta-box-content-permissions.php' );
 
 			// Edit capabilities tabs and groups.
 			require_once( $this->dir . 'admin/class-cap-tabs.php'       );
 			require_once( $this->dir . 'admin/class-cap-section.php'    );
 			require_once( $this->dir . 'admin/class-cap-control.php'    );
+		}
+
+		$addons = get_option( 'members_active_addons', array() );
+
+		if ( ! empty( $addons ) ) {
+			foreach ( $addons as $addon ) {
+				if ( file_exists( __DIR__ . "/addons/{$addon}/addon.php" ) ) {
+					include __DIR__ . "/addons/{$addon}/addon.php";
+				}
+			}
 		}
 	}
 
@@ -252,24 +283,38 @@ final class Members_Plugin {
 	 * @return void
 	 */
 	private function setup_actions() {
+		// Migrate add-ons
+		add_action( 'plugins_loaded', array( $this, 'migrate_addons' ) );
 
-		// Internationalize the text strings used.
-		add_action( 'plugins_loaded', array( $this, 'i18n' ), 2 );
+		// Administrator Rescue (Magic Link)
+		add_action( 'plugins_loaded', array( $this, 'init_rescue_magic_link' ), 5 );
+
+		// MemberPress info in block editor
+		add_action( 'enqueue_block_editor_assets', array( $this, 'block_editor_assets' ) );
 
 		// Register activation hook.
 		register_activation_hook( __FILE__, array( $this, 'activation' ) );
+
+		// Reset roles
+		add_action( 'wp_ajax_members_reset_roles', array( $this, 'reset_roles' ) );
 	}
 
 	/**
-	 * Loads the translation files.
+	 * Initialize Growth Tools.
 	 *
-	 * @since  1.0.0
+	 * @since  3.2.19
 	 * @access public
 	 * @return void
 	 */
-	public function i18n() {
-
-		load_plugin_textdomain( 'members', false, trailingslashit( dirname( plugin_basename( __FILE__ ) ) ) . 'lang' );
+	public function init_growth_tools() {
+		if ( version_compare( phpversion(), '7.4', '>=' ) && class_exists( '\Members\Caseproof\GrowthTools\App' ) ) {
+			$config = new \Members\Caseproof\GrowthTools\Config( [
+				'parentMenuSlug' => 'members',
+				'instanceId'     => 'members',
+				'menuSlug'       => 'members-growth-tools',
+			] );
+			new \Members\Caseproof\GrowthTools\App( $config );
+		}
 	}
 
 	/**
@@ -308,6 +353,14 @@ final class Members_Plugin {
 				$role->add_cap( 'edit_roles'   ); // Edit existing roles/caps.
 			}
 		}
+
+		$flag = get_transient( 'members_30days_flag' );
+		if ( empty( $flag ) ) {
+			set_transient( 'members_30days_flag', true, 30 * DAY_IN_SECONDS );
+		}
+		if ( empty( get_option( 'members_activated' ) ) ) {
+			update_option( 'members_activated', time() );
+		}
 	}
 
 	/**
@@ -344,6 +397,201 @@ final class Members_Plugin {
 
 		// Make sure the plugin is deactivated.
 		deactivate_plugins( plugin_basename( __FILE__ ) );
+	}
+
+	/**
+	 * Transition separate add-on plugins into the included add-ons
+	 *
+	 * @return void
+	 */
+	public function migrate_addons() {
+
+		// Bail if we've already migrated the add-ons
+		if ( ! empty( get_option( 'members_addons_migrated' ) ) ) {
+			return;
+		}
+
+		$addons = array();
+
+		$plugins = array(
+			'members-acf-integration' => 'plugin.php',
+			'members-admin-access' => 'members-admin-access.php',
+			'members-block-permissions' => 'plugin.php',
+			'members-category-and-tag-caps' => 'plugin.php',
+			'members-core-create-caps' => 'members-core-create-caps.php',
+			'members-edd-integration' => 'plugin.php',
+			'members-givewp-integration' => 'plugin.php',
+			'members-meta-box-integration' => 'plugin.php',
+			'members-privacy-caps' => 'members-privacy-caps.php',
+			'members-role-hierarchy' => 'members-role-hierarchy.php',
+			'members-role-levels' => 'members-role-levels.php',
+			'members-woocommerce-integration' => 'plugin.php'
+		);
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+		foreach ( $plugins as $dir => $file ) {
+			if ( is_plugin_active( "{$dir}/{$file}" ) ) {
+
+				// Deactive it
+				deactivate_plugins( "{$dir}/{$file}", true );
+
+				// Delete it
+				delete_plugins( array( "{$dir}/{$file}" ) );
+
+				// Make sure it's stored in our option for active add-ons
+				$addons[] = $dir;
+			}
+		}
+
+		if ( ! empty( $addons ) ) {
+			update_option( 'members_active_addons', $addons );
+		}
+
+		update_option( 'members_addons_migrated', true );
+	}
+
+	/**
+	 * Initialize Administrator Rescue (Magic Link).
+	 * Only runs when the class was loaded (i.e. PHP version requirement met).
+	 *
+	 * @since  3.2.20
+	 * @access public
+	 * @return void
+	 */
+	public function init_rescue_magic_link() {
+		if ( class_exists( 'Members_Rescue_Magic_Link' ) ) {
+			new Members_Rescue_Magic_Link();
+		}
+	}
+
+	/**
+	 * We need a way to run an add-on's activation hook since the add-ons are no longer separate plugins.
+	 *
+	 * @param  string 	$addon 	Add-on directory name
+	 *
+	 * @return void
+	 */
+	public function run_addon_activator( $addon ) {
+
+		if ( file_exists( trailingslashit( __DIR__ ) . "addons/{$addon}/src/Activator.php" ) ) {
+
+			// Require the add-on file
+			include trailingslashit( __DIR__ ) . "addons/{$addon}/src/Activator.php";
+
+			// Read the file contents into memory, and determine the namespace
+			$contents = file_get_contents( trailingslashit( __DIR__ ) . "addons/{$addon}/src/Activator.php" );
+			preg_match( '/[\r\n]namespace\W(.+);[\r\n]/', $contents, $matches );
+			$namespace = $matches[1];
+			// Run the activator
+			if ( ! empty( $namespace ) ) {
+				$namespace .= '\Activator';
+				$namespace::activate();
+			}
+		}
+	}
+
+	public function block_editor_assets() {
+		// Block-level upsell controls conflict with Content Permissions in the block editor.
+		if ( members_content_permissions_enabled() ) {
+			return;
+		}
+
+		$active_addons = get_option( 'members_active_addons', array() );
+		if ( ! in_array( 'members-block-permissions', $active_addons ) && ! members_is_memberpress_active() ) {
+			wp_enqueue_script( 'block-editor-mp-upsell', plugin_dir_url( __FILE__ ) . '/addons/members-block-permissions/public/js/upsell.js' , array(
+				'wp-compose',
+				'wp-element',
+				'wp-hooks',
+				'wp-components'
+			), null, true );
+			wp_localize_script( 'block-editor-mp-upsell', 'membersUpsell', array(
+				'title' => __( 'Permissions', 'members' ),
+				'message' => __( 'To protect this block by paid membership or centrally with a content protection rule, add MemberPress.', 'members' )
+			) );
+		}
+	}
+
+	/**
+	 * AJAX handler for resetting roles to default WordPress roles.
+	 * Only removes roles that were created via the Members UI; roles from other
+	 * plugins (e.g. WooCommerce) are left unchanged.
+	 *
+	 * @since  3.2.18
+	 * @access public
+	 * @return void
+	 */
+	public function reset_roles() {
+		
+		// Verify nonce
+		if ( ! wp_verify_nonce( $_POST['nonce'] ?? null, 'members_reset_roles' ) ) {
+			wp_send_json_error();
+		}
+
+		// Check user capabilities
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error();
+		}
+
+		$default_roles = array( 'administrator', 'editor', 'author', 'contributor', 'subscriber' );
+
+		$members_created_roles = members_get_created_roles();
+		$default_role_option   = get_option( 'default_role', 'subscriber' );
+
+		// If the site default is a Members-created role we're about to remove, set default to subscriber.
+		if ( in_array( $default_role_option, $members_created_roles, true ) ) {
+			update_option( 'default_role', 'subscriber' );
+			$default_role_option = 'subscriber';
+		}
+
+		// Fallback for reassigning users: use site default if it's a core role, else subscriber.
+		$fallback_role = in_array( $default_role_option, $default_roles, true ) ? $default_role_option : 'subscriber';
+
+		foreach ( $members_created_roles as $role_name ) {
+			if ( in_array( $role_name, $default_roles, true ) ) {
+				continue;
+			}
+			if ( ! get_role( $role_name ) ) {
+				members_untrack_created_role( $role_name );
+				continue;
+			}
+			$users = get_users( array( 'role' => $role_name ) );
+			if ( ! empty( $users ) ) {
+				foreach ( $users as $user ) {
+					if ( count( $user->roles ) <= 1 ) {
+						$user->set_role( $fallback_role );
+					} else {
+						$user->remove_role( $role_name );
+					}
+				}
+			}
+			remove_role( $role_name );
+			members_untrack_created_role( $role_name );
+		}
+
+		// Reset the five default WordPress roles to core defaults.
+		foreach ( $default_roles as $role_name ) {
+			remove_role( $role_name );
+		}
+
+		// Re-add default roles using WordPress core
+		require_once( ABSPATH . 'wp-admin/includes/schema.php' );
+		populate_roles();
+
+		// Add Members plugin capabilities back to administrator (mirror activation logic)
+		$admin_role = get_role( 'administrator' );
+		if ( $admin_role ) {
+			$admin_role->add_cap( 'restrict_content' ); // Edit per-post content permissions
+			$admin_role->add_cap( 'list_roles'       ); // View roles in backend
+			if ( ! is_multisite() ) {
+				$admin_role->add_cap( 'create_roles' ); // Create new roles
+				$admin_role->add_cap( 'delete_roles' ); // Delete existing roles
+				$admin_role->add_cap( 'edit_roles'   ); // Edit existing roles/caps
+			}
+		}
+
+		wp_send_json_success();
 	}
 }
 

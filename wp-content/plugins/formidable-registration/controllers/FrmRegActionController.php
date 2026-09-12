@@ -56,7 +56,7 @@ class FrmRegActionController{
 	 * @return array
 	 */
 	public static function add_registration_trigger( $triggers ) {
-		$triggers['user_registration'] = __( 'Successful user registration', 'frmpp' );
+		$triggers['user_registration'] = __( 'Successful user registration', 'frmreg' );
 		return $triggers;
 	}
 
@@ -78,9 +78,9 @@ class FrmRegActionController{
 	 * Add a new row of user meta
 	 */
 	public static function add_user_meta_row() {
-		$meta_name = $meta_key = absint( $_POST['meta_name'] );
-		$form_id = absint( $_POST['form_id'] );
-		$field_id = 0;
+		$meta_name = $meta_key = isset( $_POST['meta_name'] ) ? absint( $_POST['meta_name'] ) : 0;
+		$form_id   = isset( $_POST['form_id'] ) ? absint( $_POST['form_id'] ) : 0;
+		$field_id  = 0;
 
 		$echo = false;
 
@@ -88,7 +88,7 @@ class FrmRegActionController{
 
 		// Set action ID
 		$action_control = FrmFormActionsController::get_form_actions( 'register' );
-		$action_control->_set( sanitize_title( $_POST['action_key'] ) );
+		$action_control->_set( isset( $_POST['action_key'] ) ? sanitize_title( $_POST['action_key'] ) : '' );
 
 		include( FrmRegAppHelper::path() .'/views/_usermeta_row.php' );
 
@@ -161,22 +161,6 @@ class FrmRegActionController{
 	}
 
 	/**
-	 * Migrate registration settings to action after import
-	 *
-	 * @since 2.0
-	 * @param int $form_id
-	 * @param array $form
-	 */
-	public static function migrate_settings_to_action_after_import( $form_id, $form ) {
-		if ( ! isset( $form['options']['registration'] ) || ! $form['options']['registration'] ) {
-			return;
-		}
-
-		$form = FrmForm::getOne( $form_id );
-		self::migrate_settings_to_action( $form, true );
-	}
-
-	/**
 	 * If registration action, update it
 	 *
 	 * @since 2.0
@@ -220,23 +204,6 @@ class FrmRegActionController{
 		$settings = FrmAppHelper::maybe_json_decode( $action['post_content'] );
 
 		return isset( $settings['reg_email_msg'] ) && ! empty( $settings['reg_email_msg'] );
-	}
-
-	/**
-	 * Migrate registration setting to a new action
-	 *
-	 * @since 2.0
-	 * @param object $form
-	 * @param bool $switch
-	 */
-	public static function migrate_settings_to_action( $form, $switch = false ) {
-		if ( ! isset( $form->options['registration'] ) || ! $form->options['registration'] ) {
-			return;
-		}
-
-		$reg_action = new FrmRegAction();
-		$reg_action->set_switch( $switch );
-		$reg_action->migrate_to_2( $form, 'update' );
 	}
 
 	/**
@@ -522,7 +489,7 @@ class FrmRegActionController{
 
 		$register_array = get_object_vars( $register_action );
 
-		return self::save_settings( $register_array, 'frm_actions' );
+		return self::save_settings( $register_array );
 	}
 
 	/**
@@ -627,7 +594,8 @@ class FrmRegActionController{
 	 */
 	private static function default_message_for_user_email( $form_id, $register_settings ) {
 		$message = '<p>';
-		$message .= sprintf( __( 'Thanks for creating an account on %s.', 'frmreg' ), '[sitename]' );
+		$message .= sprintf( esc_html__( 'Thanks for creating an account on %s.', 'frmreg' ), '[sitename]' );
+		$message .= ' ';
 
 		$user_id_field = FrmRegEntryHelper::get_user_id_field_for_form( $form_id );
 		if ( ! $user_id_field ) {
@@ -636,7 +604,7 @@ class FrmRegActionController{
 		}
 
 		$shortcode = '[' . $user_id_field . ' show=user_login]';
-		$message .= sprintf( __( 'Your username is %s.', 'frmreg' ), $shortcode );
+		$message .= sprintf( esc_html__( 'Your username is %s.', 'frmreg' ), $shortcode );
 		$message .= "</p>\r\n";
 
 		$password_setting = self::get_value_from_setting( $register_settings, 'reg_password' );
@@ -644,7 +612,7 @@ class FrmRegActionController{
 			$string1 = '<a href="' . wp_login_url() . '">';
 			$string2 = '</a>';
 			$message .= '<p>';
-			$message .= sprintf( __( 'You may %1$slog in here%2$s with the username and password you have created.', 'frmreg' ), $string1, $string2 );
+			$message .= sprintf( esc_html__( 'You may %1$slog in here%2$s with the username and password you have created.', 'frmreg' ), $string1, $string2 );
 			$message .= "</p>\r\n";
 		} else {
 			$message .= '<p>';
@@ -729,7 +697,7 @@ class FrmRegActionController{
 	 *
 	 * @return array $fields
 	 */
-	private static function get_user_meta_fields( $form_id ) {
+	public static function get_user_meta_fields( $form_id ) {
 		$where    = array(
 			'fi.form_id'  => $form_id,
 			'fi.type not' => FrmField::no_save_fields(),
@@ -755,5 +723,27 @@ class FrmRegActionController{
 			$new_values['name'] = __( 'User ID', 'frmreg' );
 			FrmField::create( $new_values );
 		}
+	}
+
+	/**
+	 * Migrate registration settings to action after import
+	 *
+	 * @since 2.0
+	 * @param int $form_id
+	 * @param array $form
+	 */
+	public static function migrate_settings_to_action_after_import( $form_id, $form ) {
+		_deprecated_function( __FUNCTION__, '2.05' );
+	}
+
+	/**
+	 * Migrate registration setting to a new action
+	 *
+	 * @since 2.0
+	 * @param object $form
+	 * @param bool $switch
+	 */
+	public static function migrate_settings_to_action( $form, $switch = false ) {
+		_deprecated_function( __FUNCTION__, '2.05' );
 	}
 }

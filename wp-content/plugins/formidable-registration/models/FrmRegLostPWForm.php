@@ -59,12 +59,6 @@ class FrmRegLostPWForm extends FrmRegForm{
 			case 'empty_username':
 				$message = __( 'Please enter a username or email address to continue.', 'frmreg' );
 				break;
-			case 'invalid_email':
-				$message = __( 'There are no users registered with this email address.', 'frmreg' );
-				break;
-			case 'invalidcombo':
-				$message = __( 'Please enter a valid email address or username.', 'frmreg' );
-				break;
 			case 'invalidkey' :
 				$message = __( 'Your password reset link appears to be invalid. Please request a new link below.', 'frmreg' );
 				break;

@@ -1,3 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/mb_form_disp_type.php' );
+?>
 <div class="frm_grid_container">
 	<p class="frm4 frm_form_field">
 		<label>

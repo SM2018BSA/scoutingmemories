@@ -1,4 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/_calendar_options.php' );
+?>
 <label class="frm_left_label"><?php esc_html_e( 'Event Date', 'formidable-pro' ); ?></label>
 <select id="date_field_id" name="options[date_field_id]">
 	<option value="created_at" <?php selected( $post->frm_date_field_id, 'created_at' ) ?>>

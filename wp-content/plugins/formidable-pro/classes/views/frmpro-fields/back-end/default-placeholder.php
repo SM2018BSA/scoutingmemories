@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <label id="<?php echo esc_attr( $name . '_' . $field['id'] ); ?>" class="frm_primary_label">
 	<?php echo esc_html( $field_label ); ?>
 </label>

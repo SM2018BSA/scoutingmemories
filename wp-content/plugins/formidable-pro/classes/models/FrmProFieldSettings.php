@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 2.03.05
  */
@@ -120,8 +124,7 @@ class FrmProFieldSettings {
 	 *
 	 * @return bool
 	 */
-	final private function has_field_options() {
+	private function has_field_options() {
 		return ! empty( $this->field_options );
 	}
-
 }

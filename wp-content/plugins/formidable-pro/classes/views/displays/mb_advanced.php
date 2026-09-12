@@ -1,4 +1,11 @@
-<?php wp_nonce_field('frm_save_display_nonce', 'frm_save_display'); ?>
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/mb_advanced.php' );
+wp_nonce_field('frm_save_display_nonce', 'frm_save_display');
+?>
 
 <div class="frm_grid_container limit_container <?php echo ( $post->frm_show_count == 'calendar' || $post->frm_show_count == 'one' ) ? 'frm_hidden' : ''; ?>">
 	<p class="frm4 frm_form_field">
@@ -120,7 +127,7 @@
 <p>
 				<label for="copy">
 					<input type="checkbox" id="copy" name="options[copy]" value="1" <?php checked( $post->frm_copy, 1 ); ?> />
-					<?php esc_html_e( 'Copy this View to other sites when Formidable Pro is activated. (Use only field keys in the content box(es) above.)', 'formidable-pro' ); ?>
+					<?php esc_html_e( 'Copy this View to other sites when Formidable Forms is activated. (Use only field keys in the content box(es) above.)', 'formidable-pro' ); ?>
 				</label>
 </p>
 		<?php } else if ( $post->frm_copy ) { ?>

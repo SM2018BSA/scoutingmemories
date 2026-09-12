@@ -1,4 +1,8 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 FrmAppHelper::show_search_box(
 	array(
 		'input_id'    => 'default-value-field',
@@ -26,8 +30,8 @@ FrmAppHelper::show_search_box(
 						echo ' frm_help" title="' . esc_attr( $title );
 					}
 					?>">
-					<span>[<?php echo esc_html( $tag ); ?>]</span>
 					<?php echo esc_html( $label ); ?>
+					<span>[<?php echo esc_html( $tag ); ?>]</span>
 				</a>
 			</li>
 			<?php

@@ -84,7 +84,11 @@ class FrmRegGlobalSettingsController{
 	 * @return array $sections
 	 */
 	public function add_settings_section( $sections ) {
-		$sections['registration'] = array( 'class' => $this, 'function' => 'route' );
+		$sections['registration'] = array(
+			'class'    => $this,
+			'function' => 'route',
+			'icon'     => 'frm_icon_font frm_register_icon',
+		);
 		return $sections;
 	}
 

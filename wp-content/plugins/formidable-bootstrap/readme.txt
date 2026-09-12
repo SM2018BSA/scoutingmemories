@@ -1,3 +1,9 @@
+= 1.03 =
+* This update requires action. After updating, click the link to migrate the old settings. If you save a form with Bootstrap field options before running this migration, you risk losing those settings.
+* New: Moved Prepend and Append Bootstrap field options to Before Input and After Input.
+* New: Errors are now shown by default and can no longer be turned off
+* New: Improved plugin security
+
 = 1.02.02 =
 * Enhancement: Allow prepend and append options with dropdowns.
 

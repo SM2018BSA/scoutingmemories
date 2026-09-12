@@ -1,6 +1,31 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 class FrmProDynamicFieldsController {
+
+	/**
+	 * @since 5.4
+	 *
+	 * @var string
+	 */
+	const INCLUDE_DRAFTS = 'include';
+
+	/**
+	 * @since 5.4
+	 *
+	 * @var string
+	 */
+	const EXCLUDE_DRAFTS = 'exclude';
+
+	/**
+	 * @since 5.4
+	 *
+	 * @var string
+	 */
+	const DRAFT_ONLY = 'draft_only';
 
 	/**
 	 * Add options for a Dynamic field
@@ -52,8 +77,8 @@ class FrmProDynamicFieldsController {
 	/**
 	 * Get the options for an independent Dynamic field
 	 *
-	 * @param array $values
-	 * @param object $field
+	 * @param array    $values
+	 * @param object   $field
 	 * @param bool|int $entry_id
 	 * @return array
 	 */
@@ -81,16 +106,18 @@ class FrmProDynamicFieldsController {
 				$observed_field_val = '';
 			}
 
-			$observed_field_val = maybe_unserialize( $observed_field_val );
+			FrmProAppHelper::unserialize_or_decode( $observed_field_val );
 
 			$metas = array();
 			FrmProEntryMetaHelper::meta_through_join( $values['hide_field'], $selected_field, $observed_field_val, false, $metas );
-
-		} else if ( $values['restrict'] && $user_ID ) {
+		} elseif ( $values['restrict'] && ( $user_ID || self::should_restrict_options_for_logged_out_users( $field ) ) ) {
 			$entry_user = FrmProEntryMetaHelper::user_for_dynamic_opts( $user_ID, compact( 'entry_id', 'field' ) );
 
 			if ( isset( $selected_field->form_id ) ) {
-				$linked_where = array( 'form_id' => $selected_field->form_id, 'user_id' => $entry_user );
+				$linked_where = array(
+					'form_id' => $selected_field->form_id,
+					'user_id' => $entry_user,
+				);
 				if ( $linked_posts ) {
 					$post_ids = FrmDb::get_results( 'frm_items', $linked_where, 'id, post_id' );
 				} else {
@@ -99,16 +126,19 @@ class FrmProDynamicFieldsController {
 				unset( $linked_where );
 			}
 
-			if ( isset( $entry_ids ) && ! empty( $entry_ids ) ) {
+			if ( ! empty( $entry_ids ) ) {
 				$metas = FrmEntryMeta::getAll( array( 'it.item_id' => $entry_ids, 'field_id' => (int) $values['form_select'] ), ' ORDER BY meta_value', '' );
 			}
 		} else {
-			$limit = '';
+			$limit     = '';
+			$meta_args = array();
 			if ( FrmAppHelper::is_admin_page( 'formidable' ) ) {
-				$limit = 200;
+				$limit                 = 200;
+				$meta_args['limit']    = $limit;
+				$meta_args['order_by'] = 'meta_value';
 			}
 
-			$metas = FrmDb::get_results( 'frm_item_metas', array( 'field_id' => $values['form_select'] ), 'item_id, meta_value', array( 'order_by' => 'meta_value', 'limit' => $limit ) );
+			$metas    = FrmDb::get_results( 'frm_item_metas', array( 'field_id' => $values['form_select'] ), 'item_id, meta_value', $meta_args );
 			$post_ids = FrmDb::get_results( 'frm_items', array( 'form_id' => $selected_field->form_id ), 'id, post_id', array( 'limit' => $limit ) );
 		}
 
@@ -119,7 +149,11 @@ class FrmProDynamicFieldsController {
 			}
 		}
 
-		$options = array();
+		$options           = array();
+		$should_strip_tags = $field->field_options['data_type'] === 'select' || FrmAppHelper::is_admin_page( 'formidable' );
+
+		self::maybe_exclude_drafts( $metas, $values );
+
 		foreach ( $metas as $meta ) {
 			$meta = (array) $meta;
 			if ( $meta['meta_value'] == '' ) {
@@ -127,7 +161,7 @@ class FrmProDynamicFieldsController {
 			}
 
 			$new_value = FrmEntriesHelper::display_value( $meta['meta_value'], $selected_field, array( 'type' => $selected_field->type, 'show_icon' => true, 'show_filename' => false ) );
-			if ( $field->field_options['data_type'] == 'select' || FrmAppHelper::is_admin_page('formidable') ) {
+			if ( $should_strip_tags ) {
 				$new_value = strip_tags( $new_value );
 			}
 
@@ -137,6 +171,7 @@ class FrmProDynamicFieldsController {
 		}
 
 		$options = apply_filters( 'frm_data_sort', $options, array( 'metas' => $metas, 'field' => $selected_field, 'dynamic_field' => $values ) );
+
 		unset( $metas );
 
 		if ( self::include_blank_option( $options, $field ) ) {
@@ -147,13 +182,89 @@ class FrmProDynamicFieldsController {
 	}
 
 	/**
-	 * If using autocomplete, don't include the placeholder as an option.
+	 * @since 6.8.3
+	 *
+	 * @param stdClass $field
+	 * @return bool
+	 */
+	private static function should_restrict_options_for_logged_out_users( $field ) {
+		$should_restrict_options = true;
+
+		/**
+		 * @since 6.8.3
+		 *
+		 * @param bool     $should_restrict_options
+		 * @param stdClass $field
+		 */
+		return (bool) apply_filters( 'frm_restrict_options_for_logged_out_users', $should_restrict_options, $field );
+	}
+
+	/**
+	 * Maybe exclude draft items.
+	 *
+	 * @since 5.4
+	 *
+	 * @param array $metas  Array of item meta and id.
+	 * @param array $values Field array.
+	 */
+	private static function maybe_exclude_drafts( &$metas, $values ) {
+		global $wpdb;
+
+		/**
+		 * Allows including or excluding draft items from dynamic data.
+		 *
+		 * @since 5.4
+		 *
+		 * @param string $include Accepts `include`, `exclude`, `draft_only`.
+		 * @param array  $args    Contains `field` as field array.
+		 */
+		$include_drafts = apply_filters( 'frm_dynamic_field_include_drafts', self::EXCLUDE_DRAFTS, array( 'field' => $values ) );
+
+		if ( self::INCLUDE_DRAFTS === $include_drafts ) {
+			return;
+		}
+
+		$draft_item_ids = FrmDb::get_col(
+			"{$wpdb->prefix}frm_items it INNER JOIN {$wpdb->prefix}frm_fields fi ON it.form_id = fi.form_id",
+			array(
+				'fi.id'    => intval( $values['form_select'] ),
+				'is_draft' => 1,
+			),
+			'it.id'
+		);
+
+		if ( ! $draft_item_ids ) {
+			return;
+		}
+
+		$draft_item_ids = array_map( 'intval', $draft_item_ids );
+
+		foreach ( $metas as $index => $meta ) {
+			if ( ! isset( $meta->item_id ) ) {
+				continue;
+			}
+
+			$meta->item_id = intval( $meta->item_id );
+
+			if (
+				self::EXCLUDE_DRAFTS === $include_drafts && in_array( $meta->item_id, $draft_item_ids, true ) ||
+				self::DRAFT_ONLY === $include_drafts && ! in_array( $meta->item_id, $draft_item_ids, true )
+			) {
+				unset( $metas[ $index ] );
+			}
+		}
+	}
+
+	/**
+	 * If using Chosen Autocomplete (not Slim Select), don't include the placeholder as an option.
 	 *
 	 * @since 4.0
+	 *
+	 * @return string
 	 */
 	private static function get_placeholder_option( $field ) {
 		$placeholder = FrmField::get_option( $field, 'placeholder' );
-		if ( FrmField::get_option( $field, 'autocom' ) ) {
+		if ( FrmField::get_option( $field, 'autocom' ) && FrmProAppHelper::use_chosen_js() ) {
 			$placeholder = '';
 		}
 		return $placeholder;
@@ -176,5 +287,15 @@ class FrmProDynamicFieldsController {
 		}
 
 		return ( ! FrmField::is_multiple_select( $field ) || FrmField::is_option_true( $field, 'autocom' ) );
+	}
+
+	/**
+	 * @since 6.7.1
+	 *
+	 * @param array $values
+	 * @return array
+	 */
+	public static function clean_field_options_before_update( $values ) {
+		return FrmProFieldsHelper::map_dropdown_data_type_to_select( $values );
 	}
 }

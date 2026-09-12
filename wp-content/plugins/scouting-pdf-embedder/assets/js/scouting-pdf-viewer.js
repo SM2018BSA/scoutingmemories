@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
     'use strict';
 
     if (typeof window.pdfjsLib === 'undefined') {
@@ -189,24 +189,42 @@
             }
         });
 
-        // Load document
-        pdfjsLib.getDocument({
-            url: pdfUrl,
-            cMapUrl: (window.ScoutingPdfConfig && window.ScoutingPdfConfig.cMapUrl) || undefined,
-            cMapPacked: true
-        }).promise.then(function(loadedDoc) {
-            pdfDoc = loadedDoc;
-            updateUI();
-            renderPage(pageNum);
-        }).catch(function(error) {
-            console.error('Error loading PDF document:', error);
-            if (loadingEl) {
-                loadingEl.innerHTML = '<div class="scouting-pdf-error">' +
-                    '<p>Unable to display PDF directly.</p>' +
-                    '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" download target="_blank">' +
-                    'Download PDF to view</a></div>';
-            }
-        });
+        // Load document with transparent proxy retry fallback
+        function loadDoc(urlToLoad, isRetry) {
+            pdfjsLib.getDocument({
+                url: urlToLoad,
+                cMapUrl: (window.ScoutingPdfConfig && window.ScoutingPdfConfig.cMapUrl) || undefined,
+                cMapPacked: true
+            }).promise.then(function(loadedDoc) {
+                pdfDoc = loadedDoc;
+                updateUI();
+                renderPage(pageNum);
+            }).catch(function(error) {
+                console.warn('Scouting PDF: Direct load failed for ' + urlToLoad + ':', error);
+                if (!isRetry && window.ScoutingPdfConfig) {
+                    var proxyUrl = '';
+                    if (window.ScoutingPdfConfig.restUrl) {
+                        proxyUrl = window.ScoutingPdfConfig.restUrl + (window.ScoutingPdfConfig.restUrl.indexOf('?') === -1 ? '?' : '&') + 'pdf_url=' + encodeURIComponent(pdfUrl);
+                    } else if (window.ScoutingPdfConfig.ajaxUrl) {
+                        proxyUrl = window.ScoutingPdfConfig.ajaxUrl + '?action=scouting_pdf_proxy&pdf_url=' + encodeURIComponent(pdfUrl);
+                    }
+
+                    if (proxyUrl) {
+                        console.info('Scouting PDF: Attempting fallback through stream proxy...');
+                        loadDoc(proxyUrl, true);
+                        return;
+                    }
+                }
+                if (loadingEl) {
+                    loadingEl.innerHTML = '<div class="scouting-pdf-error">' +
+                        '<p>Unable to display PDF directly.</p>' +
+                        '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" download target="_blank">' +
+                        'Download PDF to view</a></div>';
+                }
+            });
+        }
+
+        loadDoc(pdfUrl, false);
     }
 
     function initAllViewers() {

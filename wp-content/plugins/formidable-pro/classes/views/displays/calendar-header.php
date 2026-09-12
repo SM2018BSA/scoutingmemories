@@ -1,3 +1,11 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/calendar-header.php' );
+?>
+
 <div class="frmcal" id="frmcal-<?php echo esc_attr( $view->ID ) ?>">
 <div class="frmcal-header"><a href="<?php echo esc_url( add_query_arg( array( 'frmcal-month' => $prev_month, 'frmcal-year' => $prev_year) ) ) ?>#frmcal-<?php echo esc_attr( $view->ID ) ?>" class="frmcal-prev" title="<?php echo esc_attr( $month_names[ $prev_month ] ) ?>">&larr; <?php echo esc_html( $month_names[ $prev_month ] ) ?></a><select class="frmcal-dropdown" onchange="window.location='<?php echo esc_url( remove_query_arg( 'frmcal-month', add_query_arg( array( 'frmcal-year' => $year ) ) ) ) ?>&amp;frmcal-month='+this.value+'#frmcal-<?php echo esc_attr( $view->ID ) ?>';"><?php
 

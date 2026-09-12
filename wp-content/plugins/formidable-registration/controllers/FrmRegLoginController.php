@@ -6,18 +6,31 @@
 class FrmRegLoginController {
 
 	/**
+	 * Login limitation error code.
+	 *
+	 * @since 2.05
+	 *
+	 * @var string
+	 */
+	public static $login_limit_error = 'login_limit_exceeded';
+
+	/**
 	 * Redirect the user to the custom login page instead of wp-login.php
 	 *
 	 * @since 2.0
 	 */
 	public static function redirect_to_custom_login() {
-		if ( $_SERVER['REQUEST_METHOD'] == 'GET' && ! isset( $_GET['interim-login'] ) ) {
+		if ( 'GET' === FrmRegAppHelper::request_method() && ! isset( $_GET['interim-login'] ) ) {
 
 			$args = array();
 			foreach ( array( 'redirect_to', 'checkemail' ) as $param ) {
-				if ( ! empty( $_REQUEST[ $param ] ) ) {
-					$args[ $param ] = urlencode( sanitize_text_field( $_REQUEST[ $param ] ) );
+				$request_param_string = self::get_request_param_string( $param );
+
+				if ( '' === $request_param_string ) {
+					continue;
 				}
+
+				$args[ $param ] = $request_param_string;
 			}
 
 			self::redirect_to_selected_login_page( $args );
@@ -25,19 +38,55 @@ class FrmRegLoginController {
 	}
 
 	/**
+	 * @since 2.10
+	 * 
+	 * @param mixed $param
+	 *
+	 * @return string
+	 */
+	private static function get_request_param_string( $param ) {
+		if ( empty( $_REQUEST[ $param ] ) ) {
+			return '';
+		}
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$param_value = $_REQUEST[ $param ];
+		if ( is_string( $param_value ) ) {
+			return rawurlencode( $param_value );
+		}
+
+		if ( is_array( $param_value ) && count( $param_value ) === 1 ) {
+			$first_element = reset( $param_value );
+			if ( is_string( $first_element ) ) {
+				return rawurlencode( $first_element );
+			}
+		}
+
+		return '';
+	}
+
+	/**
 	 * Redirect the user after authentication if there were any errors.
 	 *
-	 *
 	 * @since 2.0
-	 * @param Wp_User|Wp_Error  $user       The signed in user, or the errors that have occurred during login.
+	 * @param WP_User|WP_Error  $user       The signed in user, or the errors that have occurred during login.
 	 *
-	 * @return Wp_User|Wp_Error The logged in user, or error information if there were errors.
+	 * @return WP_User|WP_Error The logged in user, or error information if there were errors.
 	 */
 	public static function redirect_at_authenticate_when_error( $user ) {
-		if ( $_SERVER['REQUEST_METHOD'] === 'POST' && ! isset( $_POST['interim-login'] ) ) {
+		if ( 'POST' === FrmRegAppHelper::request_method() && ! isset( $_POST['interim-login'] ) ) {
+
+			// If it's a REST API request, don't interfere with login page.
+			if ( 'application/json' === FrmAppHelper::get_server_value( 'CONTENT_TYPE' ) ) {
+				return $user;
+			}
+
 			$login_url = self::login_page_url( 'none' );
+			self::maybe_set_login_limit_exceeded_error( $user );
 
 			if ( $login_url && is_wp_error( $user ) ) {
+
+				self::run_login_failed_hooks( FrmAppHelper::get_post_param( 'log' ), $user );
 
 				self::add_error_code_to_query_string( $user, $login_url );
 				self::add_error_message_text_to_query_string( $user, $login_url );
@@ -49,6 +98,99 @@ class FrmRegLoginController {
 		}
 
 		return $user;
+	}
+
+	/**
+	 * Checks if login limit exceeded, change $user to WP_Error object.
+	 *
+	 * @since 2.05
+	 *
+	 * @param WP_User|WP_Error $user User object or error.
+	 */
+	private static function maybe_set_login_limit_exceeded_error( &$user ) {
+		$error_message = self::get_login_limit_exceeded_error_message();
+		if ( ! $error_message ) {
+			return;
+		}
+
+		$user = new WP_Error();
+		$user->add( self::$login_limit_error, $error_message );
+	}
+
+	/**
+	 * Gets login limit exceeded error message.
+	 *
+	 * @since 2.05
+	 *
+	 * @return string Return empty string if no errors.
+	 */
+	private static function get_login_limit_exceeded_error_message() {
+		$message = FrmRegSessionErrorController::get_error_from_session( self::$login_limit_error );
+
+		if ( $message ) {
+			// This message shouldn't be filtered on the redirected page.
+			return $message;
+		}
+
+		if ( function_exists( 'loginizer_can_login' ) && ! loginizer_can_login() ) {
+			$message = $GLOBALS['lz_error']['ip_blocked'];
+		} elseif ( class_exists( 'Limit_Login_Attempts' ) && ! empty( $GLOBALS['limit_login_attempts_obj'] ) ) {
+			$message = $GLOBALS['limit_login_attempts_obj']->get_message();
+		}
+
+		/**
+		 * Allows 3rd-party plugins to add custom login limitation checks.
+		 *
+		 * @since 2.05
+		 *
+		 * @param string $message Login limit exceeded message. Leave empty if no errors.
+		 */
+		$message = apply_filters( 'frm_reg_login_limit_exceeded_error_message', $message );
+
+		if ( $message ) {
+			FrmRegSessionErrorController::start_session();
+			FrmRegSessionErrorController::add_error_to_session( self::$login_limit_error, $message );
+		}
+
+		return $message;
+	}
+
+	/**
+	 * Checks if login limitation feature is available or not.
+	 *
+	 * @since 2.05
+	 *
+	 * @return bool
+	 */
+	public static function is_login_limit_feature_activated() {
+		$activated = false;
+
+		if ( function_exists( 'loginizer_can_login' ) || class_exists( 'Limit_Login_Attempts' ) ) {
+			$activated = true;
+		}
+
+		/**
+		 * Allows 3rd-party plugin to inform Formidable Registration that login limitation feature is available.
+		 *
+		 * @since 2.05
+		 *
+		 * @param bool $activated  Login limitation is activated or not.
+		 */
+		return apply_filters( 'frm_reg_login_limit_feature_activated', $activated );
+	}
+
+	/**
+	 * Runs hooks when login failed.
+	 *
+	 * @since 2.05
+	 *
+	 * @param string   $username Username.
+	 * @param WP_Error $error    Error object.
+	 */
+	private static function run_login_failed_hooks( $username, $error ) {
+		if ( self::$login_limit_error !== $error->get_error_code() ) {
+			do_action( 'wp_login_failed', $username, $error );
+		}
 	}
 
 	/**
@@ -71,7 +213,14 @@ class FrmRegLoginController {
 	 */
 	private static function get_error_code( $error ) {
 		$error_codes = $error->get_error_codes();
-		return reset( $error_codes );
+		$error_code  = reset( $error_codes );
+
+		// Do not show invalid username error to prevent user enumeration attack.
+		if ( 'invalid_username' === $error_code ) {
+			$error_code = 'incorrect_password';
+		}
+
+		return $error_code;
 	}
 
 	/**
@@ -98,8 +247,9 @@ class FrmRegLoginController {
 	 * @param $login_url
 	 */
 	private static function add_posted_redirect_to_query_string( &$login_url ) {
-		if ( isset( $_POST['redirect_to'] ) && $_POST['redirect_to'] ) {
-			$login_url = add_query_arg( 'redirect_to', $_POST['redirect_to'], $login_url );
+		if ( ! empty( $_POST['redirect_to'] ) ) {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$login_url = add_query_arg( 'redirect_to', urlencode( $_POST['redirect_to'] ), $login_url );
 		}
 	}
 
@@ -156,8 +306,8 @@ class FrmRegLoginController {
 		$page_id = self::login_page_id();
 
 		if ( $page_id ) {
-			$login_url = get_permalink( $page_id );
-		} else if ( $fallback === 'wordpress' ) {
+			$login_url = FrmRegAppHelper::get_page_url( $page_id );
+		} elseif ( $fallback === 'wordpress' ) {
 			$login_url = wp_login_url();
 		} else {
 			$login_url = '';
@@ -198,7 +348,7 @@ class FrmRegLoginController {
 	public static function print_login_messages( $message ) {
 		if ( isset( $_GET['frm_message'] ) && $_GET['frm_message'] === 'activation_sent' ) {
 			$message = '<p class="message">' . FrmRegMessagesHelper::activation_sent_message() . '</p>';
-		} else if ( isset( $_GET['frmreg_error'] ) && $_GET['frmreg_error'] === 'invalid_key' ) {
+		} elseif ( isset( $_GET['frmreg_error'] ) && $_GET['frmreg_error'] === 'invalid_key' ) {
 			$message = '<div id="login_error">' . FrmRegMessagesHelper::activation_invalid_key_message() . '</div>';
 		}
 
@@ -208,16 +358,16 @@ class FrmRegLoginController {
 	/**
 	 * Prevent "pending" users from logging in
 	 *
-	 * @param WP_User $user
+	 * @param WP_User|WP_Error $user
 	 *
 	 * @return WP_User|WP_Error
 	 */
 	public static function prevent_pending_login( $user ) {
 		//If user has "Pending" role, don't let them in
-		if ( in_array( 'pending', (array) $user->roles ) ) {
+		if ( $user instanceof WP_User && in_array( 'pending', (array) $user->roles, true ) ) {
 			$moderate_type = (array) get_user_meta( $user->ID, 'frmreg_moderate', 1 );
 
-			if ( in_array( 'email', $moderate_type ) ) {
+			if ( in_array( 'email', $moderate_type, true ) ) {
 				return new WP_Error( 'resend_activation_' . $user->ID, FrmRegMessagesHelper::resend_activation_message( $user->ID ) );
 			}
 		}
@@ -225,4 +375,24 @@ class FrmRegLoginController {
 		return $user;
 	}
 
+	/**
+	 * Checks if the current page contains the login form.
+	 *
+	 * @since 2.05
+	 *
+	 * @return bool
+	 */
+	public static function page_contains_login_form() {
+		if ( ! is_singular() || is_user_logged_in() ) {
+			return false;
+		}
+
+		$errors   = array();
+		$page_key = 'login_page';
+		$settings = new FrmRegGlobalSettings();
+
+		$settings->check_page_content( get_queried_object_id(), $page_key, $errors );
+
+		return empty( $errors );
+	}
 }

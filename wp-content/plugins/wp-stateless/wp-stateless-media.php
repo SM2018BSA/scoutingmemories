@@ -1,14 +1,15 @@
 <?php
 /**
  * Plugin Name: WP-Stateless
- * Plugin URI: https://www.usabilitydynamics.com
+ * Plugin URI: https://stateless.udx.io/
  * Description: Upload and serve your WordPress media files from Google Cloud Storage.
- * Author: Usability Dynamics, Inc.
- * Version: 2.2.7
+ * Author: UDX
+ * Version: 4.4.3
  * Text Domain: stateless-media
- * Author URI: https://www.usabilitydynamics.com
- *
- * Copyright 2012 - 2019 Usability Dynamics, Inc.  ( email: info@usabilitydynamics.com )
+ * Author URI: https://udx.io
+ * License: GPLv2 or later
+ * 
+ * Copyright 2012 - 2026 UDX ( email: info@udx.io )
  *
  */
 
@@ -26,6 +27,21 @@ if( !function_exists( 'ud_get_stateless_media' ) ) {
   function ud_get_stateless_media( $key = false, $default = null ) {
     $instance = \wpCloud\StatelessMedia\Bootstrap::get_instance();
     return $key ? $instance->get( $key, $default ) : $instance;
+  }
+
+}
+
+if( !function_exists( 'ud_stateless_db' ) ) {
+
+  /**
+   * Returns Stateless Media Database Object instance 
+   *
+   * @author Usability Dynamics, Inc.
+   * @since 4.0.0
+   * @return \wpCloud\StatelessMedia\DB
+   */
+  function ud_stateless_db() {
+    return \wpCloud\StatelessMedia\DB::instance();
   }
 
 }
@@ -65,6 +81,12 @@ if( !function_exists( 'ud_check_stateless_media' ) ) {
       if( !class_exists( '\wpCloud\StatelessMedia\Bootstrap' ) ) {
         throw new Exception( __( 'Distributive is broken. Plugin loader is not available. Try to remove and upload plugin again.', 'stateless-media' ) );
       }
+
+      // Include metabox plugin
+      require_once(  dirname( __FILE__ ) . '/vendor/wpmetabox/meta-box/meta-box.php' );
+
+      // Include metabox tabs addon
+      require_once(  dirname( __FILE__ ) . '/lib/meta-box-tabs/meta-box-tabs.php' );
     } catch( Exception $e ) {
       $_ud_stateless_media_error = $e->getMessage();
       return false;
@@ -94,4 +116,5 @@ if( !function_exists( 'ud_stateless_media_message' ) ) {
 if( ud_check_stateless_media() ) {
   //** Initialize. */
   ud_get_stateless_media();
+  ud_stateless_db();
 }

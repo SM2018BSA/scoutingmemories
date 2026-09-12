@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
@@ -53,11 +57,11 @@ class FrmProFieldCreditCard extends FrmFieldType {
 	 */
 	public function show_primary_options( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/credit-cards/back-end-field-opts.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/credit-cards/back-end-field-opts.php';
 
 		if ( ! empty( $field['description'] ) ) {
 			// This is here only for reverse compatibility.
-			include( FrmAppHelper::plugin_path() . '/classes/views/frm-fields/back-end/field-description.php' );
+			include FrmAppHelper::plugin_path() . '/classes/views/frm-fields/back-end/field-description.php';
 		}
 
 		parent::show_primary_options( $args );
@@ -73,7 +77,7 @@ class FrmProFieldCreditCard extends FrmFieldType {
 
 		$sub_fields = $this->all_default_labels();
 		foreach ( $sub_fields as $name => $field_label ) {
-			include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/default-placeholder.php' );
+			include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/default-placeholder.php';
 		}
 	}
 
@@ -125,13 +129,14 @@ class FrmProFieldCreditCard extends FrmFieldType {
 		$field_name = $this->html_name( $name );
 		$html_id = $this->html_id();
 
-		include( FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/input-form-builder.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/input-form-builder.php';
 	}
 
 	public function front_field_input( $args, $shortcode_atts ) {
-		$pass_args = array( 'errors' => $args['errors'], 'html_id' => $args['html_id'] );
+		$pass_args = array( 'errors' => $args['errors'], 'html_id' => $args['html_id'], 'field_id' => $args['field_id'] );
+		$callback  = apply_filters( 'frm_pro_show_card_callback', 'FrmProCreditCardsController::show_in_form' );
 		ob_start();
-		FrmProCreditCardsController::show_in_form( $this->field, $args['field_name'], $pass_args );
+		call_user_func( $callback, $this->field, $args['field_name'], $pass_args );
 		$input_html = ob_get_contents();
 		ob_end_clean();
 
@@ -296,7 +301,7 @@ class FrmProFieldCreditCard extends FrmFieldType {
 	private function validate_cc_expiration( &$errors, $args ) {
 		$values = $args['value'];
 		if ( isset( $values['month'] ) && ! empty( $values['month'] ) && ! empty( $values['year'] ) ) {
-			$is_past_date = ( $values['year'] <= date('Y') && $values['month'] < date('m') );
+			$is_past_date = ( $values['year'] <= gmdate( 'Y' ) && $values['month'] < gmdate( 'm' ) );
 			if ( $is_past_date ) {
 				$errors[ 'field' . $args['id'] . '-month' ] = __( 'That credit card is expired', 'formidable-pro' );
 				$errors[ 'field' . $args['id'] . '-year' ] = '';
@@ -316,6 +321,9 @@ class FrmProFieldCreditCard extends FrmFieldType {
 		}
 	}
 
+	/**
+	 * @param string|array $value This may be a serialized value set before inserting into database.
+	 */
 	public function set_value_before_save( $value ) {
 		if ( empty( $value ) ) {
 			return $value;
@@ -323,7 +331,7 @@ class FrmProFieldCreditCard extends FrmFieldType {
 
 		$serialized = false;
 		if ( ! is_array( $value ) ) {
-			$value = maybe_unserialize( $value );
+			FrmProAppHelper::unserialize_or_decode( $value );
 			$serialized = true;
 		}
 
@@ -365,5 +373,4 @@ class FrmProFieldCreditCard extends FrmFieldType {
 	public function sanitize_value( &$value ) {
 		FrmAppHelper::sanitize_value( 'sanitize_text_field', $value );
 	}
-
 }

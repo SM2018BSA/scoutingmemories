@@ -1,4 +1,7 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
 /**
  * @since 3.0
@@ -7,17 +10,26 @@ class FrmFieldEmail extends FrmFieldType {
 
 	/**
 	 * @var string
+	 *
 	 * @since 3.0
 	 */
 	protected $type = 'email';
-	protected $display_type = 'text';
 
 	/**
 	 * @var bool
+	 *
 	 * @since 3.0
 	 */
 	protected $holds_email_values = true;
 
+	/**
+	 * @var bool
+	 */
+	protected $array_allowed = false;
+
+	/**
+	 * @return bool[]
+	 */
 	protected function field_settings_for_type() {
 		return array(
 			'size'           => true,
@@ -34,8 +46,13 @@ class FrmFieldEmail extends FrmFieldType {
 	 * @return array
 	 */
 	public function validate( $args ) {
+		if ( ! $args['value'] ) {
+			return array();
+		}
+
 		$errors = array();
-		if ( $args['value'] != '' && ! is_email( $args['value'] ) ) {
+
+		if ( str_contains( $args['value'], '.@' ) || ! is_email( $args['value'] ) ) {
 			$errors[ 'field' . $args['id'] ] = FrmFieldsHelper::get_error_msg( $this->field, 'invalid' );
 		}
 
@@ -44,6 +61,10 @@ class FrmFieldEmail extends FrmFieldType {
 
 	/**
 	 * @since 4.0.04
+	 *
+	 * @param array|string $value Email value passed by reference.
+	 *
+	 * @return void
 	 */
 	public function sanitize_value( &$value ) {
 		FrmAppHelper::sanitize_value( 'sanitize_email', $value );

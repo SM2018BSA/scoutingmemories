@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
@@ -67,7 +71,7 @@ class FrmProFieldBreak extends FrmFieldType {
 		$previous = isset( $form->options['prev_value'] ) ? $form->options['prev_value'] : __( 'Previous', 'formidable-pro' );
 		unset( $form );
 
-		include( $this->include_form_builder_file() );
+		include $this->include_form_builder_file();
 	}
 
 	/**
@@ -89,7 +93,7 @@ class FrmProFieldBreak extends FrmFieldType {
 		$is_current_page = $current_page == $this->field['field_order'];
 
 		$should_scroll = $is_current_page || ! isset( $frm_vars['scrolled'] );
-		if ( $this->field['form_id'] == $post_form_id && ! defined('DOING_AJAX') && $should_scroll ) {
+		if ( $this->field['form_id'] == $post_form_id && ! defined( 'DOING_AJAX' ) && $should_scroll ) {
 			$frm_vars['scrolled'] = true;
 			//scroll to the form when we move to the next page
 			FrmFormsHelper::get_scroll_js( $this->field['form_id'] );
@@ -112,5 +116,19 @@ class FrmProFieldBreak extends FrmFieldType {
 		global $frm_vars;
 		$current_page = isset( $frm_vars['prev_page'][ $this->field['form_id'] ] ) ? $frm_vars['prev_page'][ $this->field['form_id'] ] : 0;
 		return '<input type="hidden" name="frm_next_page" class="frm_next_page" id="frm_next_p_' . esc_attr( $current_page ) . '" value="" />';
+	}
+
+	/**
+	 * @since 5.5.2
+	 *
+	 * @param string|array $value
+	 * @param array        $atts
+	 * @return string
+	 */
+	public function get_display_value( $value, $atts = array() ) {
+		if ( ! empty( $atts['plain_text'] ) ) {
+			return "\r\n"; // Another line break is also added in FrmEntryFormatter::prepare_plain_text_display_value_for_extra_fields.
+		}
+		return '<br/><br/>';
 	}
 }

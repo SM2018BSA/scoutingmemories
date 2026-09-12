@@ -1,3 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/order_row.php' );
+?>
 <div id="frm_order_field_<?php echo esc_attr( $order_key ); ?>" class="frm_order_row">
 	<select id="order_by" name="options[order_by][<?php echo esc_attr( $order_key ); ?>]">
 		<option value="id" <?php selected( $order_by, 'id' ); ?>>

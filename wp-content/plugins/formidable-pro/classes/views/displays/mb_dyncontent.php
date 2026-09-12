@@ -1,3 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/mb_dyncontent.php' );
+?>
 <div class="nav-menus-php hide-if-no-js ">
 <div class="wrap">
 	<ul class="nav-tab-wrapper frm_form_nav">
@@ -70,3 +77,27 @@
         <?php wp_editor( $post->frm_dyncontent, 'dyncontent', $editor_args ); ?>
     </div>
 </div>
+
+<?php
+if ( ! shortcode_exists( 'frm-export-view' ) && strpos( $post->frm_before_content, '<table' ) !== false ) {
+	// Show a message for exporting views.
+	FrmAppController::include_upgrade_overlay();
+	$data = array(
+		'data-upgrade' => 'Exporting Views to CSV',
+		'data-medium'  => 'view-export',
+	);
+
+	$upgrading = FrmProAddonsController::install_link( 'export-view' );
+	if ( isset( $upgrading['url'] ) ) {
+		$data['data-oneclick'] = json_encode( $upgrading );
+	}
+
+	?>
+	<p class="frmcenter">
+		<a href="javascript:void(0)" class="frm_pro_tip" <?php echo FrmAppHelper::array_to_html_params( $data ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>>
+			Want to export Views from the front-end?<br/>
+			<span class="frm-tip-cta">Get the Export Views to CSV add-on.</span>
+		</a>
+	</p>
+	<?php
+}

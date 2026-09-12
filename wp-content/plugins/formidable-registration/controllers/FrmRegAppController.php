@@ -19,7 +19,7 @@ class FrmRegAppController{
 
 		$wp_list_table = _get_list_table( 'WP_Plugins_List_Table' );
 		echo '<tr class="plugin-update-tr active"><th colspan="' . absint( $wp_list_table->get_column_count() ) . '" class="check-column plugin-update colspanchange"><div class="update-message">' .
-			__( 'You are running an outdated version of Formidable. This plugin will not work correctly if you do not update Formidable.', 'frmreg' ) .
+			esc_html__( 'You are running an outdated version of Formidable. This plugin will not work correctly if you do not update Formidable.', 'frmreg' ) .
 			'</div></td></tr>';
 	}
 
@@ -89,7 +89,7 @@ class FrmRegAppController{
 	 * @since 2.0
 	 */
 	public static function add_login_form_css() {
-		include( FrmRegAppHelper::path() . '/css/login_form.css' );
+		readfile( FrmRegAppHelper::path() . '/css/login_form.css' );
 	}
 
 	/***********************************************************************
@@ -256,7 +256,7 @@ class FrmRegAppController{
 		return FrmRegShortcodesController::do_login_form_shortcode( $atts );
 	}
 
-	public static function get_avatar( $avatar = '', $id_or_email, $size = '96', $default = '', $alt = false ) {
+	public static function get_avatar( $avatar, $id_or_email, $size = '96', $default = '', $alt = false ) {
 		_deprecated_function( __FUNCTION__, '2.0', 'FrmRegAvatarController::get_avatar');
 		FrmRegAvatarController::get_avatar( $avatar, $id_or_email, $size, $default, $alt );
 	}

@@ -11,8 +11,8 @@ class FrmRegRegistrationPageController {
 	 * @since 2.01
 	 */
 	public static function redirect_to_custom_registration_page() {
-		if ( 'GET' == $_SERVER[ 'REQUEST_METHOD' ] ) {
-			$redirect_url = self::reset_password_page_url( 'none' );
+		if ( 'GET' === FrmRegAppHelper::request_method() ) {
+			$redirect_url = self::registration_page_url( 'none' );
 
 			if ( $redirect_url ) {
 				wp_redirect( esc_url_raw( $redirect_url ) );
@@ -29,11 +29,11 @@ class FrmRegRegistrationPageController {
 	 *
 	 * @return false|string
 	 */
-	private static function reset_password_page_url( $fallback = 'wordpress' ) {
+	private static function registration_page_url( $fallback = 'wordpress' ) {
 		$page_id = self::registration_page_id();
 
 		if ( $page_id ) {
-			$page_url = get_permalink( $page_id );
+			$page_url = FrmRegAppHelper::get_page_url( $page_id );
 		} else if ( $fallback === 'wordpress' ) {
 			$page_url = site_url( 'wp-login.php?action=register' );
 		} else {

@@ -1,12 +1,13 @@
 ﻿=== Reveal IDs ===
 Contributors: Alphawolf
 Donate link: https://www.schloebe.de/donate/
-Tags: reveal, id, wp-admin, hidden, category, post, page, media, links, capability, user, restore, comments, taxonomy, custom posts, post type, multisite, ms
+Tags: wp-admin, post, page, media, id
 Requires at least: 3.0
-Tested up to: 5.0.9999
+Tested up to: 7.1
+Requires PHP: 7.4
 Stable tag: trunk
 License: GPLv2 or later
-License URI: http://www.gnu.org/licenses/gpl-2.0.html
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 What this plugin does is to reveal most removed IDs on admin pages, as it was in versions prior to 2.5.
 
@@ -20,24 +21,24 @@ What this plugin does is to reveal most removed entry IDs on admin pages, showin
 
 * Sortable columns for WP 3.1 or higher
 
-[Developer on Twitter](https://twitter.com/wpseek "Developer on Twitter")
+[Developer on X](https://x.com/wpseek "Developer on X") [Developer on Bluesky](https://bsky.app/profile/cyberblitzbirne.bsky.social "Developer on Bluesky")
 
 **Included languages:**
 
 * English
 * German (de_DE) (Thanks to me ;-))
-* Brazilian Portuguese (pt_BR) (Thanks for contributing brazilian portuguese language goes to [Maurício Samy Silva](http://www.maujor.com))
+* Brazilian Portuguese (pt_BR) (Thanks for contributing brazilian portuguese language goes to [Maurício Samy Silva](https://www.maujor.com))
 * Italian (it_IT) (Thanks for contributing italian language goes to Gianluca Urgese)
-* Spanish (es_ES) (Thanks for contributing spanish language goes to [Karin Sequen](http://www.es-xchange.com))
-* Russian (ru_RU) (Thanks for contributing russian language goes to [Dimitry German](http://grugl.me))
-* Belorussian (by_BY) (Thanks for contributing belorussian language goes to [FatCow](http://www.fatcow.com))
-* Dutch (nl_NL) (Thanks for contributing dutch language goes to [wpwebshop.com](http://wpwebshop.com/premium-wordpress-plugins/))
-* European Portuguese (pt_PT) (Thanks for contributing european portuguese language goes to [PL Monteiro](http://thepatientcapacitor.com/))
+* Spanish (es_ES) (Thanks for contributing spanish language goes to [Karin Sequen](https://www.es-xchange.com))
+* Russian (ru_RU) (Thanks for contributing russian language goes to [Dimitry German](https://grugl.me))
+* Belorussian (by_BY) (Thanks for contributing belorussian language goes to [FatCow](https://www.fatcow.com))
+* Dutch (nl_NL) (Thanks for contributing dutch language goes to [wpwebshop.com](https://wpwebshop.com/premium-wordpress-plugins/))
+* European Portuguese (pt_PT) (Thanks for contributing european portuguese language goes to [PL Monteiro](https://thepatientcapacitor.com/))
 * Polish (pl_PL) (Thanks for contributing polish language goes to Simivar)
-* Romanian (ro_RO) (Thanks for contributing romanian language goes to [Anunturi Jibo](http://www.jibo.ro))
-* Georgian (ge_KA) (Thanks for contributing georgian language goes to [Online Casino Bluebook](http://www.onlinecasinobluebook.com/))
-* Swedish (sv_SE) (Thanks for contributing swedish language goes to [Tor-Bjorn Fjellner](http://fjellner.com/))
-* Ukrainian (uk) (Thanks for contributing ukrainian language goes to [Everycloud](http://www.everycloudtech.com/))
+* Romanian (ro_RO) (Thanks for contributing romanian language goes to [Anunturi Jibo](https://www.jibo.ro))
+* Georgian (ge_KA) (Thanks for contributing georgian language goes to [Online Casino Bluebook](https://www.onlinecasinobluebook.com/))
+* Swedish (sv_SE) (Thanks for contributing swedish language goes to [Tor-Bjorn Fjellner](https://fjellner.com/))
+* Ukrainian (uk) (Thanks for contributing ukrainian language goes to [Everycloud](https://www.everycloudtech.com/))
 
 **Looking for more WordPress plugins? Visit [www.schloebe.de/portfolio/](https://www.schloebe.de/portfolio/)**
 
@@ -53,6 +54,28 @@ None.
 1. Installation finished.
 
 == Changelog ==
+
+= 1.6.3 =
+* WordPress 7.1 compatibility
+* Security hardening: added an ABSPATH guard to block direct access to the plugin file
+* Removed the dead legacy authorplugins include that could cause a PHP fatal error on the old settings URL
+* Escaped the admin column header output with esc_attr__() / esc_html__()
+* Moved the inline admin CSS into a properly enqueued stylesheet
+
+= 1.6.2 =
+* WordPress 6.9 compatibility
+
+= 1.6.1 =
+* Revert PHP8 requirement
+
+= 1.6.0 =
+* PHP 8.2 compatibility
+
+= 1.5.5 =
+* PHP 8.2 compatibility
+
+= 1.5.4 =
+* WordPress 5.3 compatibility
 
 = 1.5.3 =
 * Showing ID columns for plugins that register non-public post types and taxonomies

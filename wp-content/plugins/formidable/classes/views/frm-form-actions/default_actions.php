@@ -1,131 +1,260 @@
 <?php
-// add post action
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+/**
+ * Add post action.
+ */
 class FrmDefPostAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_wordpress_icon frm-inverse frm_show_upgrade' );
-		$action_ops['color']   = 'rgb(0,160,210)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_wordpress_icon frm_show_upgrade' );
+		$action_ops['color'] = '#3177C7';
 
 		parent::__construct( 'wppost', __( 'Create Post', 'formidable' ), $action_ops );
 	}
 }
 
-// add register action
+/**
+ * Add register action.
+ */
 class FrmDefRegAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_register_icon frm_show_upgrade' );
-		$action_ops['plugin']  = 'registration';
-		$action_ops['color']   = 'var(--pink)';
+		$action_ops           = FrmFormAction::default_action_opts( 'frm_register_icon frm_show_upgrade' );
+		$action_ops['plugin'] = 'registration';
+		$action_ops['color']  = '#e22a6e';
 		parent::__construct( 'register', __( 'Register User', 'formidable' ), $action_ops );
 	}
 }
 
-// add paypal action
-class FrmDefPayPalAction extends FrmFormAction {
+/**
+ * Add paypal action.
+ */
+class FrmPayPalLiteAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_paypal_icon frm-inverse frm_show_upgrade' );
-		$action_ops['color'] = 'var(--primary-hover)';
+		$action_ops = array(
+			'classes' => 'frmfont frm_paypal_icon',
+			'color'   => 'var(--primary-700)',
+		);
 
 		parent::__construct( 'paypal', 'PayPal', $action_ops );
 	}
 }
 
-// add aweber action
+/**
+ * Add paypal legacy action.
+ */
+if ( class_exists( 'FrmPaymentAction' ) ) {
+	class FrmDefPayPalLegacyAction extends FrmPaymentAction {
+		public function __construct() {
+			parent::__construct();
+
+			$this->id_base = 'paypal-legacy';
+			$this->name    = 'PayPal (Legacy)';
+
+			// FrmPaymentAction sets option_name to 'frm_paypal_action' using its 'paypal'
+			// id_base. Recompute it from the new id_base so this action does not share the
+			// POST data namespace with the PayPal add-on's 'paypal' action, which would make
+			// both action controls save the same submission and create a duplicate action.
+			$this->option_name = 'frm_' . $this->id_base . '_action';
+		}
+	}
+}
+
+class FrmStripeLiteAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops = array(
+			'classes' => 'frmfont frm_stripe_icon',
+			'color'   => '#635bff',
+		);
+
+		parent::__construct( 'stripe', 'Stripe', $action_ops );
+	}
+}
+
+class FrmSquareAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops = array(
+			'classes' => 'frmfont frm_square_icon',
+			'color'   => '#000',
+		);
+
+		parent::__construct( 'square', 'Square', $action_ops );
+	}
+}
+
+/**
+ * Add quiz action.
+ */
+class FrmDefQuizAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops           = FrmFormAction::default_action_opts( 'frm_quiz_icon frm_show_upgrade' );
+		$action_ops['plugin'] = 'quizzes';
+		$action_ops['color']  = '#f15a24';
+		parent::__construct( 'quiz', __( 'Scored Quiz', 'formidable' ), $action_ops );
+	}
+}
+
+/**
+ * Add quiz outcome action.
+ */
+class FrmDefQuizOutcomeAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops           = FrmFormAction::default_action_opts( 'frm_quiz_outcome_icon frm_show_upgrade' );
+		$action_ops['plugin'] = 'quizzes';
+		$action_ops['color']  = '#8d35f5';
+		parent::__construct( 'quiz_outcome', __( 'Quiz Outcome', 'formidable' ), $action_ops );
+	}
+}
+
+/**
+ * Add aweber action.
+ */
 class FrmDefAweberAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_aweber_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--green)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_aweber_icon frm_show_upgrade' );
+		$action_ops['color'] = '#246BE8';
 		parent::__construct( 'aweber', 'AWeber', $action_ops );
 	}
 }
 
-// add mailchimp action
+/**
+ * Add mailchimp action.
+ */
 class FrmDefMlcmpAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_mailchimp_icon frm_show_upgrade frm-inverse' );
-		$action_ops['color']   = 'var(--dark-grey)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_mailchimp_icon frm_show_upgrade' );
+		$action_ops['color'] = '#000';
 
-		parent::__construct( 'mailchimp', 'MailChimp', $action_ops );
+		parent::__construct( 'mailchimp', 'Mailchimp', $action_ops );
 	}
 }
 
-// add twilio action
+/**
+ * Add zapier action.
+ */
+class FrmDefZapierAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_zapier_icon frm_show_upgrade' );
+		$action_ops['color'] = '#FF4A00';
+		parent::__construct( 'zapier', 'Zapier', $action_ops );
+	}
+}
+
+/**
+ * Add n8n action.
+ */
+class FrmDefN8NAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops           = FrmFormAction::default_action_opts( 'frm_n8n_icon frm_show_upgrade' );
+		$action_ops['color']  = '#EA4B71';
+		$action_ops['is_new'] = true;
+		parent::__construct( 'n8n', 'n8n', $action_ops );
+	}
+}
+
+/**
+ * Add twilio action.
+ */
 class FrmDefTwilioAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_sms_icon frm_show_upgrade' );
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_sms_icon frm_show_upgrade' );
+		$action_ops['color'] = '#F12E45';
 		parent::__construct( 'twilio', __( 'Twilio SMS', 'formidable' ), $action_ops );
-	}
-}
-
-// add payment action
-class FrmDefHrsAction extends FrmFormAction {
-	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_stripe_icon frm_credit_card_alt_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--green)';
-		$action_ops['plugin'] = 'stripe';
-		parent::__construct( 'payment', __( 'eCommerce', 'formidable' ), $action_ops );
 	}
 }
 
 class FrmDefActiveCampaignAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_activecampaign_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--primary-hover)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_activecampaign_icon frm_show_upgrade' );
+		$action_ops['color'] = '#004CFF';
 		parent::__construct( 'activecampaign', 'ActiveCampaign', $action_ops );
 	}
 }
 
 class FrmDefSalesforceAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_salesforce_icon frm-inverse frm_show_upgrade' );
-		$action_ops['color'] = 'var(--primary-color)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_salesforcealt_icon frm_show_upgrade' );
+		$action_ops['color'] = '#00A1E0';
 		parent::__construct( 'salesforce', 'Salesforce', $action_ops );
 	}
 }
 
 class FrmDefConstContactAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_constant_contact_icon frm_show_upgrade' );
-		$action_ops['color'] = 'rgb(0,160,210)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_constant_contact_icon frm_show_upgrade' );
+		$action_ops['color'] = '#1856ED';
 		parent::__construct( 'constantcontact', 'Constant Contact', $action_ops );
 	}
 }
 
 class FrmDefGetResponseAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_getresponse_icon frm_show_upgrade' );
-		$action_ops['color'] = '#00baff';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_getresponse_icon frm_show_upgrade' );
+		$action_ops['color'] = '#00A2FF';
 		parent::__construct( 'getresponse', 'GetResponse', $action_ops );
 	}
 }
 
 class FrmDefHubspotAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_hubspot_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--orange)';
-		parent::__construct( 'hubspot', 'Hubspot', $action_ops );
-	}
-}
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_hubspot_icon frm_show_upgrade' );
+		$action_ops['color'] = '#FF7A59';
 
-class FrmDefHighriseAction extends FrmFormAction {
-	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_building_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--purple)';
-		parent::__construct( 'highrise', 'Highrise', $action_ops );
+		$action_ops['message'] = '';
+
+		if ( ! FrmAppHelper::pro_is_installed() ) {
+			$action_ops['message'] .= __( 'The HubSpot integration is not available on your plan. Did you know you can upgrade to unlock more awesome features?', 'formidable' ) . '<br/><br/>';
+		}
+
+		$link                   = FrmAppHelper::admin_upgrade_link( 'add-action', 'go/hubspot-signup' );
+		$action_ops['message'] .= '<a href="' . esc_url( $link ) . '" target="_blank" rel="noopener" class="button button-secondary frm-button-secondary">Get Free HubSpot Account</a>';
+		parent::__construct( 'hubspot', 'Hubspot', $action_ops );
 	}
 }
 
 class FrmDefMailpoetAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_mailpoet_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--orange)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_mailpoet_icon frm_show_upgrade' );
+		$action_ops['color'] = '#FE5301';
 		parent::__construct( 'mailpoet', 'MailPoet', $action_ops );
 	}
 }
 
 class FrmDefApiAction extends FrmFormAction {
 	public function __construct() {
-		$action_ops = FrmFormAction::default_action_opts( 'frm_feed_icon frm_show_upgrade' );
-		$action_ops['color'] = 'var(--purple)';
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_feed_icon frm_show_upgrade' );
+		$action_ops['color'] = '#0193d7';
 		parent::__construct( 'api', __( 'Send API data', 'formidable' ), $action_ops );
+	}
+}
+
+/**
+ * Add google sheets.
+ */
+class FrmDefGoogleSpreadsheetAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_googlesheets_icon frm_show_upgrade' );
+		$action_ops['color'] = '#0F9D58';
+		parent::__construct( 'googlespreadsheet', __( 'Google Sheets', 'formidable' ), $action_ops );
+	}
+}
+
+class FrmDefHrsAction extends FrmFormAction {
+	public function __construct() {
+		_deprecated_function( __METHOD__, '6.5' );
+
+		$action_ops           = FrmFormAction::default_action_opts( 'frm_stripe_icon frm_credit_card_alt_icon frm_show_upgrade' );
+		$action_ops['color']  = 'var(--green)';
+		$action_ops['plugin'] = 'stripe';
+		parent::__construct( 'payment', __( 'eCommerce', 'formidable' ), $action_ops );
+	}
+}
+
+class FrmDefConvertKitAction extends FrmFormAction {
+	public function __construct() {
+		$action_ops          = FrmFormAction::default_action_opts( 'frm_convertkit_icon frm_show_upgrade' );
+		$action_ops['color'] = '#1E1E1E';
+		parent::__construct( 'convertkit', 'Kit', $action_ops );
 	}
 }

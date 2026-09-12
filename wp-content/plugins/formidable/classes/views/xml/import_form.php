@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <div class="frm_wrap">
 	<?php
 	FrmAppHelper::get_admin_header(
@@ -7,24 +12,48 @@
 	);
 	?>
 	<div class="wrap">
-		<?php include( FrmAppHelper::plugin_path() . '/classes/views/shared/errors.php' ); ?>
+		<?php require FrmAppHelper::plugin_path() . '/classes/views/shared/errors.php'; ?>
 
 		<h2 class="frm-h2"><?php esc_html_e( 'Import', 'formidable' ); ?></h2>
-		<p class="howto"><?php echo esc_html( apply_filters( 'frm_upload_instructions1', __( 'Upload your Formidable XML file to import forms into this site. If your imported form key and creation date match a form on your site, that form will be updated.', 'formidable' ) ) ); ?></p>
+		<p class="howto">
+			<?php
+			if ( FrmAppHelper::is_formidable_branding() ) {
+				$page_description = esc_html__( 'Upload your Formidable XML file to import forms into this site. If your imported form key and creation date match a form on your site, that form will be updated.', 'formidable' );
+			} else {
+				$page_description = sprintf(
+					// Translators: 1: Menu name
+					esc_html__( 'Upload your %1$s XML file to import forms into this site. If your imported form key and creation date match a form on your site, that form will be updated.', 'formidable' ),
+					FrmAppHelper::get_menu_name()
+				);
+			}
+			echo esc_html( apply_filters( 'frm_upload_instructions1', $page_description ) );
+			?>
+		</p>
 		<br/>
-		<form enctype="multipart/form-data" method="post">
+		<form enctype="multipart/form-data" method="post" class="frm-fields">
 			<input type="hidden" name="frm_action" value="import_xml" />
 			<?php wp_nonce_field( 'import-xml-nonce', 'import-xml' ); ?>
 			<p>
-				<label>
-					<?php echo esc_html( apply_filters( 'frm_upload_instructions2', __( 'Choose a Formidable XML file', 'formidable' ) ) ); ?>
+				<label for="frm_import_file">
+					<?php
+					if ( FrmAppHelper::is_formidable_branding() ) {
+						$file_section_title = esc_html__( 'Choose a Formidable XML file', 'formidable' );
+					} else {
+						$file_section_title = sprintf(
+							// Translators: 1: Menu name
+							esc_html__( 'Choose a %1$s XML file', 'formidable' ),
+							FrmAppHelper::get_menu_name()
+						);
+					}
+					echo esc_html( apply_filters( 'frm_upload_instructions2', $file_section_title ) );
+					?>
 					(<?php
 					/* translators: %s: File size */
 					echo esc_html( sprintf( __( 'Maximum size: %s', 'formidable' ), ini_get( 'upload_max_filesize' ) ) );
 					?>)
 				</label>
 				<br/>
-				<input type="file" name="frm_import_file" size="25" />
+				<input id="frm_import_file" type="file" name="frm_import_file" size="25" accept="<?php echo esc_attr( implode( ', ', FrmXMLHelper::get_supported_upload_file_types() ) ); ?>" />
 			</p>
 
 			<?php do_action( 'frm_csv_opts', $forms ); ?>
@@ -33,12 +62,14 @@
 				<input type="submit" value="<?php esc_attr_e( 'Upload file and import', 'formidable' ); ?>" class="button-primary frm-button-primary" />
 			</p>
 		</form>
+		<?php FrmFormMigratorsHelper::maybe_show_download_link(); ?>
 		<?php FrmTipsHelper::pro_tip( 'get_import_tip' ); ?>
 
-		<br/><br/>
+		<?php do_action( 'frm_import_settings' ); ?>
+
 		<h2 class="frm-h2"><?php esc_html_e( 'Export', 'formidable' ); ?></h2>
 		<p class="howto">
-			<?php echo esc_html( __( 'Export your forms, entries, views, and styles so you can easily import them on another site.', 'formidable' ) ); ?>
+			<?php esc_html_e( 'Export your forms, entries, views, and styles so you can easily import them on another site.', 'formidable' ); ?>
 		</p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" id="frm_export_xml" class="frm-fields frm_grid_container">
 			<input type="hidden" name="action" value="frm_export_xml" />
@@ -46,20 +77,20 @@
 
 			<p class="frm4 frm_form_field">
 				<label for="format"><?php esc_html_e( 'Export Format', 'formidable' ); ?></label>
-				<select name="format">
+				<select id="format" name="format">
 					<?php foreach ( $export_format as $t => $type ) { ?>
 						<option value="<?php echo esc_attr( $t ); ?>" data-support="<?php echo esc_attr( $type['support'] ); ?>" <?php echo isset( $type['count'] ) ? 'data-count="' . esc_attr( $type['count'] ) . '"' : ''; ?>>
-							<?php echo esc_html( isset( $type['name'] ) ? $type['name'] : $t ); ?>
+							<?php echo esc_html( $type['name'] ?? $t ); ?>
 						</option>
 					<?php } ?>
 				</select>
 			</p>
 
 			<p class="frm_hidden csv_opts export-filters frm4 frm_form_field">
-				<label for="csv_format" class="frm_help" title="<?php esc_attr_e( 'If your CSV special characters are not working correctly, try a different formatting option.', 'formidable' ); ?>">
+				<label for="frm_csv_format" class="frm_help" title="<?php esc_attr_e( 'If your CSV special characters are not working correctly, try a different formatting option.', 'formidable' ); ?>">
 					<?php esc_html_e( 'CSV Encoding Format', 'formidable' ); ?>
 				</label>
-				<select name="csv_format">
+				<select id="frm_csv_format" name="csv_format">
 					<?php foreach ( FrmCSVExportHelper::csv_format_options() as $format ) { ?>
 						<option value="<?php echo esc_attr( $format ); ?>">
 							<?php echo esc_html( $format ); ?>
@@ -69,7 +100,7 @@
 			</p>
 
 			<p class="frm_hidden csv_opts export-filters frm4 frm_form_field">
-				<label for="csv_col_sep">
+				<label for="frm_csv_col_sep">
 					<?php esc_html_e( 'Column Separation', 'formidable' ); ?>
 				</label>
 				<input id="frm_csv_col_sep" name="csv_col_sep" value="," type="text" />
@@ -78,7 +109,7 @@
 			<p id="frm_csv_data_export" class="xml_opts">
 				<label><?php esc_html_e( 'Include the following in the export file', 'formidable' ); ?></label>
 				<?php foreach ( $export_types as $t => $type ) { ?>
-					<label class="frm_inline_label">
+					<label class="frm_inline_label frm-export-xml-<?php echo esc_attr( $t ); ?>">
 						<input type="checkbox" name="type[]" value="<?php echo esc_attr( $t ); ?>"/>
 						<?php echo esc_html( $type ); ?>
 					</label> &nbsp;
@@ -86,7 +117,7 @@
 			</p>
 
 			<div class="frm-table-box">
-			<p class="alignleft" style="margin-bottom:0;">
+			<p class="alignleft frm-mb-sm">
 				<label class="xml_opts">
 					<?php esc_html_e( 'Select Form(s)', 'formidable' ); ?>
 				</label>
@@ -104,10 +135,13 @@
 			);
 			?>
 			<div class="frm-scroll-box">
-				<table class="widefat striped frm-border frm_no_top_margin">
+				<table class="widefat striped frm-border frm-mt-0">
 					<thead>
 						<tr>
-							<td class="column-cb check-column"></td>
+							<td class="column-cb check-column">
+								<label class="screen-reader-text" for="frm-export-select-all"><?php esc_html_e( 'Select All', 'formidable' ); ?></label>
+								<input id="frm-export-select-all" type="checkbox">
+							</td>
 							<td><?php esc_html_e( 'Form Title', 'formidable' ); ?></td>
 							<td><?php esc_html_e( 'ID / Form Key', 'formidable' ); ?></td>
 							<td><?php esc_html_e( 'Type', 'formidable' ); ?></td>
@@ -117,13 +151,13 @@
 					</thead>
 					<tbody>
 						<?php foreach ( $forms as $form ) { ?>
-							<tr class="frm-row">
+							<tr class="frm-row <?php echo ! empty( $form->parent_form_id ) ? esc_attr( 'frm-is-repeater' ) : ''; ?>">
 								<td>
 									<input type="checkbox" name="frm_export_forms[]" value="<?php echo esc_attr( $form->id ); ?>" id="export_form_<?php echo esc_attr( $form->id ); ?>" />
 								</td>
 								<td>
 									<label for="export_form_<?php echo esc_attr( $form->id ); ?>">
-										<?php echo esc_html( '' === $form->name ? __( '(no title)', 'formidable' ) : $form->name ); ?>
+										<?php echo esc_html( '' === $form->name ? FrmFormsHelper::get_no_title_text() : $form->name ); ?>
 									</label>
 								</td>
 								<td>
@@ -153,16 +187,19 @@
 								</td>
 								<td class="column-entries">
 									<?php
-									$style = isset( $form->options['custom_style'] ) ? $form->options['custom_style'] : 1;
-									if ( empty( $style ) ) {
-										echo '0';
-									} else {
+									$style = $form->options['custom_style'] ?? 1;
+
+									if ( $style ) {
 										echo '1';
+									} else {
+										echo '0';
 									}
 									?>
 								</td>
 							</tr>
-						<?php } ?>
+							<?php
+						}//end foreach
+						?>
 					</tbody>
 				</table>
 			</div>
@@ -173,5 +210,6 @@
 			</p>
 		</form>
 
+		<?php do_action( 'frm_page_footer', array( 'table' => 'export' ) ); ?>
 	</div>
 </div>

@@ -1,19 +1,26 @@
-<p class="frm-has-modal">
+<?php
+/**
+ * HTML content editor for HTML fields.
+ *
+ * @package Formidable
+ *
+ * @var array $field Field data including 'id' and 'description'.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
+<p>
 	<label>
 		<?php esc_html_e( 'Content', 'formidable' ); ?>
 	</label>
-	<span class="frm-with-right-icon">
-		<?php
-		FrmAppHelper::icon_by_class(
-			'frm_icon_font frm_more_horiz_solid_icon frm-show-inline-modal',
-			array(
-				'data-open' => 'frm-smart-values-box',
-				'title'     => esc_attr__( 'Toggle Options', 'formidable' ),
-			)
-		);
-		?>
-		<textarea name="field_options[description_<?php echo absint( $field['id'] ); ?>]" id="frm_description_<?php echo esc_attr( $field['id'] ); ?>" rows="8"><?php
-		echo FrmAppHelper::esc_textarea( $field['description'] ); // WPCS: XSS ok.
-		?></textarea>
-	</span>
+	<?php
+	$e_args  = array(
+		'textarea_name' => 'field_options[description_' . absint( $field['id'] ) . ']',
+		'textarea_rows' => 7,
+	);
+	$html_id = 'frm_description_' . absint( $field['id'] );
+	wp_editor( $field['description'], $html_id, $e_args );
+	?>
 </p>

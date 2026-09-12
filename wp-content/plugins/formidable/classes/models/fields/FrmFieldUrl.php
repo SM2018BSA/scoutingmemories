@@ -1,4 +1,7 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
 /**
  * @since 3.0
@@ -7,11 +10,19 @@ class FrmFieldUrl extends FrmFieldType {
 
 	/**
 	 * @var string
+	 *
 	 * @since 3.0
 	 */
 	protected $type = 'url';
-	protected $display_type = 'text';
 
+	/**
+	 * @var bool
+	 */
+	protected $array_allowed = false;
+
+	/**
+	 * @return bool[]
+	 */
 	protected function field_settings_for_type() {
 		return array(
 			'size'           => true,
@@ -30,10 +41,18 @@ class FrmFieldUrl extends FrmFieldType {
 		);
 	}
 
+	/**
+	 * @return string
+	 */
 	protected function get_field_name() {
 		return __( 'Website', 'formidable' );
 	}
 
+	/**
+	 * @param array $atts
+	 *
+	 * @return void
+	 */
 	protected function fill_default_atts( &$atts ) {
 		$defaults = array(
 			'sep'  => ', ',
@@ -46,23 +65,28 @@ class FrmFieldUrl extends FrmFieldType {
 		}
 	}
 
+	/**
+	 * @param array $args
+	 */
 	public function validate( $args ) {
 		$value = $args['value'];
-		if ( trim( $value ) == 'http://' || empty( $value ) ) {
+
+		if ( trim( $value ) === 'http://' || ! $value ) {
 			$value = '';
 		} else {
 			$value = esc_url_raw( $value );
-			$value = preg_match( '/^(https?|ftps?|mailto|news|feed|telnet):/is', $value ) ? $value : 'http://' . $value;
+			$value = preg_match( '/^(https?|ftps?|mailto|news|feed|telnet):/is', $value ) ? $value : 'https://' . $value;
 		}
 
 		FrmEntriesHelper::set_posted_value( $this->field, $value, $args );
 
 		$errors = array();
 
-		// validate the url format
-		if ( ! empty( $value ) && ! preg_match( '/^http(s)?:\/\/(?:localhost|(?:[\da-z\.-]+\.[\da-z\.-]+))/i', $value ) ) {
+		// Validate the url format
+		if ( $value && ! preg_match( '/^http(s)?:\/\/(?:localhost|(?:[\da-z\.-]+\.[\da-z\.-]+))/i', $value ) ) {
 			$errors[ 'field' . $args['id'] ] = FrmFieldsHelper::get_error_msg( $this->field, 'invalid' );
-		} elseif ( $this->field->required == '1' && empty( $value ) ) {
+		// skipcq: PHP-W1067 -- $this->field is always a field object by the time validate() runs; FrmFieldType's constructor just accepts array|int|object for lazy construction elsewhere.
+		} elseif ( $this->field->required == '1' && ! $value ) { // phpcs:ignore Universal.Operators.StrictComparisons
 			$errors[ 'field' . $args['id'] ] = FrmFieldsHelper::get_error_msg( $this->field, 'blank' );
 		}
 
@@ -70,25 +94,32 @@ class FrmFieldUrl extends FrmFieldType {
 	}
 
 	protected function prepare_display_value( $value, $atts ) {
-		if ( $atts['html'] ) {
-			$images = '';
-			foreach ( (array) $value as $url ) {
-				$image_regex = '/(\.(?i)(jpg|jpeg|png|gif))$/';
-				$is_image    = preg_match( $image_regex, $url );
-				if ( $is_image ) {
-					$images .= '<img src="' . esc_attr( $url ) . '" class="frm_image_from_url" alt="" /> ';
-				} else {
-					$images .= strip_tags( $url );
-				}
-			}
-			$value = $images;
+		if ( ! $atts['html'] ) {
+			return $value;
 		}
 
-		return $value;
+		$images = '';
+
+		foreach ( (array) $value as $url ) {
+			$image_regex = '/(\.(?i)(jpg|jpeg|png|gif))$/';
+			$is_image    = preg_match( $image_regex, $url );
+
+			if ( $is_image ) {
+				$images .= '<img src="' . esc_url( $url ) . '" class="frm_image_from_url" alt="" /> ';
+			} else {
+				$images .= strip_tags( $url );
+			}
+		}
+
+		return $images;
 	}
 
 	/**
 	 * @since 4.0.04
+	 *
+	 * @param array|string $value
+	 *
+	 * @return void
 	 */
 	public function sanitize_value( &$value ) {
 		FrmAppHelper::sanitize_value( 'esc_url_raw', $value );

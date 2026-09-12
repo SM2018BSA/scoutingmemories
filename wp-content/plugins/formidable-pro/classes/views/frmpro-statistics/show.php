@@ -1,15 +1,73 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <div id="form_reports_page" class="frm_wrap frm_charts">
-	<div class="frm_page_container">
 	<?php
 	FrmAppHelper::get_admin_header( array(
 		'label' => __( 'Reports', 'formidable-pro' ),
 		'form'  => $form,
-		'close' => remove_query_arg( 'frm-full' ),
 	) );
 
 	$class = 'odd';
+	$time_data = isset( $data['time'] ) ? $data['time'] : '';
 	?>
 	<div class="frm-inner-content wrap">
+		<h2><?php esc_html_e( 'Reports', 'formidable-pro' ); ?></h2>
+		<form method="GET" class="frm-report-filter frm-flex-justify tablenav">
+			<input type="hidden" name="page" value="formidable" />
+			<input type="hidden" name="frm_action" value="reports" />
+			<input type="hidden" name="form" value="<?php echo esc_attr( $form->id ); ?>" />
+
+			<?php
+			if ( ! empty( $entry_status_options ) ) {
+				?>
+			<div class="frm_form_field">
+				<label for="frm_stats_entry_status" class="frm_primary_label">
+					<?php esc_html_e( 'Status', 'formidable-pro' ); ?>
+				</label>
+				<select id="frm_stats_entry_status" name="entry_status">
+					<?php
+					foreach ( $entry_status_options as $val => $label ) {
+						$selected = $selected_status === $val;
+						$params   = array( 'value' => $val );
+						FrmProHtmlHelper::echo_dropdown_option( $label, $selected, $params );
+					}
+					?>
+				</select>
+			</div>
+			<?php } ?>
+			<div class="frm_form_field">
+				<label for="frm_stats_date_range" class="frm_primary_label">
+					<?php esc_html_e( 'Date range', 'formidable-pro' ); ?>
+				</label>
+				<select id="frm_stats_date_range" name="date_range">
+					<?php
+					foreach ( FrmProReportsHelper::get_date_range_options() as $val => $label ) {
+						?>
+						<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $val, $selected_date_range ); ?>><?php echo esc_html( $label ); ?></option>
+						<?php
+					}
+					?>
+				</select>
+			</div>
+			<div class="frm_form_field frm_stats_date_wrapper frm_invisible">
+				<label for="frm_stats_start_date" class="frm_primary_label"><?php esc_html_e( 'Start date', 'formidable-pro' ); ?></label>
+				<input name="start_date" id="frm_stats_start_date" type="date" value="<?php echo $start_date ? esc_attr( gmdate( 'Y-m-d', strtotime( $start_date ) ) ) : ''; ?>" disabled />
+			</div>
+			<div class="frm_form_field frm_stats_date_wrapper frm_invisible">
+				<label for="frm_stats_end_date" class="frm_primary_label"><?php esc_html_e( 'End date', 'formidable-pro' ); ?></label>
+				<input name="end_date" id="frm_stats_end_date" type="date" value="<?php echo $end_date ? esc_attr( gmdate( 'Y-m-d', strtotime( $end_date ) ) ) : ''; ?>" disabled />
+			</div>
+			<div>
+				<br>
+				<button class="frm-button-secondary frm-button-sm" type="submit">
+					<?php esc_html_e( 'Apply', 'formidable-pro' ); ?>
+				</button>
+			</div>
+		</form>
+
 		<div class="frmcenter">
 		<div class="postbox">
 			<div class="inside">
@@ -28,30 +86,36 @@
 		<div class="clear"></div>
 		</div>
 
-        <?php
-		if ( isset( $data['time'] ) ) {
-			?>
-			<h2 class="frm-h2">
-				<?php esc_html_e( 'Responses Over Time', 'formidable-pro' ); ?>
-			</h2>
-			<?php
-			echo $data['time'];
-        }
+		<div class="frm-inline-pro-tip">
+			<?php if ( $time_data ) { ?>
+				<h3><?php esc_html_e( 'Responses Over Time', 'formidable-pro' ); ?></h3>
+			<?php } ?>
 
-        foreach ( $fields as $field ) {
+			<a class="frm-pro-tip frm-pro-tip-end" href="https://formidableforms.com/knowledgebase/graphs/" target="_blank">
+				<span class="frm-pro-tip-text"><?php esc_html_e( 'Pro Tip: Add graphs like this on a page', 'formidable-pro' ); ?></span>
+				<?php FrmAppHelper::icon_by_class( 'frmfont frm_external_link_icon' ); ?>
+			</a>
+		</div>
+
+		<?php
+		if ( $time_data ) {
+			echo $data['time'];
+		}
+
+		foreach ( $fields as $field ) {
 			if ( ! isset( $data[ $field->id ] ) ) {
                 continue;
             }
 
-            $total = FrmProStatisticsController::stats_shortcode( array( 'id' => $field->id, 'type' => 'count' ) );
-            if ( ! $total ) {
-                continue;
-            }
+			$post_boxes = FrmProReportsHelper::get_field_boxes( compact( 'field', 'entries' ) );
+			if ( empty( $post_boxes ) ) {
+				continue;
+			}
             ?>
-			<div class="frm_report_box pg_<?php echo esc_attr( $class ); ?>">
-				<h2 class="frm-h2">
+			<div class="frm_report_box pg_<?php echo esc_attr( $class ); ?>" data-ftype="<?php echo esc_attr( $field->type ); ?>">
+				<h3>
 					<?php echo esc_html( $field->name ); ?>
-				</h2>
+				</h3>
 				<?php echo $data[ $field->id ]; ?>
 
 				<?php if ( isset( $data[ $field->id . '_table' ] ) ) { ?>
@@ -60,38 +124,25 @@
 				<?php } ?>
 
 				<div class="frmcenter" style="margin-top:20px;">
+				<?php foreach ( $post_boxes as $box ) { ?>
 				<div class="postbox">
 					<div class="inside">
-						<h3><?php esc_html_e( 'Answered', 'formidable-pro' ); ?></h3>
-						<?php echo esc_html( $total ); ?>
-						(<?php echo round( ( $total / count( $entries ) ) * 100, 2 ); ?>%)
+						<h3><?php echo esc_html( $box['label'] ); ?></h3>
+						<?php echo esc_html( $box['stat'] ); ?>
 					</div>
 				</div>
-			<?php if ( in_array( $field->type, array( 'number', 'hidden', 'scale' ) ) ) { ?>
-				<div class="postbox">
-					<div class="inside">
-						<h3><?php esc_html_e( 'Average', 'formidable-pro' ); ?></h3>
-						<?php
-						echo FrmProStatisticsController::stats_shortcode( array(
-							'id' => $field->id,
-							'type' => 'average',
-						) );
-						?>
-					</div>
-				</div>
+				<?php } ?>
 
-				<div class="postbox">
-					<div class="inside">
-						<h3><?php esc_html_e( 'Median', 'formidable-pro' ); ?></h3>
-						<?php
-						echo FrmProStatisticsController::stats_shortcode( array(
-							'id' => $field->id,
-							'type' => 'median',
-						) );
-						?>
-					</div>
-				</div>
-            <?php } ?>
+				<?php
+				/**
+				 * Fires after the field report.
+				 *
+				 * @since 5.0.02
+				 *
+				 * @param array $args The arguments. Contains `field`..
+				 */
+				do_action( 'frm_pro_after_field_report', compact( 'field' ) );
+				?>
 			</div>
 
             <div class="clear"></div>
@@ -105,6 +156,5 @@
             echo $data['month'];
         }
 ?>
-	</div>
 	</div>
 </div>

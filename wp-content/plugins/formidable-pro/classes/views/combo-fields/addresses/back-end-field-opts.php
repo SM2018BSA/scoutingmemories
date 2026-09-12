@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <p>
 	<label for="address_type_<?php echo esc_attr( $field['id'] ); ?>">
 		<?php esc_html_e( 'Address Type', 'formidable-pro' ); ?>

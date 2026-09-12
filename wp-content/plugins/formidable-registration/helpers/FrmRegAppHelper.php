@@ -5,6 +5,18 @@ class FrmRegAppHelper{
 	private static $min_formidable_version = 2.0;
 
 	/**
+	 * @var string $plug_version
+	 */
+	public static $plug_version = '2.12';
+
+	/**
+	 * @return string
+	 */
+	public static function plugin_version() {
+		return self::$plug_version;
+	}
+
+	/**
 	 * Get the plugin path
 	 *
 	 * @return string
@@ -64,7 +76,7 @@ class FrmRegAppHelper{
 	 * @since 2.0
 	 */
 	public static function enqueue_admin_js() {
-		wp_register_script( 'frmreg_admin', self::plugin_url() . '/js/back_end.js' );
+		wp_register_script( 'frmreg_admin', self::plugin_url() . '/js/back_end.js', array(), self::plugin_version() );
 
 		wp_localize_script( 'frmreg_admin', 'frmRegGlobal', array(
 			'nonce'        => wp_create_nonce( 'frm_ajax' ),
@@ -72,6 +84,17 @@ class FrmRegAppHelper{
 
 		if ( self::is_form_settings_page() ) {
 			wp_enqueue_script( 'frmreg_admin' );
+		}
+	}
+
+	/**
+	 * Enqueue the global JS script
+	 *
+	 * @since 2.09
+	 */
+	public static function enqueue_global_js() {
+		if ( FrmAppHelper::simple_get( 'page', 'sanitize_title' ) === 'formidable-settings' ) {
+			wp_add_inline_script( 'formidable_admin_global', "jQuery( document ).ready( function() { frmDom.autocomplete.initAutocomplete( 'page' ); })");
 		}
 	}
 
@@ -145,24 +168,25 @@ class FrmRegAppHelper{
 	 *
 	 * @since 2.0
 	 *
-	 * @param int|string $profile_user_id
-	 * @param WP_Post $register_action
+	 * @param int|string    $profile_user_id
+	 * @param WP_Post       $register_action
+	 * @param object|string $form
 	 *
 	 * @return bool
 	 */
-	public static function current_user_can_update_profile( $profile_user_id, $register_action ) {
-		$can_update = false;
+	public static function current_user_can_update_profile( $profile_user_id, $register_action, $form = '' ) {
+		$can_update      = false;
 		$profile_user_id = (int) $profile_user_id;
 		$current_user_id = get_current_user_id();
 
 		if ( current_user_can( 'administrator' ) || self::always_allow_edit() ) {
 			$can_update = true;
-		} else if ( $profile_user_id && $current_user_id ) {
-
-			if ( $profile_user_id == $current_user_id || self::current_user_can_create_users( $register_action ) ) {
-				$can_update = true;
-			}
-
+		} elseif ( $profile_user_id && $current_user_id && $profile_user_id === $current_user_id ) {
+			$can_update = true;
+		} elseif( self::current_user_can_create_users( $register_action ) ) {
+			$can_update = true;
+		} elseif( $profile_user_id && is_object( $form ) && ! empty( $form->options['open_editable_role'] ) && FrmProFieldsHelper::user_has_permission( $form->options['open_editable_role'] ) ) {
+			$can_update = true;
 		}
 
 		return $can_update;
@@ -231,6 +255,39 @@ class FrmRegAppHelper{
             echo '"';
         }
     }
+
+	/**
+	 * Gets request method from $_SERVER.
+	 *
+	 * @since 2.05
+	 *
+	 * @return string
+	 */
+    public static function request_method() {
+		return FrmAppHelper::get_server_value( 'REQUEST_METHOD' );
+    }
+
+	/**
+	 * Returns the URL for a page, of its translate if available.
+	 *
+	 * @since 2.09
+	 *
+	 * @param int $page_id The page id.
+	 *
+	 * @return string The page URL.
+	 */
+	public static function get_page_url( $page_id ) {
+
+		if ( function_exists( 'pll_current_language' ) ) {
+			$pll_current_language = pll_current_language();
+
+			if ( $pll_current_language !== pll_get_post_language( $page_id ) ) {
+				$page_id = pll_get_post( $page_id, $pll_current_language );
+			}
+		}
+
+		return get_permalink( $page_id );
+	}
 
 	/*----------------Deprecated Functions--------------------*/
 

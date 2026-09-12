@@ -1,20 +1,44 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
 class FrmFormsController {
 
+	/**
+	 * Track the form that opened the redirect URL in a new tab. This is used to check if we should show the default
+	 * message in the current tab.
+	 *
+	 * @since 6.2
+	 *
+	 * @var array Keys are form IDs and values are 1.
+	 */
+	private static $redirected_in_new_tab = array();
+
+	/**
+	 * The HTML for the Formdiable TinyMCE button (That triggers a popup to insert shortcodes)
+	 * is stored here and re-used as an optimization.
+	 *
+	 * @since 6.11
+	 *
+	 * @var string|null
+	 */
+	private static $formidable_tinymce_button;
+
 	public static function menu() {
 		$menu_label = __( 'Forms', 'formidable' );
+
 		if ( ! FrmAppHelper::pro_is_installed() ) {
 			$menu_label .= ' (Lite)';
 		}
+
 		add_submenu_page( 'formidable', 'Formidable | ' . $menu_label, $menu_label, 'frm_view_forms', 'formidable', 'FrmFormsController::route' );
 
 		self::maybe_load_listing_hooks();
 	}
 
 	public static function maybe_load_listing_hooks() {
-		$action = FrmAppHelper::simple_get( 'frm_action', 'sanitize_title' );
-		if ( ! empty( $action ) && ! in_array( $action, array( 'list', 'trash', 'untrash', 'destroy' ) ) ) {
+		if ( ! FrmAppHelper::on_form_listing_page() ) {
 			return;
 		}
 
@@ -24,6 +48,13 @@ class FrmFormsController {
 		add_filter( 'manage_toplevel_page_formidable_sortable_columns', 'FrmFormsController::get_sortable_columns' );
 	}
 
+	/**
+	 * Runs on admin head of the formidable forms page.
+	 *
+	 * @since 6.32 This adds screen options.
+	 *
+	 * @return void
+	 */
 	public static function head() {
 		if ( wp_is_mobile() ) {
 			wp_enqueue_script( 'jquery-touch-punch' );
@@ -31,8 +62,23 @@ class FrmFormsController {
 	}
 
 	public static function register_widgets() {
-		require_once( FrmAppHelper::plugin_path() . '/classes/widgets/FrmShowForm.php' );
+		require_once FrmAppHelper::plugin_path() . '/classes/widgets/FrmShowForm.php';
 		register_widget( 'FrmShowForm' );
+	}
+
+	/**
+	 * Show a message about conditional logic
+	 *
+	 * @since 4.06.03
+	 */
+	public static function logic_tip() {
+		$images_url    = FrmAppHelper::plugin_url() . '/images/';
+		$data_message  = __( 'Only show the fields you need and create branching forms. Upgrade to get conditional logic and question branching.', 'formidable' );
+		$data_message .= ' <img src="' . esc_url( $images_url ) . '/survey-logic.png" srcset="' . esc_url( $images_url ) . 'survey-logic@2x.png 2x" alt="' . esc_attr__( 'Conditional Logic options', 'formidable' ) . '"/>'; // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+		echo '<a href="javascript:void(0)" class="frm_noallow frm_show_upgrade frm_add_logic_link frm-collapsed frm-flex-justify" data-upgrade="' . esc_attr__( 'Conditional Logic options', 'formidable' ) . '" data-message="' . esc_attr( $data_message ) . '" data-medium="builder" data-content="logic">'; // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+		esc_html_e( 'Conditional Logic', 'formidable' );
+		FrmAppHelper::icon_by_class( 'frmfont frm_arrowdown8_icon', array( 'aria-hidden' => 'true' ) );
+		echo '</a>';
 	}
 
 	/**
@@ -40,45 +86,34 @@ class FrmFormsController {
 	 * Now that won't do.
 	 *
 	 * @since 3.01
+	 *
+	 * @param array $shortcodes List of shortcodes to process.
+	 *
+	 * @return array
 	 */
 	public static function prevent_divi_conflict( $shortcodes ) {
 		$shortcodes[] = 'formidable';
-
 		return $shortcodes;
 	}
 
+	/**
+	 * @return void
+	 */
 	public static function list_form() {
 		FrmAppHelper::permission_check( 'frm_view_forms' );
 
 		$message = '';
 		$params  = FrmForm::list_page_params();
 		$errors  = self::process_bulk_form_actions( array() );
+
 		if ( isset( $errors['message'] ) ) {
 			$message = $errors['message'];
 			unset( $errors['message'] );
 		}
+
 		$errors = apply_filters( 'frm_admin_list_form_action', $errors );
 
-		return self::display_forms_list( $params, $message, $errors );
-	}
-
-	/**
-	 * Choose which type of form to create
-	 *
-	 * @since 3.06
-	 */
-	public static function add_new() {
-		self::list_templates();
-	}
-
-	/**
-	 * Load the scripts before a modal can be triggered.
-	 *
-	 * @since 4.0
-	 */
-	private static function init_modal() {
-		wp_enqueue_script( 'jquery-ui-dialog' );
-		wp_enqueue_style( 'jquery-ui-dialog' );
+		self::display_forms_list( $params, $message, $errors );
 	}
 
 	/**
@@ -86,26 +121,121 @@ class FrmFormsController {
 	 *
 	 * @since 2.02.11
 	 *
-	 * @param object $form
+	 * @param int|object $form
+	 *
+	 * @return void
 	 */
 	private static function create_default_email_action( $form ) {
 		FrmForm::maybe_get_form( $form );
+
+		if ( ! is_object( $form ) ) {
+			return;
+		}
+
 		$create_email = apply_filters( 'frm_create_default_email_action', true, $form );
 
-		if ( $create_email ) {
-			$action_control = FrmFormActionsController::get_form_actions( 'email' );
-			$action_control->create( $form->id );
+		if ( ! $create_email ) {
+			return;
 		}
+
+		/**
+		 * @var FrmFormAction
+		 */
+		$action_control = FrmFormActionsController::get_form_actions( 'email' );
+		$action_control->create( $form->id );
 	}
 
+	/**
+	 * Create the default On submit action
+	 *
+	 * @since 6.0.0
+	 *
+	 * @param int|object $form Form object or ID.
+	 *
+	 * @return void
+	 */
+	private static function create_default_on_submit_action( $form ) {
+		FrmForm::maybe_get_form( $form );
+
+		if ( ! is_object( $form ) ) {
+			return;
+		}
+
+		/**
+		 * Enable or disable the default On Submit action.
+		 *
+		 * @since 6.0.0
+		 *
+		 * @param bool   $create Set to `false` if you want to disable.
+		 * @param object $form   Form object.
+		 */
+		$create = apply_filters( 'frm_create_default_on_submit_action', true, $form );
+
+		if ( ! $create ) {
+			return;
+		}
+
+		/**
+		 * @var FrmFormAction
+		 */
+		$action_control = FrmFormActionsController::get_form_actions( FrmOnSubmitAction::$slug );
+		$action_control->create( $form->id );
+	}
+
+	/**
+	 * Creates submit button field.
+	 *
+	 * @since 6.9
+	 *
+	 * @param int|object $form Form ID or object.
+	 *
+	 * @return void
+	 */
+	private static function create_submit_button_field( $form ) {
+		FrmForm::maybe_get_form( $form );
+
+		if ( ! is_object( $form ) ) {
+			return;
+		}
+
+		if ( FrmSubmitHelper::get_submit_field( $form->id ) ) {
+			// Do not create submit button field if it exists.
+			return;
+		}
+
+		FrmField::create(
+			array(
+				'type'          => FrmSubmitHelper::FIELD_TYPE,
+				'name'          => __( 'Submit', 'formidable' ),
+				'field_order'   => FrmSubmitHelper::DEFAULT_ORDER,
+				'form_id'       => $form->id,
+				'field_options' => FrmFieldsHelper::get_default_field_options( FrmSubmitHelper::FIELD_TYPE ),
+				'description'   => '',
+				'default_value' => '',
+				'options'       => array(),
+			)
+		);
+	}
+
+	/**
+	 * @param array|false $values
+	 *
+	 * @return void
+	 */
 	public static function edit( $values = false ) {
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
 
 		$id = isset( $values['id'] ) ? absint( $values['id'] ) : FrmAppHelper::get_param( 'id', '', 'get', 'absint' );
 
-		return self::get_edit_vars( $id );
+		self::get_edit_vars( $id );
 	}
 
+	/**
+	 * @param mixed  $id
+	 * @param string $message
+	 *
+	 * @return void
+	 */
 	public static function settings( $id = false, $message = '' ) {
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
 
@@ -113,31 +243,112 @@ class FrmFormsController {
 			$id = FrmAppHelper::get_param( 'id', '', 'get', 'absint' );
 		}
 
-		return self::get_settings_vars( $id, array(), $message );
+		FrmOnSubmitHelper::maybe_migrate_submit_settings_to_action( $id );
+
+		self::get_settings_vars( $id, array(), $message );
 	}
 
 	public static function update_settings() {
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
+		$process_form = FrmAppHelper::get_post_param( 'process_form', '', 'sanitize_text_field' );
 
-		$id = FrmAppHelper::get_param( 'id', '', 'get', 'absint' );
+		if ( ! wp_verify_nonce( $process_form, 'process_form_nonce' ) ) {
+			$frm_settings = FrmAppHelper::get_settings();
+			$error_args   = array(
+				'title'       => __( 'Verification failed', 'formidable' ),
+				'body'        => $frm_settings->admin_permission,
+				'cancel_text' => __( 'Cancel', 'formidable' ),
+			);
+			FrmAppController::show_error_modal( $error_args );
+			return;
+		}
 
-		$errors = FrmForm::validate( $_POST );
+		$id       = FrmAppHelper::get_param( 'id', '', 'get', 'absint' );
+		$errors   = FrmForm::validate( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$warnings = FrmFormsHelper::check_for_warnings( $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
 		if ( count( $errors ) > 0 ) {
-			return self::get_settings_vars( $id, $errors );
+			self::get_settings_vars( $id, $errors, compact( 'warnings' ) );
+			return;
 		}
 
 		do_action( 'frm_before_update_form_settings', $id );
 
-		FrmForm::update( $id, $_POST );
+		$antispam_was_on = self::antispam_was_on( $id ); // phpcs:ignore Formidable.CodeAnalysis.InlineSingleUseVariable
+
+		FrmForm::update( $id, $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+		$antispam_is_on = ! empty( $_POST['options']['antispam'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+
+		if ( $antispam_is_on !== $antispam_was_on ) {
+			FrmAntiSpam::clear_caches();
+		}
+
+		// Handle captcha field inclusion
+		$include_captcha = isset( $_POST['frm_include_captcha'] ) && '1' === $_POST['frm_include_captcha']; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		self::handle_captcha_field( $id, $include_captcha );
 
 		$message = __( 'Settings Successfully Updated', 'formidable' );
 
-		return self::get_settings_vars( $id, array(), $message );
+		self::get_settings_vars( $id, array(), compact( 'message', 'warnings' ) );
 	}
 
+	/**
+	 * @param int $form_id
+	 *
+	 * @return bool
+	 */
+	private static function antispam_was_on( $form_id ) {
+		$form = FrmForm::getOne( $form_id );
+		return ! empty( $form->options['antispam'] );
+	}
+
+	/**
+	 * Handle captcha field inclusion in form
+	 *
+	 * @since 6.33
+	 *
+	 * @param int  $form_id         Form ID.
+	 * @param bool $include_captcha Whether to include captcha field.
+	 *
+	 * @return void
+	 */
+	private static function handle_captcha_field( $form_id, $include_captcha ) {
+		$form_fields        = FrmField::get_all_for_form( $form_id, '', 'exclude' );
+		$captcha_field_id   = 0;
+		$submit_field_order = 0;
+
+		foreach ( $form_fields as $field ) {
+			if ( 'captcha' === $field->type ) {
+				$captcha_field_id = $field->id;
+				break;
+			}
+
+			if ( 'submit' === $field->type ) {
+				$submit_field_order = $field->field_order;
+			}
+		}
+
+		if ( $include_captcha && ! $captcha_field_id ) {
+			// Create captcha field just before submit button
+			$field_values                = FrmFieldsHelper::setup_new_vars( 'captcha', $form_id );
+			$field_values['name']        = __( 'Captcha', 'formidable' );
+			$field_values['field_order'] = $submit_field_order > 0 ? $submit_field_order - 1 : 0;
+			FrmField::create( $field_values );
+		} elseif ( ! $include_captcha && $captcha_field_id ) {
+			// Delete captcha field
+			FrmField::destroy( $captcha_field_id );
+		}
+	}
+
+	/**
+	 * @param array $values
+	 *
+	 * @return void
+	 */
 	public static function update( $values = array() ) {
-		if ( empty( $values ) ) {
-			$values = $_POST;
+		if ( ! $values ) {
+			$values = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		}
 
 		// Set radio button and checkbox meta equal to "other" value.
@@ -147,6 +358,7 @@ class FrmFormsController {
 
 		$errors           = FrmForm::validate( $values );
 		$permission_error = FrmAppHelper::permission_nonce_error( 'frm_edit_forms', 'frm_save_form', 'frm_save_form_nonce' );
+
 		if ( $permission_error !== false ) {
 			$errors['form'] = $permission_error;
 		}
@@ -154,25 +366,73 @@ class FrmFormsController {
 		$id = isset( $values['id'] ) ? absint( $values['id'] ) : FrmAppHelper::get_param( 'id', '', 'get', 'absint' );
 
 		if ( count( $errors ) > 0 ) {
-			return self::get_edit_vars( $id, $errors );
-		} else {
-			FrmForm::update( $id, $values );
-			$message = __( 'Form was successfully updated.', 'formidable' );
+			self::get_edit_vars( $id, $errors );
+			return;
+		}
 
-			if ( self::is_too_long( $values ) ) {
-				$message .= '<br/> ' . sprintf(
-					/* translators: %1$s: Start link HTML, %2$s: end link HTML */
-					__( 'However, your form is very long and may be %1$sreaching server limits%2$s.', 'formidable' ),
-					'<a href="https://formidableforms.com/knowledgebase/i-have-a-long-form-why-did-the-options-at-the-end-of-the-form-stop-saving/?utm_source=WordPress&utm_medium=builder&utm_campaign=liteplugin" target="_blank" rel="noopener">',
-					'</a>'
-				);
-			}
+		self::maybe_remove_draft_option_from_fields( $id );
 
-			if ( defined( 'DOING_AJAX' ) ) {
-				wp_die( FrmAppHelper::kses( $message, array( 'a' ) ) ); // WPCS: XSS ok.
-			}
+		FrmForm::update( $id, $values );
+		$message = __( 'Form was successfully updated.', 'formidable' );
 
-			return self::get_edit_vars( $id, array(), $message );
+		if ( self::is_too_long( $values ) ) {
+			$message .= '<br/> ' . sprintf(
+				/* translators: %1$s: Start link HTML, %2$s: end link HTML */
+				__( 'However, your form is very long and may be %1$sreaching server limits%2$s.', 'formidable' ),
+				'<a href="' . esc_url( self::get_form_too_long_docs_url() ) . '" target="_blank" rel="noopener">',
+				'</a>'
+			);
+		}
+
+		if ( defined( 'DOING_AJAX' ) ) {
+			wp_die( FrmAppHelper::kses( $message, array( 'a' ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
+
+		self::get_edit_vars( $id, array(), $message );
+	}
+
+	/**
+	 * @since 6.25.1
+	 *
+	 * @return string
+	 */
+	private static function get_form_too_long_docs_url() {
+		$utm = array(
+			'campaign' => 'builder',
+			'content'  => 'form-too-long',
+		);
+		return FrmAppHelper::admin_upgrade_link( $utm, 'knowledgebase/i-have-a-long-form-why-did-the-options-at-the-end-of-the-form-stop-saving/' );
+	}
+
+	/**
+	 * Remove the draft flag from any new fields from this current session.
+	 *
+	 * @since 6.8
+	 *
+	 * @param int $form_id
+	 *
+	 * @return void
+	 */
+	private static function maybe_remove_draft_option_from_fields( $form_id ) {
+		$draft_field_ids_csv = FrmAppHelper::get_post_param( 'draft_fields', '', 'sanitize_text_field' );
+
+		if ( ! $draft_field_ids_csv ) {
+			// If the draft_fields input is empty there are no new fields in the session.
+			return;
+		}
+
+		$draft_field_ids = array_filter( explode( ',', $draft_field_ids_csv ), 'is_numeric' );
+
+		if ( ! $draft_field_ids ) {
+			// Exit early if the draft fields input is invalid. It should be a CSV of integer values.
+			return;
+		}
+
+		$draft_field_rows = FrmFieldsHelper::get_draft_field_results( $form_id, $draft_field_ids );
+
+		foreach ( $draft_field_rows as $row ) {
+			$row->field_options['draft'] = 0;
+			FrmField::update( $row->id, array( 'field_options' => $row->field_options ) );
 		}
 	}
 
@@ -182,76 +442,102 @@ class FrmFormsController {
 	 * were likely not saved either.
 	 *
 	 * @since 3.06.01
+	 *
+	 * @param array $values
+	 *
+	 * @return bool
 	 */
 	private static function is_too_long( $values ) {
-		return ( ! isset( $values['frm_end'] ) ) || empty( $values['frm_end'] );
-	}
-
-	/**
-	 * Redirect to the url for creating from a template
-	 * Also delete the current form
-	 *
-	 * @since 2.0
-	 * @deprecated 3.06
-	 */
-	public static function _create_from_template() {
-		_deprecated_function( __FUNCTION__, '3.06' );
-
-		FrmAppHelper::permission_check( 'frm_edit_forms' );
-		check_ajax_referer( 'frm_ajax', 'nonce' );
-
-		$current_form = FrmAppHelper::get_param( 'this_form', '', 'get', 'absint' );
-		$template_id  = FrmAppHelper::get_param( 'id', '', 'get', 'absint' );
-
-		if ( $current_form ) {
-			FrmForm::destroy( $current_form );
-		}
-
-		echo esc_url_raw( admin_url( 'admin.php?page=formidable&frm_action=duplicate&id=' . absint( $template_id ) ) );
-		wp_die();
+		return empty( $values['frm_end'] );
 	}
 
 	public static function duplicate() {
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
+		$nonce = FrmAppHelper::simple_get( '_wpnonce' );
+
+		if ( ! wp_verify_nonce( $nonce ) ) {
+			$frm_settings = FrmAppHelper::get_settings();
+			wp_die( esc_html( $frm_settings->admin_permission ) );
+		}
 
 		$params  = FrmForm::list_page_params();
 		$form    = FrmForm::duplicate( $params['id'], $params['template'], true );
-		$message = $params['template'] ? __( 'Form template was Successfully Created', 'formidable' ) : __( 'Form was Successfully Copied', 'formidable' );
+		$url     = admin_url( 'admin.php?page=formidable' );
+		$message = 'form_duplicate_error';
+
 		if ( $form ) {
-			return self::get_edit_vars( $form, array(), $message, true );
-		} else {
-			return self::display_forms_list( $params, __( 'There was a problem creating the new template.', 'formidable' ) );
+			$new_template = FrmAppHelper::simple_get( 'new_template' ) ? '&new_template=true' : '';
+			$url          = admin_url( 'admin.php?page=formidable&frm_action=edit&id=' . absint( $form ) . $new_template );
+			$message      = 'form_duplicated';
 		}
+
+		$url .= '&message=' . $message;
+
+		wp_safe_redirect( $url );
+		exit();
 	}
 
+	/**
+	 * @return string|null
+	 */
 	public static function page_preview() {
 		$params = FrmForm::list_page_params();
-		if ( ! $params['form'] ) {
-			return;
+
+		if ( ! $params['form'] || is_numeric( $params['form'] ) ) {
+			return null;
 		}
 
+		self::maybe_block_preview( $params['form'] );
+
 		$form = FrmForm::getOne( $params['form'] );
-		if ( $form ) {
-			return self::show_form( $form->id, '', true, true );
+
+		if ( ! $form ) {
+			return null;
 		}
+
+		return self::show_form( $form->id, '', 'auto', 'auto' );
 	}
 
 	/**
 	 * @since 3.0
+	 *
+	 * @return void
 	 */
 	public static function show_page_preview() {
-		echo self::page_preview(); // WPCS: XSS ok.
+		$preview = self::page_preview();
+
+		if ( is_null( $preview ) ) {
+			wp_die(
+				'<h1>' . esc_html__( 'Form key is invalid', 'formidable' ) . '</h1>',
+				'<p>' . esc_html__( 'Form key is invalid', 'formidable' ) . '</p>',
+				404
+			);
+		}
+
+		echo $preview; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
+	/**
+	 * @return void
+	 */
 	public static function preview() {
 		do_action( 'frm_wp' );
+		FrmAppHelper::set_current_screen_and_hook_suffix();
 
 		global $frm_vars;
 		$frm_vars['preview'] = true;
 
-		self::load_wp();
+		// print_emoji_styles is deprecated.
+		remove_action( 'wp_print_styles', 'print_emoji_styles' );
+
+		if ( FrmTestModeController::should_add_test_mode_container() ) {
+			do_action( 'frm_test_mode_init' );
+			add_action( 'wp_enqueue_scripts', 'FrmTestModeController::register_and_enqueue_required_scripts' );
+			add_filter( 'frm_filter_final_form', 'FrmTestModeController::maybe_add_test_mode_container', 99 );
+		}
 
 		$include_theme = FrmAppHelper::get_param( 'theme', '', 'get', 'absint' );
+
 		if ( $include_theme ) {
 			self::set_preview_query();
 			self::load_theme_preview();
@@ -263,41 +549,68 @@ class FrmFormsController {
 	}
 
 	/**
-	 * @since 3.0
+	 * Set the page global to any available page (except for the Blog Page).
+	 *
+	 * @return void
 	 */
-	private static function load_wp() {
-		if ( ! defined( 'ABSPATH' ) && ! defined( 'XMLRPC_REQUEST' ) ) {
-			global $wp;
-			$root = dirname( dirname( dirname( dirname( __FILE__ ) ) ) );
-			include_once( $root . '/wp-config.php' );
-			$wp->init();
-			$wp->register_globals();
-		}
-	}
-
 	private static function set_preview_query() {
-		$random_page = get_posts(
+		$page_query = array(
+			'numberposts' => 1,
+			'orderby'     => 'date',
+			'order'       => 'ASC',
+			'post_type'   => 'page',
+		);
+
+		$page_for_posts = get_option( 'page_for_posts' );
+
+		if ( is_numeric( $page_for_posts ) ) {
+			// Avoid querying for the "Posts Page" or "Blog Page" so we don't display 10 forms.
+			$page_query['post__not_in'] = array( $page_for_posts );
+		}
+
+		$random_page = get_posts( $page_query );
+
+		if ( ! $random_page ) {
+			return;
+		}
+
+		$random_page = reset( $random_page );
+
+		if ( ! is_a( $random_page, 'WP_Post' ) ) {
+			// The return type can also be int.
+			return;
+		}
+
+		query_posts(
 			array(
-				'numberposts' => 1,
-				'orderby'     => 'date',
-				'order'       => 'ASC',
-				'post_type'   => 'page',
+				'post_type' => 'page',
+				'page_id'   => $random_page->ID,
 			)
 		);
 
-		if ( ! empty( $random_page ) ) {
-			$random_page = reset( $random_page );
-			query_posts(
-				array(
-					'post_type' => 'page',
-					'page_id'   => $random_page->ID,
-				)
-			);
-		}
+		// Fixes Pro issue #3004. Prevent an undefined $post object.
+		// Otherwise WordPress themes will trigger a warning "Attempt to read property "comment_count" on null".
+		self::set_post_global( $random_page );
+	}
+
+	/**
+	 * Set the WP $post global object. Used for in-theme preview when defining a page.
+	 *
+	 * @since 5.5.2
+	 *
+	 * @param WP_Post $page The page object.
+	 *
+	 * @return void
+	 */
+	private static function set_post_global( $page ) {
+		global $post;
+		$post = $page; // phpcs:ignore WordPress.WP.GlobalVariablesOverride
 	}
 
 	/**
 	 * @since 3.0
+	 *
+	 * @return void
 	 */
 	private static function load_theme_preview() {
 		add_filter( 'wp_title', 'FrmFormsController::preview_title', 9999 );
@@ -305,39 +618,144 @@ class FrmFormsController {
 		add_filter( 'the_content', 'FrmFormsController::preview_content', 9999 );
 		add_action( 'loop_no_results', 'FrmFormsController::show_page_preview' );
 		add_filter( 'is_active_sidebar', '__return_false' );
-		get_template_part( 'page' );
-	}
+		FrmStylesController::enqueue_css( 'enqueue', true );
 
-	/**
-	 * Set the page title for the theme preview page
-	 *
-	 * @since 3.0
-	 */
-	public static function preview_page_title( $title ) {
-		if ( in_the_loop() ) {
-			$title = self::preview_title( $title );
+		if ( false !== get_template_part( 'page' ) ) {
+			return;
 		}
 
-		return $title;
+		if ( function_exists( 'wp_is_block_theme' ) && wp_is_block_theme() ) {
+			add_filter( 'body_class', 'FrmFormsController::preview_block_theme_body_classnames' );
+		}
+		self::fallback_when_page_template_part_is_not_supported_by_theme();
+	}
+
+	/**
+	 * Add padding to the body for block themes.
+	 *
+	 * @since 6.5.2
+	 *
+	 * @param array $classes The body classes list.
+	 *
+	 * @return array
+	 */
+	public static function preview_block_theme_body_classnames( $classes ) {
+		$classes[] = 'has-global-padding';
+		return $classes;
+	}
+
+	/**
+	 * Not every theme supports get_template_part( 'page' ).
+	 * When this is not supported, false is returned, and we can handle a fallback.
+	 *
+	 * @return void
+	 */
+	private static function fallback_when_page_template_part_is_not_supported_by_theme() {
+		if ( ! have_posts() ) {
+			return;
+		}
+
+		the_post();
+		self::get_template( 'header' );
+
+		// Add some generic class names to the container to add some natural padding to the content.
+		// .entry-content catches the WordPress TwentyTwenty theme.
+		// .container catches Customizr content.
+		echo '<div class="container entry-content">';
+		the_content();
+		echo '</div>';
+
+		// Prevent extra unexpected forms in the footer.
+		// For some reason this happens in the Twenty Twenty Five theme.
+		add_filter( 'frm_filter_final_form', '__return_empty_string' );
+
+		self::get_template( 'footer' );
+	}
+
+	/**
+	 * Calls core function to get a template part if it doesn't cause deprecation warnings. Otherwise skips the deprecation function call
+	 * and renders required html fragments calling required functions.
+	 *
+	 * @since 6.7.1
+	 *
+	 * @param string $template
+	 *
+	 * @return void
+	 */
+	private static function get_template( $template ) {
+		if ( self::should_try_getting_template( $template ) ) {
+			call_user_func( 'get_' . $template );
+			return;
+		}
+
+		if ( 'header' === $template ) {
+			include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/preview/header.php';
+			return;
+		}
+
+		if ( 'footer' === $template ) {
+			include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/preview/footer.php';
+		}
+	}
+
+	/**
+	 * Returns true if calling a template function doesn't trigger deprecation warnings.
+	 *
+	 * @since 6.7.1
+	 *
+	 * @param string $template
+	 *
+	 * @return bool
+	 */
+	private static function should_try_getting_template( $template ) {
+		$stylesheet_path = get_stylesheet_directory();
+		$template_path   = get_template_directory();
+		$is_child_theme  = $stylesheet_path !== $template_path;
+		$template_name   = $template . '.php';
+
+		return file_exists( $stylesheet_path . '/' . $template_name ) || $is_child_theme && file_exists( $template_path . '/' . $template_name );
 	}
 
 	/**
 	 * Set the page title for the theme preview page
 	 *
 	 * @since 3.0
+	 *
+	 * @param string $title
+	 *
+	 * @return string
+	 */
+	public static function preview_page_title( $title ) {
+		return in_the_loop() ? self::preview_title( $title ) : $title;
+	}
+
+	/**
+	 * Set the page title for the theme preview page.
+	 *
+	 * @since 3.0
+	 *
+	 * @param string $title
+	 *
+	 * @return string
 	 */
 	public static function preview_title( $title ) {
 		return __( 'Form Preview', 'formidable' );
 	}
 
 	/**
-	 * Set the page content for the theme preview page
+	 * Set the page content for the theme preview page.
 	 *
 	 * @since 3.0
+	 *
+	 * @param string $content
+	 *
+	 * @return string
 	 */
 	public static function preview_content( $content ) {
 		if ( in_the_loop() ) {
-			$content = self::show_page_preview();
+			self::show_page_preview();
+			// Clear the content for the page we're using.
+			$content = '';
 		}
 
 		return $content;
@@ -347,34 +765,111 @@ class FrmFormsController {
 	 * @since 3.0
 	 */
 	private static function load_direct_preview() {
-		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
-
 		$key = FrmAppHelper::simple_get( 'form', 'sanitize_title' );
+
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( $key == '' ) {
 			$key = FrmAppHelper::get_post_param( 'form', '', 'sanitize_title' );
 		}
 
-		$form = FrmForm::getAll( array( 'form_key' => $key ), '', 1 );
-		if ( empty( $form ) ) {
-			$form = FrmForm::getAll( array(), '', 1 );
+		if ( ! $key ) {
+			$error = __( 'Form key is missing', 'formidable' );
+			wp_die(
+				'<h1>' . esc_html( $error ) . '</h1>',
+				'<p>' . esc_html( $error ) . '</p>',
+				404
+			);
 		}
 
-		require( FrmAppHelper::plugin_path() . '/classes/views/frm-entries/direct.php' );
+		self::maybe_block_preview( $key );
+
+		$form = FrmForm::getAll( array( 'form_key' => $key ), '', 1 );
+
+		if ( ! $form ) {
+			$error = __( 'Form does not exist', 'formidable' );
+			wp_die(
+				'<h1>' . esc_html( $error ) . '</h1>',
+				'<p>' . esc_html( $error ) . '</p>',
+				404
+			);
+		}
+
+		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
+
+		self::fix_deprecated_null_param_warning();
+
+		require FrmAppHelper::plugin_path() . '/classes/views/frm-entries/direct.php';
+	}
+
+	/**
+	 * Block the form preview for the contact form by default if the user cannot view forms.
+	 * This is to prevent the contact form being exploited.
+	 * Since this form is added by default and every site uses the same key, it is too easy
+	 * to guess this form.
+	 *
+	 * @since 6.20
+	 *
+	 * @param string $form_key Form key.
+	 *
+	 * @return void
+	 */
+	public static function maybe_block_preview( $form_key ) {
+		if ( ! FrmFormsHelper::should_block_preview( $form_key ) ) {
+			return;
+		}
+
+		$error = __( 'You do not have permission to view this form', 'formidable' );
+		wp_die(
+			'<h1>' . esc_html( $error ) . '</h1>',
+			'<p>' . esc_html( $error ) . '</p>',
+			403
+		);
+	}
+
+	/**
+	 * Some themes have a null $src value.
+	 * This function adds a filter to ensure that $src is not null.
+	 * WP will call str_starts_with with the null value triggering a deprecated message otherwise.
+	 *
+	 * @since 6.10
+	 *
+	 * @return void
+	 */
+	private static function fix_deprecated_null_param_warning() {
+		add_filter(
+			'script_loader_src',
+			/**
+			 * @param string|null $src
+			 *
+			 * @return string
+			 */
+			function ( $src ) {
+				return is_null( $src ) ? '' : $src;
+			}
+		);
 	}
 
 	public static function untrash() {
 		self::change_form_status( 'untrash' );
 	}
 
+	/**
+	 * @param array $ids
+	 *
+	 * @return string
+	 */
 	public static function bulk_untrash( $ids ) {
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
 
 		$count = FrmForm::set_status( $ids, 'published' );
 
-		/* translators: %1$s: Number of forms */
-		$message = sprintf( _n( '%1$s form restored from the Trash.', '%1$s forms restored from the Trash.', $count, 'formidable' ), 1 );
+		if ( ! $count ) {
+			// Don't show "0 forms restored" on refresh.
+			return '';
+		}
 
-		return $message;
+		/* translators: %1$s: Number of forms */
+		return sprintf( _n( '%1$s form restored from the Trash.', '%1$s forms restored from the Trash.', $count, 'formidable' ), $count );
 	}
 
 	/**
@@ -395,7 +890,7 @@ class FrmFormsController {
 	/**
 	 * @param string $status
 	 *
-	 * @return int The number of forms changed
+	 * @return void
 	 */
 	public static function change_form_status( $status ) {
 		$available_status = array(
@@ -417,12 +912,13 @@ class FrmFormsController {
 
 		$params = FrmForm::list_page_params();
 
-		//check nonce url
+		// Check nonce url.
 		check_admin_referer( $status . '_form_' . $params['id'] );
 
 		$count = 0;
+
 		if ( FrmForm::set_status( $params['id'], $available_status[ $status ]['new_status'] ) ) {
-			$count ++;
+			++$count;
 		}
 
 		$form_type = FrmAppHelper::get_simple_request(
@@ -436,21 +932,31 @@ class FrmFormsController {
 		$available_status['untrash']['message'] = sprintf( _n( '%1$s form restored from the Trash.', '%1$s forms restored from the Trash.', $count, 'formidable' ), $count );
 
 		/* translators: %1$s: Number of forms, %2$s: Start link HTML, %3$s: End link HTML */
-		$available_status['trash']['message']   = sprintf( _n( '%1$s form moved to the Trash. %2$sUndo%3$s', '%1$s forms moved to the Trash. %2$sUndo%3$s', $count, 'formidable' ), $count, '<a href="' . esc_url( wp_nonce_url( '?page=formidable&frm_action=untrash&form_type=' . $form_type . '&id=' . $params['id'], 'untrash_form_' . $params['id'] ) ) . '">', '</a>' );
+		$available_status['trash']['message'] = sprintf( _n( '%1$s form moved to the Trash. %2$sUndo%3$s', '%1$s forms moved to the Trash. %2$sUndo%3$s', $count, 'formidable' ), $count, '<a href="' . esc_url( wp_nonce_url( '?page=formidable&frm_action=untrash&form_type=' . $form_type . '&id=' . $params['id'], 'untrash_form_' . $params['id'] ) ) . '">', '</a>' ); // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 
 		$message = $available_status[ $status ]['message'];
 
 		self::display_forms_list( $params, $message );
 	}
 
+	/**
+	 * @param array $ids
+	 *
+	 * @return string
+	 */
 	public static function bulk_trash( $ids ) {
 		FrmAppHelper::permission_check( 'frm_delete_forms' );
 
 		$count = 0;
+
 		foreach ( $ids as $id ) {
 			if ( FrmForm::trash( $id ) ) {
-				$count ++;
+				++$count;
 			}
+		}
+
+		if ( ! $count ) {
+			return '';
 		}
 
 		$current_page = FrmAppHelper::get_simple_request(
@@ -459,15 +965,14 @@ class FrmFormsController {
 				'type'  => 'request',
 			)
 		);
-		$message      = sprintf(
+
+		return sprintf(
 			/* translators: %1$s: Number of forms, %2$s: Start link HTML, %3$s: End link HTML */
 			_n( '%1$s form moved to the Trash. %2$sUndo%3$s', '%1$s forms moved to the Trash. %2$sUndo%3$s', $count, 'formidable' ),
 			$count,
-			'<a href="' . esc_url( wp_nonce_url( '?page=formidable&frm_action=list&action=bulk_untrash&form_type=' . $current_page . '&item-action=' . implode( ',', $ids ), 'bulk-toplevel_page_formidable' ) ) . '">',
+			'<a href="' . esc_url( wp_nonce_url( '?page=formidable&frm_action=list&action=bulk_untrash&form_type=' . $current_page . '&item-action=' . implode( ',', $ids ), 'bulk-toplevel_page_formidable' ) ) . '">', // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 			'</a>'
 		);
-
-		return $message;
 	}
 
 	public static function destroy() {
@@ -479,8 +984,9 @@ class FrmFormsController {
 		check_admin_referer( 'destroy_form_' . $params['id'] );
 
 		$count = 0;
+
 		if ( FrmForm::destroy( $params['id'] ) ) {
-			$count ++;
+			++$count;
 		}
 
 		/* translators: %1$s: Number of forms */
@@ -489,38 +995,50 @@ class FrmFormsController {
 		self::display_forms_list( $params, $message );
 	}
 
+	/**
+	 * @param array $ids
+	 *
+	 * @return string
+	 */
 	public static function bulk_destroy( $ids ) {
 		FrmAppHelper::permission_check( 'frm_delete_forms' );
 
 		$count = 0;
+
 		foreach ( $ids as $id ) {
 			$d = FrmForm::destroy( $id );
+
 			if ( $d ) {
-				$count ++;
+				++$count;
 			}
 		}
 
-		/* translators: %1$s: Number of forms */
-		$message = sprintf( _n( '%1$s form permanently deleted.', '%1$s forms permanently deleted.', $count, 'formidable' ), $count );
+		if ( $count ) {
+			/* translators: %1$s: Number of forms */
+			return sprintf( _n( '%1$s form permanently deleted.', '%1$s forms permanently deleted.', $count, 'formidable' ), $count );
+		}
 
-		return $message;
+		return '';
 	}
 
-	private static function delete_all() {
+	/**
+	 * @since 6.7.1 Function went from private to public.
+	 */
+	public static function delete_all() {
 		// Check nonce url.
 		$permission_error = FrmAppHelper::permission_nonce_error( 'frm_delete_forms', '_wpnonce', 'bulk-toplevel_page_formidable' );
+
 		if ( $permission_error !== false ) {
 			self::display_forms_list( array(), '', array( $permission_error ) );
-
 			return;
 		}
 
-		$count   = FrmForm::scheduled_delete( time() );
+		$count = FrmForm::scheduled_delete( time() );
+		$url   = remove_query_arg( array( 'delete_all' ) );
+		$url  .= '&message=forms_permanently_deleted&forms_deleted=' . $count;
 
-		/* translators: %1$s: Number of forms */
-		$message = sprintf( _n( '%1$s form permanently deleted.', '%1$s forms permanently deleted.', $count, 'formidable' ), $count );
-
-		self::display_forms_list( array(), $message );
+		wp_safe_redirect( $url );
+		die();
 	}
 
 	/**
@@ -529,54 +1047,40 @@ class FrmFormsController {
 	 * @since 4.0
 	 */
 	public static function build_new_form() {
-		global $wpdb;
-
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
 		check_ajax_referer( 'frm_ajax', 'nonce' );
 
 		$new_values             = self::get_modal_values();
 		$new_values['form_key'] = $new_values['name'];
+		$new_values['options']  = array(
+			'antispam'           => 1,
+			'on_submit_migrated' => 1,
+		);
+
+		/**
+		 * Allows changing form values before creating from the modal.
+		 *
+		 * @since 5.4
+		 *
+		 * @param array $values Form values.
+		 */
+		$new_values = apply_filters( 'frm_new_form_values', $new_values );
 
 		$form_id = FrmForm::create( $new_values );
+		/**
+		 * @since 5.3
+		 *
+		 * @param int $form_id
+		 */
+		do_action( 'frm_build_new_form', $form_id );
 
+		self::create_submit_button_field( $form_id );
+		self::create_default_on_submit_action( $form_id );
 		self::create_default_email_action( $form_id );
 
 		$response = array(
-			'redirect' => FrmForm::get_edit_link( $form_id ),
+			'redirect' => FrmForm::get_edit_link( $form_id ) . '&new_template=true',
 		);
-
-		echo wp_json_encode( $response );
-		wp_die();
-	}
-
-	/**
-	 * Create a custom template from a form
-	 *
-	 * @since 3.06
-	 */
-	public static function build_template() {
-		global $wpdb;
-
-		FrmAppHelper::permission_check( 'frm_edit_forms' );
-		check_ajax_referer( 'frm_ajax', 'nonce' );
-
-		$form_id     = FrmAppHelper::get_param( 'xml', '', 'post', 'absint' );
-		$new_form_id = FrmForm::duplicate( $form_id, 1, true );
-		if ( empty( $new_form_id ) ) {
-			$response = array(
-				'message' => __( 'There was an error creating a template.', 'formidable' ),
-			);
-		} else {
-			$new_values    = self::get_modal_values();
-			$query_results = $wpdb->update( $wpdb->prefix . 'frm_forms', $new_values, array( 'id' => $new_form_id ) );
-			if ( $query_results ) {
-				FrmForm::clear_form_cache();
-			}
-
-			$response = array(
-				'redirect' => admin_url( 'admin.php?page=formidable&frm_action=list_templates' ),
-			);
-		}
 
 		echo wp_json_encode( $response );
 		wp_die();
@@ -586,8 +1090,10 @@ class FrmFormsController {
 	 * Before creating a new form, get the name and description from the modal.
 	 *
 	 * @since 4.0
+	 *
+	 * @return array<string,string>
 	 */
-	private static function get_modal_values() {
+	public static function get_modal_values() {
 		$name = FrmAppHelper::get_param( 'name', '', 'post', 'sanitize_text_field' );
 		$desc = FrmAppHelper::get_param( 'desc', '', 'post', 'sanitize_textarea_field' );
 
@@ -602,20 +1108,31 @@ class FrmFormsController {
 	 * Hook exists since 2.5.0
 	 *
 	 * @since 2.0.15
+	 *
+	 * @return void
 	 */
 	public static function insert_form_button() {
-		if ( current_user_can( 'frm_view_forms' ) ) {
-			$menu_name = FrmAppHelper::get_menu_name();
-			$icon      = apply_filters( 'frm_media_icon', FrmAppHelper::svg_logo() );
-			echo '<a href="#TB_inline?width=50&height=50&inlineId=frm_insert_form" class="thickbox button add_media frm_insert_form" title="' . esc_attr__( 'Add forms and content', 'formidable' ) . '">' .
-				FrmAppHelper::kses( $icon, 'all' ) .
-				' ' . esc_html( $menu_name ) . '</a>'; // WPCS: XSS ok.
+		if ( ! current_user_can( 'frm_view_forms' ) ) {
+			return;
 		}
+
+		// Store the result in memory and re-use it when this function is called multiple times.
+		// This helps speed up the form builder when there are a lot of HTML fields, where this
+		// Button is inserted once per HTML field.
+		// In a form with 66 HTML fields, this saves 0.5 seconds on page load time, tested locally.
+		if ( ! isset( self::$formidable_tinymce_button ) ) {
+			FrmAppHelper::load_admin_wide_js();
+			$icon                            = apply_filters( 'frm_media_icon', FrmAppHelper::svg_logo() );
+			self::$formidable_tinymce_button = '<a href="#TB_inline?width=50&height=50&inlineId=frm_insert_form" class="thickbox button add_media frm_insert_form" title="' . esc_attr__( 'Add forms and content', 'formidable' ) . '">' . FrmAppHelper::kses( $icon, 'all' ) . ' ' . esc_html( FrmAppHelper::get_menu_name() ) . '</a>'; // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+		}
+		echo self::$formidable_tinymce_button; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
+	/**
+	 * @return void
+	 */
 	public static function insert_form_popup() {
-		$page = basename( FrmAppHelper::get_server_value( 'PHP_SELF' ) );
-		if ( ! in_array( $page, array( 'post.php', 'page.php', 'page-new.php', 'post-new.php' ) ) ) {
+		if ( ! self::should_insert_form_popup() ) {
 			return;
 		}
 
@@ -627,10 +1144,39 @@ class FrmFormsController {
 				'label' => __( 'Insert a Form', 'formidable' ),
 			),
 		);
-
 		$shortcodes = apply_filters( 'frm_popup_shortcodes', $shortcodes );
 
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/insert_form_popup.php' );
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/insert_form_popup.php';
+
+		if ( ! FrmAppHelper::is_form_builder_page() || class_exists( '_WP_Editors', false ) ) {
+			return;
+		}
+
+		// Initialize a wysiwyg so we have usable settings defined in tinyMCEPreInit.mceInit
+		require ABSPATH . WPINC . '/class-wp-editor.php';
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		?>
+		<div class="frm_hidden">
+			<?php wp_editor( '', 'frm_description_placeholder', array() ); ?>
+		</div>
+		<?php
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
+	}
+
+	/**
+	 * Check the page being loaded, determine if this is a page that should include the form popup.
+	 *
+	 * @since 5.0.14
+	 *
+	 * @return bool
+	 */
+	private static function should_insert_form_popup() {
+		if ( FrmAppHelper::is_form_builder_page() ) {
+			return true;
+		}
+
+		$page = basename( FrmAppHelper::get_server_value( 'PHP_SELF' ) );
+		return in_array( $page, array( 'post.php', 'page.php', 'page-new.php', 'post-new.php' ), true );
 	}
 
 	public static function get_shortcode_opts() {
@@ -638,7 +1184,8 @@ class FrmFormsController {
 		check_ajax_referer( 'frm_ajax', 'nonce' );
 
 		$shortcode = FrmAppHelper::get_post_param( 'shortcode', '', 'sanitize_text_field' );
-		if ( empty( $shortcode ) ) {
+
+		if ( ! $shortcode ) {
 			wp_die();
 		}
 
@@ -665,69 +1212,94 @@ class FrmFormsController {
 					),
 				);
 		}
+
 		$opts = apply_filters( 'frm_sc_popup_opts', $opts, $shortcode );
 
 		if ( isset( $opts['form_id'] ) && is_string( $opts['form_id'] ) ) {
-			// allow other shortcodes to use the required form id option
+			// Allow other shortcodes to use the required form id option
 			$form_id = $opts['form_id'];
 			unset( $opts['form_id'] );
 		}
 
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/shortcode_opts.php' );
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/shortcode_opts.php';
 
 		echo '</div>';
 
 		wp_die();
 	}
 
+	/**
+	 * Display list of forms in a table.
+	 *
+	 * @param array  $params
+	 * @param string $message
+	 * @param array  $errors
+	 *
+	 * @return void
+	 */
 	public static function display_forms_list( $params = array(), $message = '', $errors = array() ) {
 		FrmAppHelper::permission_check( 'frm_view_forms' );
 
 		global $wpdb, $frm_vars;
 
-		if ( empty( $params ) ) {
+		if ( ! $params ) {
 			$params = FrmForm::list_page_params();
 		}
 
-		$wp_list_table = new FrmFormsListHelper( compact( 'params' ) );
-
-		$pagenum = $wp_list_table->get_pagenum();
+		/**
+		 * @since 5.3.1
+		 *
+		 * @param string $table_class Class name for List Helper.
+		 */
+		$table_class   = apply_filters( 'frm_forms_list_class', 'FrmFormsListHelper' );
+		$wp_list_table = new $table_class( compact( 'params' ) );
+		$pagenum       = $wp_list_table->get_pagenum();
 
 		$wp_list_table->prepare_items();
 
 		$total_pages = $wp_list_table->get_pagination_arg( 'total_pages' );
+
 		if ( $pagenum > $total_pages && $total_pages > 0 ) {
-			wp_redirect( esc_url_raw( add_query_arg( 'paged', $total_pages ) ) );
+			wp_safe_redirect( esc_url_raw( add_query_arg( 'paged', $total_pages ) ) );
 			die();
 		}
 
-		require( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/list.php' );
-	}
+		$error = FrmInbox::check_for_error();
 
-	public static function get_columns( $columns ) {
-		$columns['cb'] = '<input type="checkbox" />';
-		$columns['id'] = 'ID';
-
-		$type = FrmAppHelper::get_simple_request(
-			array(
-				'param'   => 'form_type',
-				'type'    => 'request',
-				'default' => 'published',
-			)
-		);
-
-		if ( 'template' == $type ) {
-			$columns['name']     = __( 'Template Name', 'formidable' );
-			$columns['type']     = __( 'Type', 'formidable' );
-			$columns['form_key'] = __( 'Key', 'formidable' );
-		} else {
-			$columns['name']      = __( 'Form Title', 'formidable' );
-			$columns['entries']   = __( 'Entries', 'formidable' );
-			$columns['form_key']  = __( 'Key', 'formidable' );
-			$columns['shortcode'] = __( 'Shortcodes', 'formidable' );
+		if ( $error ) {
+			$show_messages = array( $error['subject'] . '. ' . $error['message'] );
 		}
 
-		$columns['created_at'] = __( 'Date', 'formidable' );
+		require FrmAppHelper::plugin_path() . '/classes/views/frm-forms/list.php';
+	}
+
+	/**
+	 * @param array<string,string> $columns
+	 *
+	 * @return array<string,string>
+	 */
+	public static function get_columns( $columns ) {
+		$columns['cb']       = '<input type="checkbox" />';
+		$columns['name']     = esc_html__( 'Form Title', 'formidable' );
+		$columns['entries']  = esc_html__( 'Entries', 'formidable' );
+		$columns['views']    = esc_html__( 'Views', 'formidable' );
+		$columns['id']       = 'ID';
+		$columns['form_key'] = esc_html__( 'Key', 'formidable' );
+
+		if ( 'trash' !== FrmAppHelper::simple_get( 'form_type' ) && has_filter( 'frm_form_list_actions' ) ) {
+			// If there is any filters added, keep this column.
+			$columns['shortcode'] = esc_html__( 'Actions', 'formidable' );
+		}
+
+		$columns['created_at'] = esc_html__( 'Date', 'formidable' );
+
+		if ( 'trash' !== FrmAppHelper::simple_get( 'form_type' ) ) {
+			$columns['embeds']    = esc_html__( 'Embeds', 'formidable' );
+			$columns['settings']  = '<div class="frm-forms-list-settings-btn-wrapper"><a href="#" class="frm-forms-list-settings-btn">';
+			$columns['settings'] .= FrmAppHelper::icon_by_class( 'frmfont frm_settings_icon', array( 'echo' => false ) );
+			$columns['settings'] .= '<span class="screen-reader-text">' . esc_html__( 'List settings', 'formidable' ) . '</span>';
+			$columns['settings'] .= '</a></div>';
+		}
 
 		add_screen_option(
 			'per_page',
@@ -741,6 +1313,9 @@ class FrmFormsController {
 		return $columns;
 	}
 
+	/**
+	 * @return array<string,string>
+	 */
 	public static function get_sortable_columns() {
 		return array(
 			'id'          => 'id',
@@ -751,7 +1326,16 @@ class FrmFormsController {
 		);
 	}
 
+	/**
+	 * @param mixed $hidden_columns
+	 *
+	 * @return array
+	 */
 	public static function hidden_columns( $hidden_columns ) {
+		if ( ! is_array( $hidden_columns ) ) {
+			$hidden_columns = array();
+		}
+
 		$type = FrmAppHelper::get_simple_request(
 			array(
 				'param' => 'form_type',
@@ -767,136 +1351,218 @@ class FrmFormsController {
 		return $hidden_columns;
 	}
 
+	/**
+	 * @param mixed      $save
+	 * @param string     $option
+	 * @param int|string $value
+	 *
+	 * @return mixed
+	 */
 	public static function save_per_page( $save, $option, $value ) {
-		if ( $option == 'formidable_page_formidable_per_page' ) {
-			$save = (int) $value;
+		if ( $option === 'formidable_page_formidable_per_page' ) {
+			return (int) $value;
 		}
 
 		return $save;
 	}
 
 	/**
-	 * Show the template listing page
+	 * @param int|string $id
+	 * @param array      $errors
+	 * @param string     $message
+	 * @param bool       $create_link
 	 *
-	 * @since 3.06
+	 * @return void
 	 */
-	private static function list_templates() {
-		self::init_modal();
-
-		$where = apply_filters( 'frm_forms_dropdown', array(), '' );
-		$forms = FrmForm::get_published_forms( $where );
-
-		$api       = new FrmFormTemplateApi();
-		$templates = $api->get_api_info();
-		self::add_user_templates( $templates );
-
-		$error   = '';
-		$expired = false;
-		$license_type = '';
-		if ( isset( $templates['error'] ) ) {
-			$error   = $templates['error']['message'];
-			$error   = str_replace( 'utm_medium=addons', 'utm_medium=form-templates', $error );
-			$expired = ( $templates['error']['code'] === 'expired' );
-
-			$license_type = isset( $templates['error']['type'] ) ? $templates['error']['type'] : '';
-			unset( $templates['error'] );
-		}
-
-		$pricing = FrmAppHelper::admin_upgrade_link( 'form-templates' );
-
-		require( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/list-templates.php' );
-	}
-
-	private static function add_user_templates( &$templates ) {
-		$user_templates = array(
-			'is_template'      => 1,
-			'default_template' => 0,
-		);
-		$user_templates = FrmForm::getAll( $user_templates, 'name' );
-		foreach ( $user_templates as $template ) {
-			$template = array(
-				'id'          => $template->id,
-				'name'        => $template->name,
-				'key'         => $template->form_key,
-				'description' => $template->description,
-				'url'         => admin_url( 'admin.php?page=formidable&frm_action=duplicate&id=' . absint( $template->id ) ),
-				'released'    => $template->created_at,
-				'installed'   => 1,
-			);
-			array_unshift( $templates, $template );
-			unset( $template );
-		}
-	}
-
 	private static function get_edit_vars( $id, $errors = array(), $message = '', $create_link = false ) {
 		global $frm_vars;
 
-		$form = FrmForm::getOne( $id );
+		$form       = FrmForm::getOne( $id );
+		$error_args = array(
+			'title'        => __( 'You can\'t edit the form', 'formidable' ),
+			'body'         => __( 'You are trying to edit a form that does not exist', 'formidable' ),
+			'cancel_url'   => admin_url( 'admin.php?page=formidable' ),
+			'continue_url' => add_query_arg(
+				array(
+					'page' => 'formidable',
+				)
+			),
+		);
+
 		if ( ! $form ) {
-			wp_die( esc_html__( 'You are trying to edit a form that does not exist.', 'formidable' ) );
+			FrmAppController::show_error_modal( $error_args );
+			return;
+		}
+
+		if ( 'trash' === $form->status ) {
+			$error_args['body']          = __( 'The form you\'re trying to edit is in trash. You must restore it first before you can make changes', 'formidable' );
+			$error_args['continue_url']  = add_query_arg(
+				array(
+					'page'       => 'formidable',
+					'_wpnonce'   => wp_create_nonce( 'untrash_form_' . $id ),
+					'form_type'  => 'trash',
+					'frm_action' => 'untrash',
+					'id'         => $id,
+				)
+			);
+			$error_args['continue_text'] = __( 'Restore form', 'formidable' );
+			FrmAppController::show_error_modal( $error_args );
+			return;
 		}
 
 		if ( $form->parent_form_id ) {
 			/* translators: %1$s: Start link HTML, %2$s: End link HTML */
-			wp_die( sprintf( esc_html__( 'You are trying to edit a child form. Please edit from %1$shere%2$s', 'formidable' ), '<a href="' . esc_url( FrmForm::get_edit_link( $form->parent_form_id ) ) . '">', '</a>' ) );
+			wp_die( sprintf( esc_html__( 'You are trying to edit a child form. Please edit from %1$shere%2$s', 'formidable' ), '<a href="' . esc_url( FrmForm::get_edit_link( $form->parent_form_id ) ) . '">', '</a>' ) ); // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 		}
 
 		$frm_field_selection = FrmField::field_selection();
-
-		$fields = FrmField::get_all_for_form( $form->id );
+		$fields              = FrmField::get_all_for_form( $form->id );
 
 		// Automatically add end section fields if they don't exist (2.0 migration).
 		$reset_fields = false;
 		FrmFormsHelper::auto_add_end_section_fields( $form, $fields, $reset_fields );
+		FrmSubmitHelper::maybe_create_submit_field( $form, $fields, $reset_fields );
 
 		if ( $reset_fields ) {
 			$fields = FrmField::get_all_for_form( $form->id, '', 'exclude' );
 		}
 
-		unset( $end_section_values, $last_order, $open, $reset_fields );
+		unset( $reset_fields );
 
-		$args             = array( 'parent_form_id' => $form->id );
-		$values           = FrmAppHelper::setup_edit_vars( $form, 'forms', '', true, array(), $args );
-		$values['fields'] = $fields;
+		$args   = array( 'parent_form_id' => $form->id );
+		$values = FrmAppHelper::setup_edit_vars( $form, 'forms', '', true, array(), $args );
+
+		/**
+		 * Allows modifying the list of fields in the form builder.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param object[] $fields Array of fields.
+		 * @param array    $args   The arguments. Contains `form`.
+		 */
+		$values['fields'] = apply_filters( 'frm_fields_in_form_builder', $fields, compact( 'form' ) );
 
 		$edit_message = __( 'Form was successfully updated.', 'formidable' );
-		if ( $form->is_template && $message == $edit_message ) {
+
+		if ( $form->is_template && $message === $edit_message ) {
 			$message = __( 'Template was successfully updated.', 'formidable' );
 		}
 
-		$all_templates = FrmForm::getAll( array( 'is_template' => 1 ), 'name' );
-		$has_fields    = isset( $values['fields'] ) && ! empty( $values['fields'] );
+		self::maybe_update_form_builder_message( $message );
+
+		$has_fields = ! empty( $values['fields'] ) && ! FrmSubmitHelper::only_contains_submit_field( $values['fields'] );
 
 		if ( defined( 'DOING_AJAX' ) ) {
 			wp_die();
-		} else {
-			require( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/edit.php' );
+		}
+
+		require FrmAppHelper::plugin_path() . '/classes/views/frm-forms/edit.php';
+	}
+
+	/**
+	 * @param array $fields
+	 *
+	 * @return array
+	 */
+	public static function update_form_builder_fields( $fields ) {
+		foreach ( $fields as $field ) {
+			$field->do_not_include_icons = true;
+		}
+		return $fields;
+	}
+
+	/**
+	 * @param string $message
+	 *
+	 * @return void
+	 */
+	public static function maybe_update_form_builder_message( &$message ) {
+		if ( 'form_duplicated' === FrmAppHelper::simple_get( 'message' ) ) {
+			$message = __( 'Form was Successfully Copied', 'formidable' );
 		}
 	}
 
-	public static function get_settings_vars( $id, $errors = array(), $message = '' ) {
+	/**
+	 * @param int|string   $id
+	 * @param array        $errors
+	 * @param array|string $args
+	 *
+	 * @return void
+	 */
+	public static function get_settings_vars( $id, $errors = array(), $args = array() ) {
 		FrmAppHelper::permission_check( 'frm_edit_forms' );
 
 		global $frm_vars;
 
-		$form   = FrmForm::getOne( $id );
-		$fields = FrmField::get_all_for_form( $id );
-		$values = FrmAppHelper::setup_edit_vars( $form, 'forms', $fields, true );
+		self::maybe_print_media_templates();
+
+		if ( ! is_array( $args ) ) {
+			// For reverse compatibility.
+			$args = array(
+				'message' => $args,
+			);
+		}
+
+		$defaults = array(
+			'message'  => '',
+			'warnings' => array(),
+		);
+		$args     = array_merge( $defaults, $args );
+		$message  = $args['message'];
+		$warnings = $args['warnings'];
+		$form     = FrmForm::getOne( $id );
+		$fields   = FrmField::get_all_for_form( $id );
+		$values   = FrmAppHelper::setup_edit_vars( $form, 'forms', $fields, true );
+
+		/**
+		 * Allows changing fields in the form settings.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param array $fields Array of fields.
+		 * @param array $args   The arguments. Contains `form`.
+		 */
+		$values['fields'] = apply_filters( 'frm_fields_in_settings', $values['fields'], compact( 'form' ) );
 
 		self::clean_submit_html( $values );
 
 		$sections = self::get_settings_tabs( $values );
 		$current  = FrmAppHelper::simple_get( 't', 'sanitize_title', 'advanced_settings' );
 
-		require( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings.php' );
+		require FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings.php';
+	}
+
+	/**
+	 * Print WordPress media templates email actions does not trigger a "Uncaught Error: Template not found: #tmpl-media-selection" error when the media button is clicked.
+	 *
+	 * @since 6.10
+	 *
+	 * @return void
+	 */
+	private static function maybe_print_media_templates() {
+		if ( FrmAppHelper::pro_is_included() ) {
+			// This issue does not exist when Pro is active so exit early.
+			return;
+		}
+
+		add_action(
+			'wp_enqueue_editor',
+			function () {
+				wp_print_media_templates();
+			}
+		);
 	}
 
 	/**
 	 * @since 4.0
+	 *
+	 * @param array $atts
+	 *
+	 * @return void
 	 */
 	public static function form_publish_button( $atts ) {
 		$values = $atts['values'];
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/_publish_box.php' );
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/_publish_box.php';
 	}
 
 	/**
@@ -905,6 +1571,7 @@ class FrmFormsController {
 	 * @since 4.0
 	 *
 	 * @param array $values
+	 *
 	 * @return array
 	 */
 	private static function get_settings_tabs( $values ) {
@@ -912,59 +1579,102 @@ class FrmFormsController {
 			'advanced'    => array(
 				'name'     => __( 'General', 'formidable' ),
 				'title'    => __( 'General Form Settings', 'formidable' ),
-				'function' => array( __CLASS__, 'advanced_settings' ),
-				'icon'     => 'frm_icon_font frm_settings_icon',
+				'function' => array( self::class, 'advanced_settings' ),
+				'icon'     => 'frmfont frm_small_settings_icon',
 			),
 			'email'       => array(
 				'name'     => __( 'Actions & Notifications', 'formidable' ),
 				'function' => array( 'FrmFormActionsController', 'email_settings' ),
 				'id'       => 'frm_notification_settings',
-				'icon'     => 'frm_icon_font frm_mail_bulk_icon',
+				'icon'     => 'frmfont frm_notification_check_icon',
+			),
+			'spam'        => array(
+				'name'     => __( 'Spam', 'formidable' ),
+				'function' => array( self::class, 'spam_settings' ),
+				'icon'     => 'frmfont frm_shield_check2_icon',
 			),
 			'permissions' => array(
-				'name'     => __( 'Form Permissions', 'formidable' ),
-				'icon'     => 'frm_icon_font frm_lock_icon',
-				'html_class' => 'frm_show_upgrade frm_noallow',
-				'data'     => array(
-					'medium'  => 'permissions',
-					'upgrade' => __( 'Form Permissions', 'formidable' ),
+				'name'       => __( 'Form Permissions', 'formidable' ),
+				'icon'       => 'frmfont frm_lock_closed2_icon',
+				'html_class' => 'frm_show_upgrade_tab frm_noallow',
+				'data'       => array(
+					'medium'     => 'permissions',
+					'upgrade'    => __( 'Form Permissions', 'formidable' ),
+					'message'    => __( 'Allow editing, protect forms and files, limit entries, and save drafts. Upgrade to get form and entry permissions.', 'formidable' ),
+					'screenshot' => 'permissions.png',
+					'learn-more' => FrmAppHelper::get_doc_url( 'general-form-settings/#kb-form-permissions', 'form-permissions-settings' ),
 				),
 			),
-			'scheduling' => array(
-				'name'     => __( 'Form Scheduling', 'formidable' ),
-				'icon'     => 'frm_icon_font frm_calendar_icon',
-				'html_class' => 'frm_show_upgrade frm_noallow',
-				'data'     => array(
-					'medium'  => 'scheduling',
-					'upgrade' => __( 'Form scheduling settings', 'formidable' ),
+			'scheduling'  => array(
+				'name'       => __( 'Form Scheduling', 'formidable' ),
+				'icon'       => 'frmfont frm_schedule_icon',
+				'html_class' => 'frm_show_upgrade_tab frm_noallow',
+				'data'       => array(
+					'medium'     => 'scheduling',
+					'upgrade'    => __( 'Form scheduling settings', 'formidable' ),
+					'screenshot' => 'scheduling.png',
+					'learn-more' => FrmAppHelper::get_doc_url( 'general-form-settings/#kb-form-scheduling', 'form-scheduling-settings' ),
 				),
 			),
 			'buttons'     => array(
-				'name'     => __( 'Styling & Buttons', 'formidable' ),
-				'class'    => __CLASS__,
+				'name'     => __( 'Buttons', 'formidable' ),
+				'class'    => self::class,
 				'function' => 'buttons_settings',
-				'icon'     => 'frm_icon_font frm_pallet_icon',
+				'icon'     => 'frmfont frm-buttons-style',
+			),
+			'landing'     => array(
+				'name'       => __( 'Form Landing Page', 'formidable' ),
+				'icon'       => 'frmfont frm_cross_device_icon',
+				'html_class' => 'frm_show_upgrade_tab frm_noallow',
+				'data'       => FrmAppHelper::get_landing_page_upgrade_data_params(),
+			),
+			'chat'        => array(
+				'name'       => __( 'Conversational Forms', 'formidable' ),
+				'icon'       => 'frmfont frm_chat_bubbles_icon',
+				'html_class' => 'frm_show_upgrade_tab frm_noallow',
+				'data'       => FrmAppHelper::get_upgrade_data_params(
+					'chat',
+					array(
+						'upgrade'    => __( 'Conversational Forms', 'formidable' ),
+						'message'    => __( 'Ask one question at a time for automated conversations.', 'formidable' ),
+						'screenshot' => 'chat.png',
+						'learn-more' => FrmAppHelper::get_doc_url( 'conversational-forms', 'conversational-forms-settings', false ),
+					)
+				),
+			),
+			'abandonment' => array(
+				'name'       => __( 'Form Abandonment', 'formidable' ),
+				'icon'       => 'frmfont frm_abandoned_icon',
+				'html_class' => 'frm_show_upgrade_tab frm_noallow',
+				'data'       => FrmAppHelper::get_upgrade_data_params(
+					'abandonment',
+					array(
+						'upgrade'    => __( 'Form abandonment settings', 'formidable' ),
+						'message'    => __( 'Unlock the power of data capture to boost lead generation and master the art of form optimization.', 'formidable' ),
+						'screenshot' => 'abandonment.png',
+						'learn-more' => FrmAppHelper::get_doc_url( 'features/form-abandonment-wordpress-plugin', 'form-abandonment-settings', false ),
+					)
+				),
 			),
 			'html'        => array(
 				'name'     => __( 'Customize HTML', 'formidable' ),
-				'class'    => __CLASS__,
+				'class'    => self::class,
 				'function' => 'html_settings',
-				'icon'     => 'frm_icon_font frm_code_icon',
+				'icon'     => 'frmfont frm_code2_icon',
 			),
 		);
 
-		$sections = apply_filters( 'frm_add_form_settings_section', $sections, $values );
-
-		if ( FrmAppHelper::pro_is_installed() && ! FrmAppHelper::meets_min_pro_version( '4.0' ) ) {
-			// Prevent settings from showing in 2 spots.
-			unset( $sections['permissions'], $sections['scheduling'] );
+		if ( ! has_action( 'frm_add_form_style_tab_options' ) && ! has_action( 'frm_add_form_button_options' ) ) {
+			unset( $sections['buttons'] );
 		}
+
+		$sections = apply_filters( 'frm_add_form_settings_section', $sections, $values );
 
 		foreach ( $sections as $key => $section ) {
 			$defaults = array(
 				'html_class' => '',
 				'name'       => ucfirst( $key ),
-				'icon'       => 'frm_icon_font frm_settings_icon',
+				'icon'       => 'frmfont frm_settings_icon',
 			);
 
 			$section = array_merge( $defaults, $section );
@@ -972,6 +1682,7 @@ class FrmFormsController {
 			if ( ! isset( $section['anchor'] ) ) {
 				$section['anchor'] = $key;
 			}
+
 			$section['anchor'] .= '_settings';
 
 			if ( ! isset( $section['title'] ) ) {
@@ -983,7 +1694,7 @@ class FrmFormsController {
 			}
 
 			$sections[ $key ] = $section;
-		}
+		}//end foreach
 
 		return $sections;
 	}
@@ -992,31 +1703,45 @@ class FrmFormsController {
 	 * @since 4.0
 	 *
 	 * @param array $values
+	 *
+	 * @return void
 	 */
 	public static function advanced_settings( $values ) {
 		$first_h3 = 'frm_first_h3';
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings-advanced.php';
+	}
 
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings-advanced.php' );
+	/**
+	 * @since 6.33
+	 *
+	 * @param array $values
+	 *
+	 * @return void
+	 */
+	public static function spam_settings( $values ) {
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/spam-settings.php';
 	}
 
 	/**
 	 * @since 4.0
 	 *
 	 * @param array $values
+	 *
+	 * @return void
 	 */
 	public static function buttons_settings( $values ) {
-		$styles = apply_filters( 'frm_get_style_opts', array() );
-
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings-buttons.php' );
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings-buttons.php';
 	}
 
 	/**
 	 * @since 4.0
 	 *
 	 * @param array $values
+	 *
+	 * @return void
 	 */
 	public static function html_settings( $values ) {
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings-html.php' );
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/settings-html.php';
 	}
 
 	/**
@@ -1024,7 +1749,9 @@ class FrmFormsController {
 	 *
 	 * @since 2.03.08
 	 *
-	 * @param array|boolean $values
+	 * @param array|bool $values
+	 *
+	 * @return void
 	 */
 	private static function clean_submit_html( &$values ) {
 		if ( is_array( $values ) && isset( $values['submit_html'] ) ) {
@@ -1032,22 +1759,63 @@ class FrmFormsController {
 		}
 	}
 
-	public static function mb_tags_box( $form_id, $class = '' ) {
-		$fields       = FrmField::get_all_for_form( $form_id, '', 'include' );
-		$linked_forms = array();
-		$col          = 'one';
-		$settings_tab = FrmAppHelper::is_admin_page( 'formidable' ) ? true : false;
+	/**
+	 * Updates classes used in submit and prev buttons to avoid conflict with twenty twenty-one theme.
+	 *
+	 * @param array $classes
+	 *
+	 * @return array
+	 */
+	public static function update_button_classes( $classes ) {
+		if ( function_exists( 'twenty_twenty_one_setup' ) ) {
+			$classes[] = 'has-text-color has-background';
+		}
 
+		return $classes;
+	}
+
+	/**
+	 * @since 6.27 Added $template_path parameter.
+	 *
+	 * @param int|string $form_id
+	 * @param string     $class
+	 * @param string     $template_path The path to a template file to use instead of the default.
+	 *
+	 * @return void
+	 */
+	public static function mb_tags_box( $form_id, $class = '', $template_path = 'default' ) {
+		$fields = FrmField::get_all_for_form( $form_id, '', 'include' );
+
+		/**
+		 * Allows modifying the list of fields in the tags box.
+		 *
+		 * @since 5.0.04
+		 *
+		 * @param array $fields The list of fields.
+		 * @param array $args   The arguments. Contains `form_id`.
+		 */
+		$fields           = apply_filters( 'frm_fields_in_tags_box', $fields, compact( 'form_id' ) );
+		$linked_forms     = array();
+		$col              = 'one';
+		$settings_tab     = FrmAppHelper::is_admin_page( 'formidable' );
 		$cond_shortcodes  = apply_filters( 'frm_conditional_shortcodes', array() );
-		$entry_shortcodes = self::get_shortcode_helpers( $settings_tab );
-
+		$entry_shortcodes = self::get_shortcode_helpers( $settings_tab, $form_id );
 		$advanced_helpers = self::advanced_helpers( compact( 'fields', 'form_id' ) );
 
-		include( FrmAppHelper::plugin_path() . '/classes/views/shared/mb_adv_info.php' );
+		if ( 'default' === $template_path || ! file_exists( $template_path ) ) {
+			include FrmAppHelper::plugin_path() . '/classes/views/shared/mb_adv_info.php';
+			return;
+		}
+
+		include $template_path;
 	}
 
 	/**
 	 * @since 3.04.01
+	 *
+	 * @param array $atts
+	 *
+	 * @return array
 	 */
 	private static function advanced_helpers( $atts ) {
 		$advanced_helpers = array(
@@ -1058,15 +1826,17 @@ class FrmFormsController {
 		);
 
 		$user_fields = self::user_shortcodes();
-		if ( ! empty( $user_fields ) ) {
+
+		if ( $user_fields ) {
 			$user_helpers = array();
+
 			foreach ( $user_fields as $uk => $uf ) {
 				$user_helpers[ '|user_id| show="' . $uk . '"' ] = $uf;
 				unset( $uk, $uf );
 			}
 
 			$advanced_helpers['user_id'] = array(
-				'codes'   => $user_helpers,
+				'codes' => $user_helpers,
 			);
 		}
 
@@ -1075,9 +1845,128 @@ class FrmFormsController {
 		 *
 		 * @since 3.04.01
 		 *
+		 * @param array $advanced_helpers
 		 * @param array $atts - Includes fields and form_id
 		 */
 		return apply_filters( 'frm_advanced_helpers', $advanced_helpers, $atts );
+	}
+
+	/**
+	 * Adds a shortcode for each part of a multi-part field to the field shortcode list,
+	 * so a single part can be used on its own, like [25 show=first] for a Name field.
+	 *
+	 * @since 6.35
+	 *
+	 * @param array $atts Includes 'field'.
+	 *
+	 * @return void
+	 */
+	public static function field_part_shortcodes( $atts ) {
+		$field = $atts['field'];
+
+		foreach ( self::get_field_parts( $field ) as $part => $label ) {
+			FrmFormsHelper::insert_opt_html(
+				array(
+					'id'          => $field->id . ' show=' . $part,
+					'key'         => $field->field_key . ' show=' . $part,
+					// Keep the part label and the option out of the truncated text so they stay readable.
+					'key_label'   => $field->field_key,
+					'key_suffix'  => ' show=' . $part,
+					'name'        => $field->name,
+					'name_suffix' => ' (' . $label . ')',
+					'type'        => $field->type,
+					'class'       => 'frm-customize-list dropdown-item',
+				)
+			);
+			unset( $part, $label );
+		}
+	}
+
+	/**
+	 * Gets the parts of a multi-part field that can be shown on their own with a show= shortcode option.
+	 *
+	 * @since 6.35
+	 *
+	 * @param stdClass $field
+	 *
+	 * @return array Part labels keyed by the show= option value.
+	 */
+	private static function get_field_parts( $field ) {
+		$parts = array();
+
+		if ( 'name' === $field->type ) {
+			$parts = self::get_name_field_parts( $field );
+		} elseif ( 'address' === $field->type ) {
+			$parts = self::get_address_field_parts( $field );
+		}
+
+		/**
+		 * Allows add-ons to add the parts of their own multi-part fields.
+		 *
+		 * @since 6.35
+		 *
+		 * @param array    $parts Part labels keyed by the show= option value.
+		 * @param stdClass $field The field the parts belong to.
+		 */
+		return apply_filters( 'frm_field_parts_for_shortcodes', $parts, $field );
+	}
+
+	/**
+	 * Gets the parts of a Name field that are in use. Only the parts included in the
+	 * selected name layout hold a value, so the rest would always show as blank.
+	 *
+	 * @since 6.35
+	 *
+	 * @param stdClass $field
+	 *
+	 * @return array Part labels keyed by the show= option value, in layout order.
+	 */
+	private static function get_name_field_parts( $field ) {
+		$labels = array(
+			'first'  => __( 'First', 'formidable' ),
+			'middle' => __( 'Middle', 'formidable' ),
+			'last'   => __( 'Last', 'formidable' ),
+		);
+		$layout = FrmField::get_option( $field, 'name_layout' );
+
+		if ( ! $layout ) {
+			$layout = 'first_last';
+		}
+
+		// The layout option names the parts in use, in display order, like first_middle_last.
+		$parts = array();
+
+		foreach ( explode( '_', $layout ) as $part ) {
+			if ( isset( $labels[ $part ] ) ) {
+				$parts[ $part ] = $labels[ $part ];
+			}
+			unset( $part );
+		}
+
+		return $parts;
+	}
+
+	/**
+	 * Gets the parts of an Address field that are in use. The address type decides which
+	 * parts are on the form, so the rest would always show as blank.
+	 *
+	 * @since 6.35
+	 *
+	 * @param stdClass $field
+	 *
+	 * @return array Part labels keyed by the show= option value.
+	 */
+	private static function get_address_field_parts( $field ) {
+		$parts        = FrmFieldAddress::get_part_labels();
+		$address_type = FrmField::get_option( $field, 'address_type' );
+
+		if ( in_array( $address_type, array( 'us', 'generic' ), true ) ) {
+			unset( $parts['country'] );
+		} elseif ( 'europe' === $address_type ) {
+			unset( $parts['state'] );
+		}
+
+		return $parts;
 	}
 
 	/**
@@ -1085,6 +1974,8 @@ class FrmFormsController {
 	 * of the customization panel
 	 *
 	 * @since 2.0.6
+	 *
+	 * @return array
 	 */
 	private static function get_advanced_shortcodes() {
 		$adv_shortcodes = array(
@@ -1103,15 +1994,16 @@ class FrmFormsController {
 				'title' => __( 'Do not automatically add any paragraphs or line breaks', 'formidable' ),
 			),
 		);
-		$adv_shortcodes = apply_filters( 'frm_advanced_shortcodes', $adv_shortcodes );
 
 		// __( 'Leave blank instead of defaulting to User Login', 'formidable' ) : blank=1
 
-		return $adv_shortcodes;
+		return apply_filters( 'frm_advanced_shortcodes', $adv_shortcodes );
 	}
 
 	/**
 	 * @since 3.04.01
+	 *
+	 * @return array
 	 */
 	private static function user_shortcodes() {
 		$options = array(
@@ -1132,8 +2024,13 @@ class FrmFormsController {
 	 * Get an array of the helper shortcodes to display in the customization panel
 	 *
 	 * @since 2.0.6
+	 *
+	 * @param bool $settings_tab
+	 * @param int  $form_id
+	 *
+	 * @return array
 	 */
-	private static function get_shortcode_helpers( $settings_tab ) {
+	private static function get_shortcode_helpers( $settings_tab, $form_id = 0 ) {
 		$entry_shortcodes = array(
 			'id'         => __( 'Entry ID', 'formidable' ),
 			'key'        => __( 'Entry Key', 'formidable' ),
@@ -1144,16 +2041,13 @@ class FrmFormsController {
 			''           => '',
 			'siteurl'    => __( 'Site URL', 'formidable' ),
 			'sitename'   => __( 'Site Name', 'formidable' ),
+			'form_name'  => __( 'Form Name', 'formidable' ),
 		);
+
+		$entry_shortcodes = array_merge( FrmShortcodeHelper::get_contextual_shortcode_values(), $entry_shortcodes );
 
 		if ( ! FrmAppHelper::pro_is_installed() ) {
 			unset( $entry_shortcodes['post_id'] );
-		}
-
-		if ( $settings_tab ) {
-			$entry_shortcodes['default-message'] = __( 'Default Msg', 'formidable' );
-			$entry_shortcodes['default-html']    = __( 'Default HTML', 'formidable' );
-			$entry_shortcodes['default-plain']   = __( 'Default Plain', 'formidable' );
 		}
 
 		/**
@@ -1161,41 +2055,76 @@ class FrmFormsController {
 		 * in the customization panel
 		 *
 		 * @since 2.0.6
+		 *
+		 * @param array $entry_shortcodes
+		 * @param bool  $settings_tab
+		 * @param int   $form_id
 		 */
-		$entry_shortcodes = apply_filters( 'frm_helper_shortcodes', $entry_shortcodes, $settings_tab );
-
-		return $entry_shortcodes;
+		return apply_filters( 'frm_helper_shortcodes', $entry_shortcodes, $settings_tab, $form_id );
 	}
 
 	/**
-	 * Insert the form class setting into the form
+	 * Insert the form class setting into the form.
+	 *
+	 * @param stdClass $form
+	 *
+	 * @return void
 	 */
 	public static function form_classes( $form ) {
 		if ( isset( $form->options['form_class'] ) ) {
 			echo esc_attr( sanitize_text_field( $form->options['form_class'] ) );
 		}
 
-		if ( isset( $form->options['js_validate'] ) && $form->options['js_validate'] ) {
+		if ( ! empty( $form->options['js_validate'] ) ) {
 			echo ' frm_js_validate ';
+			self::add_js_validate_form_to_global_vars( $form );
 		}
+
+		if ( FrmForm::is_ajax_on( $form ) ) {
+			echo ' frm_ajax_submit ';
+		}
+	}
+
+	/**
+	 * @since 5.0.03
+	 *
+	 * @param stdClass $form
+	 */
+	public static function add_js_validate_form_to_global_vars( $form ) {
+		global $frm_vars;
+
+		if ( ! isset( $frm_vars['js_validate_forms'] ) ) {
+			$frm_vars['js_validate_forms'] = array();
+		}
+		$frm_vars['js_validate_forms'][ $form->id ] = $form;
 	}
 
 	public static function get_email_html() {
 		FrmAppHelper::permission_check( 'frm_view_forms' );
 		check_ajax_referer( 'frm_ajax', 'nonce' );
 
-		echo FrmEntriesController::show_entry_shortcode( // WPCS: XSS ok.
+		echo FrmEntriesController::show_entry_shortcode( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			array(
-				'form_id'       => FrmAppHelper::get_post_param( 'form_id', '', 'absint' ),
+				'form_id'       => FrmAppHelper::get_post_param( 'form_id', '', 'absint' ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				'default_email' => true,
-				'plain_text'    => FrmAppHelper::get_post_param( 'plain_text', '', 'absint' ),
+				'plain_text'    => FrmAppHelper::get_post_param( 'plain_text', '', 'absint' ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			)
 		);
 		wp_die();
 	}
 
+	/**
+	 * @param string                    $content
+	 * @param int|stdClass|string       $form
+	 * @param false|int|stdClass|string $entry
+	 *
+	 * @return string
+	 */
 	public static function filter_content( $content, $form, $entry = false ) {
+		$content = self::replace_form_name_shortcodes( $content, $form );
+
 		self::get_entry_by_param( $entry );
+
 		if ( ! $entry ) {
 			return $content;
 		}
@@ -1204,53 +2133,107 @@ class FrmFormsController {
 			$form = $form->id;
 		}
 
-		$shortcodes = FrmFieldsHelper::get_shortcodes( $content, $form );
-		$content    = apply_filters( 'frm_replace_content_shortcodes', $content, $entry, $shortcodes );
-
-		return $content;
-	}
-
-	private static function get_entry_by_param( &$entry ) {
-		if ( ! $entry || ! is_object( $entry ) ) {
-			if ( ! $entry || ! is_numeric( $entry ) ) {
-				$entry = FrmAppHelper::get_post_param( 'id', false, 'sanitize_title' );
-			}
-
-			FrmEntry::maybe_get_entry( $entry );
+		/*
+		 * Repeater actions adds `parent_entry` to `$entry` store the parent entry data. If `parent_entry` is not empty,
+		 * use the parent form ID instead of repeater form ID to fix the parent form field shortcodes doesn't work.
+		 */
+		if ( ! empty( $entry->parent_entry ) ) {
+			$form = $entry->parent_entry->form_id;
 		}
+
+		$shortcodes = FrmFieldsHelper::get_shortcodes( $content, $form );
+
+		return apply_filters( 'frm_replace_content_shortcodes', $content, $entry, $shortcodes );
 	}
 
+	/**
+	 * Replace any [form_name] shortcodes in a string.
+	 *
+	 * @since 5.5
+	 *
+	 * @param array|string        $string
+	 * @param int|stdClass|string $form
+	 *
+	 * @return array|string
+	 */
+	public static function replace_form_name_shortcodes( $string, $form ) {
+		if ( ! is_string( $string ) ) {
+			return $string;
+		}
+
+		if ( ! str_contains( $string, '[form_name]' ) ) {
+			return $string;
+		}
+
+		if ( ! is_object( $form ) ) {
+			$form = FrmForm::getOne( $form );
+		}
+
+		$form_name = is_object( $form ) ? $form->name : '';
+		return str_replace( '[form_name]', $form_name, $string );
+	}
+
+	/**
+	 * @param false|int|stdClass|string $entry
+	 *
+	 * @return void
+	 */
+	private static function get_entry_by_param( &$entry ) {
+		if ( $entry && is_object( $entry ) ) {
+			return;
+		}
+
+		if ( ! $entry || ! is_numeric( $entry ) ) {
+			$entry = FrmAppHelper::get_post_param( 'id', false, 'sanitize_title' );
+		}
+
+		FrmEntry::maybe_get_entry( $entry );
+	}
+
+	/**
+	 * @param string       $content
+	 * @param false|object $entry
+	 * @param array        $shortcodes
+	 *
+	 * @return string
+	 */
 	public static function replace_content_shortcodes( $content, $entry, $shortcodes ) {
 		return FrmFieldsHelper::replace_content_shortcodes( $content, $entry, $shortcodes );
 	}
 
+	/**
+	 * @param array $errors
+	 *
+	 * @return array
+	 */
 	public static function process_bulk_form_actions( $errors ) {
 		if ( ! $_REQUEST ) {
 			return $errors;
 		}
 
 		$bulkaction = FrmAppHelper::get_param( 'action', '', 'get', 'sanitize_text_field' );
+
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( $bulkaction == - 1 ) {
 			$bulkaction = FrmAppHelper::get_param( 'action2', '', 'get', 'sanitize_title' );
 		}
 
-		if ( ! empty( $bulkaction ) && strpos( $bulkaction, 'bulk_' ) === 0 ) {
+		if ( $bulkaction && str_starts_with( $bulkaction, 'bulk_' ) ) {
 			FrmAppHelper::remove_get_action();
-
 			$bulkaction = str_replace( 'bulk_', '', $bulkaction );
 		}
 
 		$ids = FrmAppHelper::get_param( 'item-action', '', 'get', 'sanitize_text_field' );
-		if ( empty( $ids ) ) {
-			$errors[] = __( 'No forms were specified', 'formidable' );
 
+		if ( ! $ids ) {
+			$errors[] = __( 'No forms were specified', 'formidable' );
 			return $errors;
 		}
 
 		$permission_error = FrmAppHelper::permission_nonce_error( '', '_wpnonce', 'bulk-toplevel_page_formidable' );
+
 		if ( $permission_error !== false ) {
 			$errors[] = $permission_error;
-
 			return $errors;
 		}
 
@@ -1269,110 +2252,248 @@ class FrmFormsController {
 				$message = self::bulk_untrash( $ids );
 		}
 
-		if ( isset( $message ) && ! empty( $message ) ) {
+		if ( ! empty( $message ) ) {
 			$errors['message'] = $message;
 		}
 
 		return $errors;
 	}
 
-	public static function route() {
+	/**
+	 * Includes html that shows a message when the device is too small to use Formidable Forms admin pages.
+	 *
+	 * @since 6.20
+	 *
+	 * @return void
+	 */
+	public static function include_device_too_small_message() {
+		if ( ! FrmAppHelper::is_formidable_admin() ) {
+			return;
+		}
+
+		include FrmAppHelper::plugin_path() . '/classes/views/shared/small-device-message.php';
+	}
+
+	public static function route() { // phpcs:ignore Generic.Metrics.CyclomaticComplexity.MaxExceeded
 		$action = isset( $_REQUEST['frm_action'] ) ? 'frm_action' : 'action';
 		$vars   = array();
 		FrmAppHelper::include_svg();
 
-		if ( isset( $_POST['frm_compact_fields'] ) ) {
+		if ( isset( $_POST['frm_compact_fields'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 			FrmAppHelper::permission_check( 'frm_edit_forms' );
 
+			// Javascript needs to be allowed in some field settings.
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.NonceVerification.Missing
 			$json_vars = htmlspecialchars_decode( nl2br( str_replace( '&quot;', '"', wp_unslash( $_POST['frm_compact_fields'] ) ) ) );
 			$json_vars = json_decode( $json_vars, true );
-			if ( empty( $json_vars ) ) {
-				// json decoding failed so we should return an error message.
+
+			if ( $json_vars ) {
+				$vars   = FrmAppHelper::json_to_array( $json_vars );
+				$action = $vars[ $action ];
+				unset( $_REQUEST['frm_compact_fields'], $_POST['frm_compact_fields'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				$_REQUEST = array_merge( $_REQUEST, $vars ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				$_POST    = array_merge( $_POST, $_REQUEST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			} else {
+				// Json decoding failed so we should return an error message.
 				$action = FrmAppHelper::get_param( $action, '', 'get', 'sanitize_title' );
-				if ( 'edit' == $action ) {
+
+				if ( 'edit' === $action ) {
 					$action = 'update';
 				}
 
 				add_filter( 'frm_validate_form', 'FrmFormsController::json_error' );
-			} else {
-				$vars   = FrmAppHelper::json_to_array( $json_vars );
-				$action = $vars[ $action ];
-				unset( $_REQUEST['frm_compact_fields'], $_POST['frm_compact_fields'] );
-				$_REQUEST = array_merge( $_REQUEST, $vars );
-				$_POST    = array_merge( $_POST, $_REQUEST );
 			}
 		} else {
 			$action = FrmAppHelper::get_param( $action, '', 'get', 'sanitize_title' );
+
 			if ( isset( $_REQUEST['delete_all'] ) ) {
 				// Override the action for this page.
 				$action = 'delete_all';
 			}
-		}
+		}//end if
 
 		add_action( 'frm_load_form_hooks', 'FrmHooksController::trigger_load_form_hooks' );
 		FrmAppHelper::trigger_hook_load( 'form' );
 
 		switch ( $action ) {
-			case 'new':
-				return self::new_form( $vars );
-			case 'add_new':
-			case 'list_templates':
-				return self::list_templates();
 			case 'create':
 			case 'edit':
 			case 'update':
-			case 'duplicate':
 			case 'trash':
 			case 'untrash':
 			case 'destroy':
-			case 'delete_all':
 			case 'settings':
 			case 'update_settings':
 				return self::$action( $vars );
+			case 'lite-reports':
+				self::no_reports( $vars );
+				return null;
+			case 'views':
+				self::no_views( $vars );
+				return null;
 			default:
 				do_action( 'frm_form_action_' . $action );
+
 				if ( apply_filters( 'frm_form_stop_action_' . $action, false ) ) {
-					return;
+					return null;
 				}
 
 				$action = FrmAppHelper::get_param( 'action', '', 'get', 'sanitize_text_field' );
+
+				// phpcs:ignore Universal.Operators.StrictComparisons
 				if ( $action == - 1 ) {
 					$action = FrmAppHelper::get_param( 'action2', '', 'get', 'sanitize_title' );
 				}
 
-				if ( strpos( $action, 'bulk_' ) === 0 ) {
+				if ( str_starts_with( $action, 'bulk_' ) ) {
 					FrmAppHelper::remove_get_action();
 
-					return self::list_form();
+					self::list_form();
+					return null;
 				}
 
-				return self::display_forms_list();
-		}
+				$message = FrmAppHelper::get_param( 'message' );
+
+				if ( 'form_duplicate_error' === $message ) {
+					self::display_forms_list( array(), '', array( __( 'There was a problem duplicating the form', 'formidable' ) ) );
+					return null;
+				}
+
+				if ( 'forms_permanently_deleted' === $message ) {
+					$count = FrmAppHelper::get_param( 'forms_deleted', 0, 'get', 'absint' );
+					/* translators: %1$s: Number of forms */
+					$message = sprintf( _n( '%1$s form permanently deleted.', '%1$s forms permanently deleted.', $count, 'formidable' ), $count );
+					self::display_forms_list( array(), $message, '' );
+					return null;
+				}
+
+				self::display_forms_list();
+
+				return null;
+		}//end switch
 	}
 
+	/**
+	 * Rename a form.
+	 *
+	 * Handles the AJAX request for renaming a form.
+	 *
+	 * @since 6.7
+	 *
+	 * @return void
+	 */
+	public static function rename_form() {
+		// Check permission and nonce
+		FrmAppHelper::permission_check( 'frm_edit_forms' );
+		check_ajax_referer( 'frm_ajax', 'nonce' );
+
+		// Get posted data
+		$form_id = FrmAppHelper::get_post_param( 'form_id', '', 'absint' );
+		$name    = FrmAppHelper::get_post_param( 'form_name', '', 'sanitize_text_field' );
+		$form    = FrmForm::getOne( $form_id );
+
+		if ( ! $form ) {
+			wp_send_json_error( __( 'Form not found', 'formidable' ) );
+		}
+
+		if ( $name === $form->name ) {
+			// Nothing to change so exit early.
+			$form_key = $form->form_key;
+			wp_send_json_success( compact( 'form_key' ) );
+		}
+
+		$to_update = array(
+			'name' => $name,
+		);
+
+		if ( '' === $name ) {
+			$form_key = $form->form_key;
+		} else {
+			// Only update form_key if name is not empty.
+			$form_key              = FrmAppHelper::get_unique_key( sanitize_title( $name ), 'frm_forms', 'form_key' );
+			$to_update['form_key'] = $form_key;
+		}
+
+		FrmForm::update( $form_id, $to_update );
+
+		wp_send_json_success( compact( 'form_key' ) );
+	}
+
+	/**
+	 * @param array $errors
+	 *
+	 * @return array
+	 */
 	public static function json_error( $errors ) {
 		$errors['json'] = __( 'Abnormal HTML characters prevented your form from saving correctly', 'formidable' );
-
 		return $errors;
 	}
 
-	/* FRONT-END FORMS */
+	/**
+	 * Add education about views.
+	 *
+	 * @since 4.07
+	 *
+	 * @param array $values
+	 *
+	 * @return void
+	 */
+	public static function no_views( $values = array() ) {
+		FrmAppHelper::include_svg();
+		$id   = FrmAppHelper::get_param( 'form', '', 'get', 'absint' );
+		$form = $id ? FrmForm::getOne( $id ) : false;
+
+		include FrmAppHelper::plugin_path() . '/classes/views/shared/views-info.php';
+	}
+
+	/**
+	 * Add education about reports.
+	 *
+	 * @since 4.07
+	 *
+	 * @param array $values
+	 *
+	 * @return void
+	 */
+	public static function no_reports( $values = array() ) {
+		$id   = FrmAppHelper::get_param( 'form', '', 'get', 'absint' );
+		$form = $id ? FrmForm::getOne( $id ) : false;
+
+		include FrmAppHelper::plugin_path() . '/classes/views/shared/reports-info.php';
+	}
+
+	/**
+	 * FRONT-END FORMS.
+	 */
 	public static function admin_bar_css() {
 		if ( is_admin() || ! current_user_can( 'frm_edit_forms' ) ) {
 			return;
 		}
 
+		self::move_menu_to_footer();
+
 		add_action( 'wp_before_admin_bar_render', 'FrmFormsController::admin_bar_configure' );
 		FrmAppHelper::load_font_style();
 	}
 
+	/**
+	 * @since 4.05.02
+	 */
+	private static function move_menu_to_footer() {
+		if ( empty( FrmAppHelper::get_settings()->admin_bar ) ) {
+			remove_action( 'wp_body_open', 'wp_admin_bar_render', 0 );
+		}
+	}
+
 	public static function admin_bar_configure() {
 		global $frm_vars;
+
 		if ( empty( $frm_vars['forms_loaded'] ) ) {
 			return;
 		}
 
 		$actions = array();
+
 		foreach ( $frm_vars['forms_loaded'] as $form ) {
 			if ( is_object( $form ) ) {
 				$actions[ $form->id ] = $form->name;
@@ -1380,7 +2501,7 @@ class FrmFormsController {
 			unset( $form );
 		}
 
-		if ( empty( $actions ) ) {
+		if ( ! $actions ) {
 			return;
 		}
 
@@ -1408,6 +2529,10 @@ class FrmFormsController {
 
 	/**
 	 * @since 2.05.07
+	 *
+	 * @param array $actions
+	 *
+	 * @return void
 	 */
 	private static function add_forms_to_admin_bar( $actions ) {
 		global $wp_admin_bar;
@@ -1415,12 +2540,11 @@ class FrmFormsController {
 		asort( $actions );
 
 		foreach ( $actions as $form_id => $name ) {
-
 			$wp_admin_bar->add_node(
 				array(
 					'parent' => 'frm-forms',
 					'id'     => 'edit_form_' . $form_id,
-					'title'  => empty( $name ) ? __( '(no title)', 'formidable' ) : $name,
+					'title'  => $name ? $name : FrmFormsHelper::get_no_title_text(),
 					'href'   => FrmForm::get_edit_link( $form_id ),
 				)
 			);
@@ -1431,11 +2555,14 @@ class FrmFormsController {
 	 * The formidable shortcode
 	 *
 	 * @param array $atts The params from the shortcode.
+	 *
+	 * @return string
 	 */
 	public static function get_form_shortcode( $atts ) {
 		global $frm_vars;
-		if ( isset( $frm_vars['skip_shortcode'] ) && $frm_vars['skip_shortcode'] ) {
-			$sc = '[formidable';
+
+		if ( ! empty( $frm_vars['skip_shortcode'] ) ) {
+			$sc  = '[formidable';
 			$sc .= FrmAppHelper::array_to_html_params( $atts );
 			return $sc . ']';
 		}
@@ -1444,8 +2571,8 @@ class FrmFormsController {
 			array(
 				'id'             => '',
 				'key'            => '',
-				'title'          => false,
-				'description'    => false,
+				'title'          => 'auto',
+				'description'    => 'auto',
 				'readonly'       => false,
 				'entry_id'       => false,
 				'fields'         => array(),
@@ -1459,14 +2586,43 @@ class FrmFormsController {
 		return self::show_form( $shortcode_atts['id'], $shortcode_atts['key'], $shortcode_atts['title'], $shortcode_atts['description'], $atts );
 	}
 
-	public static function show_form( $id = '', $key = '', $title = false, $description = false, $atts = array() ) {
-		if ( empty( $id ) ) {
+	/**
+	 * @since 5.2.01
+	 *
+	 * @param false|int|string $id
+	 * @param false|string     $key
+	 *
+	 * @return false|stdClass
+	 */
+	private static function maybe_get_form_by_id_or_key( $id, $key ) {
+		if ( ! $id ) {
 			$id = $key;
 		}
+		return self::maybe_get_form_to_show( $id );
+	}
 
-		$form = self::maybe_get_form_to_show( $id );
+	/**
+	 * @param false|int|string $id
+	 * @param false|string     $key
+	 * @param bool|int|string  $title may be 'auto', true, false, 'true', 'false', 'yes', '1', 1, '0', 0.
+	 * @param bool|int|string  $description may be 'auto', true, false, 'true', 'false', 'yes', '1', 1, '0', 0.
+	 * @param array            $atts
+	 *
+	 * @return string
+	 */
+	public static function show_form( $id = '', $key = '', $title = false, $description = false, $atts = array() ) {
+		$form = self::maybe_get_form_by_id_or_key( $id, $key );
+
 		if ( ! $form ) {
 			return __( 'Please select a valid form', 'formidable' );
+		}
+
+		if ( 'auto' === $title ) {
+			$title = ! empty( $form->options['show_title'] );
+		}
+
+		if ( 'auto' === $description ) {
+			$description = ! empty( $form->options['show_description'] );
 		}
 
 		FrmAppController::maybe_update_styles();
@@ -1474,16 +2630,13 @@ class FrmFormsController {
 		add_action( 'frm_load_form_hooks', 'FrmHooksController::trigger_load_form_hooks' );
 		FrmAppHelper::trigger_hook_load( 'form', $form );
 
-		$form = apply_filters( 'frm_pre_display_form', $form );
-
+		$form         = apply_filters( 'frm_pre_display_form', $form );
 		$frm_settings = FrmAppHelper::get_settings( array( 'current_form' => $form->id ) );
 
 		if ( self::is_viewable_draft_form( $form ) ) {
-			// don't show a draft form on a page
+			// Don't show a draft form on a page
 			$form = __( 'Please select a valid form', 'formidable' );
-		} elseif ( self::user_should_login( $form ) ) {
-			$form = do_shortcode( $frm_settings->login_msg );
-		} elseif ( self::user_has_permission_to_view( $form ) ) {
+		} elseif ( ! FrmForm::is_visible_to_user( $form ) ) {
 			$form = do_shortcode( $frm_settings->login_msg );
 		} else {
 			do_action( 'frm_pre_get_form', $form );
@@ -1501,12 +2654,19 @@ class FrmFormsController {
 		return $form;
 	}
 
+	/**
+	 * @param false|int|string $id
+	 *
+	 * @return false|stdClass
+	 */
 	private static function maybe_get_form_to_show( $id ) {
 		$form = false;
 
-		if ( ! empty( $id ) ) { // no form id or key set
+		if ( $id ) {
+			// Form id or key is set.
 			$form = FrmForm::getOne( $id );
-			if ( ! $form || $form->parent_form_id || $form->status == 'trash' ) {
+
+			if ( ! $form || $form->parent_form_id || $form->status === 'trash' ) {
 				$form = false;
 			}
 		}
@@ -1514,18 +2674,23 @@ class FrmFormsController {
 		return $form;
 	}
 
+	/**
+	 * @param object $form
+	 *
+	 * @return bool
+	 */
 	private static function is_viewable_draft_form( $form ) {
-		return $form->status == 'draft' && current_user_can( 'frm_edit_forms' ) && ! FrmAppHelper::is_preview_page();
+		return $form->status === 'draft' && current_user_can( 'frm_edit_forms' ) && ! FrmAppHelper::is_preview_page();
 	}
 
-	private static function user_should_login( $form ) {
-		return $form->logged_in && ! is_user_logged_in();
-	}
-
-	private static function user_has_permission_to_view( $form ) {
-		return $form->logged_in && get_current_user_id() && isset( $form->options['logged_in_role'] ) && $form->options['logged_in_role'] != '' && ! FrmAppHelper::user_has_permission( $form->options['logged_in_role'] );
-	}
-
+	/**
+	 * @param object $form
+	 * @param bool   $title
+	 * @param bool   $description
+	 * @param array  $atts
+	 *
+	 * @return string
+	 */
 	public static function get_form( $form, $title, $description, $atts = array() ) {
 		ob_start();
 
@@ -1534,18 +2699,30 @@ class FrmFormsController {
 		self::get_form_contents( $form, $title, $description, $atts );
 		self::enqueue_scripts( FrmForm::get_params( $form ) );
 
-		$contents = ob_get_contents();
-		ob_end_clean();
+		$contents = ob_get_clean();
 
 		self::maybe_minimize_form( $atts, $contents );
 
 		return $contents;
 	}
 
+	/**
+	 * @param array $params
+	 *
+	 * @return void
+	 */
 	public static function enqueue_scripts( $params ) {
 		do_action( 'frm_enqueue_form_scripts', $params );
 	}
 
+	/**
+	 * @param object $form
+	 * @param bool   $title
+	 * @param bool   $description
+	 * @param array  $atts
+	 *
+	 * @return void
+	 */
 	public static function get_form_contents( $form, $title, $description, $atts ) {
 		$params    = FrmForm::get_params( $form );
 		$errors    = self::get_saved_errors( $form, $params );
@@ -1553,27 +2730,30 @@ class FrmFormsController {
 		$reset     = false;
 		$pass_args = compact( 'form', 'fields', 'errors', 'title', 'description', 'reset' );
 
-		$handle_process_here = $params['action'] == 'create' && $params['posted_form_id'] == $form->id && $_POST;
+		$pass_args['action'] = $params['action'];
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, Universal.Operators.StrictComparisons
+		$handle_process_here = $params['action'] === 'create' && $params['posted_form_id'] == $form->id && $_POST;
 
 		if ( ! $handle_process_here ) {
+			FrmFormState::set_initial_value( 'title', $title );
+			FrmFormState::set_initial_value( 'description', $description );
+
 			do_action( 'frm_display_form_action', $params, $fields, $form, $title, $description );
+
 			if ( apply_filters( 'frm_continue_to_new', true, $form->id, $params['action'] ) ) {
 				self::show_form_after_submit( $pass_args );
 			}
-		} elseif ( ! empty( $errors ) ) {
+		} elseif ( $errors ) {
 			self::show_form_after_submit( $pass_args );
-
 		} else {
-
 			do_action( 'frm_validate_form_creation', $params, $fields, $form, $title, $description );
 
 			if ( apply_filters( 'frm_continue_to_create', true, $form->id ) ) {
-				$entry_id                 = self::just_created_entry( $form->id );
-				$pass_args['entry_id']    = $entry_id;
-				$pass_args['reset']       = true;
-				$pass_args['conf_method'] = self::get_confirmation_method( compact( 'form', 'entry_id' ) );
+				$entry_id              = self::just_created_entry( $form->id );
+				$pass_args['entry_id'] = $entry_id;
+				$pass_args['reset']    = true;
 
-				self::run_success_action( $pass_args );
+				self::run_on_submit_actions( $pass_args );
 
 				do_action(
 					'frm_after_entry_processed',
@@ -1583,50 +2763,96 @@ class FrmFormsController {
 					)
 				);
 			}
-		}
+		}//end if
 	}
 
 	/**
 	 * If the form was processed earlier (init), get the generated errors
 	 *
 	 * @since 2.05
+	 *
+	 * @param object $form
+	 * @param array  $params
+	 *
+	 * @return array
 	 */
 	private static function get_saved_errors( $form, $params ) {
 		global $frm_vars;
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, Universal.Operators.StrictComparisons
 		if ( $params['posted_form_id'] == $form->id && $_POST && isset( $frm_vars['created_entries'][ $form->id ] ) ) {
 			$errors = $frm_vars['created_entries'][ $form->id ]['errors'];
 		} else {
 			$errors = array();
 		}
 
-		return $errors;
+		/**
+		 * Allows modifying the generated errors if the form was processed earlier.
+		 *
+		 * @since 5.2.03
+		 *
+		 * @param array $errors Errors data. Is empty array if no errors found.
+		 * @param array $params Form params. See {@see FrmForm::get_params()}.
+		 */
+		return apply_filters( 'frm_saved_errors', $errors, $params );
 	}
 
 	/**
 	 * @since 2.2.7
+	 *
+	 * @param int|string $form_id
+	 *
+	 * @return int
 	 */
 	public static function just_created_entry( $form_id ) {
 		global $frm_vars;
-
-		return ( isset( $frm_vars['created_entries'] ) && isset( $frm_vars['created_entries'][ $form_id ] ) && isset( $frm_vars['created_entries'][ $form_id ]['entry_id'] ) ) ? $frm_vars['created_entries'][ $form_id ]['entry_id'] : 0;
+		return isset( $frm_vars['created_entries'] ) && isset( $frm_vars['created_entries'][ $form_id ] ) && isset( $frm_vars['created_entries'][ $form_id ]['entry_id'] ) ? $frm_vars['created_entries'][ $form_id ]['entry_id'] : 0; // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
 	}
 
 	/**
+	 * Gets confirmation method.
+	 *
 	 * @since 3.0
+	 * @since 6.0 This method can return an array of met On Submit actions.
+	 *
+	 * @param array $atts {
+	 *     Atts.
+	 *
+	 *     @type object $form     Form object.
+	 *     @type int    $entry_id Entry ID.
+	 * }
+	 *
+	 * @return array|string
 	 */
 	private static function get_confirmation_method( $atts ) {
-		$opt    = 'success_action';
-		$method = ( isset( $atts['form']->options[ $opt ] ) && ! empty( $atts['form']->options[ $opt ] ) ) ? $atts['form']->options[ $opt ] : 'message';
-		$method = apply_filters( 'frm_success_filter', $method, $atts['form'], 'create' );
+		$action = FrmOnSubmitHelper::current_event( $atts );
+		$opt    = 'update' === $action ? 'edit_action' : 'success_action';
+		$method = ! empty( $atts['form']->options[ $opt ] ) ? $atts['form']->options[ $opt ] : 'message';
 
-		if ( $method != 'message' && ( ! $atts['entry_id'] || ! is_numeric( $atts['entry_id'] ) ) ) {
-			$method = 'message';
+		if ( ! empty( $atts['entry_id'] ) ) {
+			$met_actions = self::get_met_on_submit_actions( $atts, $action );
+
+			if ( $met_actions ) {
+				$method = $met_actions;
+			}
+		}
+
+		$method = apply_filters( 'frm_success_filter', $method, $atts['form'], $action );
+
+		if ( $method !== 'message' && ( ! $atts['entry_id'] || ! is_numeric( $atts['entry_id'] ) ) ) {
+			return 'message';
 		}
 
 		return $method;
 	}
 
+	/**
+	 * @param object $form
+	 * @param array  $params
+	 * @param array  $args
+	 *
+	 * @return void
+	 */
 	public static function maybe_trigger_redirect( $form, $params, $args ) {
 		if ( ! isset( $params['id'] ) ) {
 			global $frm_vars;
@@ -1637,14 +2863,42 @@ class FrmFormsController {
 			array(
 				'form'     => $form,
 				'entry_id' => $params['id'],
+				'action'   => FrmOnSubmitHelper::current_event( $params ),
 			)
 		);
+
+		self::maybe_trigger_redirect_with_action( $conf_method, $form, $params, $args );
+	}
+
+	/**
+	 * Maybe trigger redirect with the new Confirmation action.
+	 *
+	 * @since 6.1.1
+	 *
+	 * @param array|string $conf_method Array of confirmation actions or the action type string.
+	 * @param object       $form        Form object.
+	 * @param array        $params      See {@see FrmFormsController::maybe_trigger_redirect()}.
+	 * @param array        $args        See {@see FrmFormsController::maybe_trigger_redirect()}.
+	 */
+	public static function maybe_trigger_redirect_with_action( $conf_method, $form, $params, $args ) {
+		if ( is_array( $conf_method ) && 1 === count( $conf_method ) && 'redirect' === FrmOnSubmitHelper::get_action_type( $conf_method[0] ) && empty( $conf_method[0]->post_content['redirect_delay'] ) ) { // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+			$event = FrmOnSubmitHelper::current_event( $params );
+			FrmOnSubmitHelper::populate_on_submit_data( $form->options, $conf_method[0], $event );
+			$conf_method = 'redirect';
+		}
 
 		if ( 'redirect' === $conf_method ) {
 			self::trigger_redirect( $form, $params, $args );
 		}
 	}
 
+	/**
+	 * @param object $form
+	 * @param array  $params
+	 * @param array  $args
+	 *
+	 * @return void
+	 */
 	public static function trigger_redirect( $form, $params, $args ) {
 		$success_args = array(
 			'action'      => $params['action'],
@@ -1664,19 +2918,34 @@ class FrmFormsController {
 	 * Used when the success action is not 'message'
 	 *
 	 * @since 2.05
+	 * @since 6.0 `$args['force_delay_redirect']` is added.
+	 *
+	 * @param array $args {
+	 *     The args.
+	 *
+	 *     @type string $conf_method          The method.
+	 *     @type object $form                 Form object.
+	 *     @type int    $entry_id             Entry ID.
+	 *     @type string $action               The action event. Accepts `create` or `update`.
+	 *     @type array  $fields               The array of fields.
+	 *     @type int    $force_delay_redirect Force to show the message before redirecting in case redirect method runs.
+	 * }
 	 */
 	public static function run_success_action( $args ) {
+		global $frm_vars;
 		$extra_args = $args;
 		unset( $extra_args['form'] );
 
 		do_action( 'frm_success_action', $args['conf_method'], $args['form'], $args['form']->options, $args['entry_id'], $extra_args );
 
-		$opt = ( ! isset( $args['action'] ) || $args['action'] == 'create' ) ? 'success' : 'edit';
+		$opt = ! isset( $args['action'] ) || $args['action'] === 'create' ? 'success' : 'edit';
 
 		$args['success_opt'] = $opt;
-		if ( $args['conf_method'] == 'page' && is_numeric( $args['form']->options[ $opt . '_page_id' ] ) ) {
+		$args['ajax']        = ! empty( $frm_vars['ajax'] );
+
+		if ( $args['conf_method'] === 'page' && is_numeric( $args['form']->options[ $opt . '_page_id' ] ) ) {
 			self::load_page_after_submit( $args );
-		} elseif ( $args['conf_method'] == 'redirect' ) {
+		} elseif ( $args['conf_method'] === 'redirect' ) {
 			self::redirect_after_submit( $args );
 		} else {
 			self::show_message_after_save( $args );
@@ -1684,27 +2953,268 @@ class FrmFormsController {
 	}
 
 	/**
+	 * Gets met On Submit actions.
+	 *
+	 * @since 6.0
+	 *
+	 * @param array  $args  See {@see FrmFormsController::run_success_action()}.
+	 * @param string $event Form event. Default is `create`.
+	 *
+	 * @return array Array of actions that meet the conditional logics.
+	 */
+	public static function get_met_on_submit_actions( $args, $event = 'create' ) {
+		if ( ! FrmOnSubmitHelper::form_has_migrated( $args['form'] ) ) {
+			return array();
+		}
+
+		// If a redirect action has already opened the URL in a new tab, we show the default message in the current tab.
+		if ( ! empty( self::$redirected_in_new_tab[ $args['form']->id ] ) ) {
+			return array( FrmOnSubmitHelper::get_fallback_action_after_open_in_new_tab( $event ) );
+		}
+
+		$entry        = FrmEntry::getOne( $args['entry_id'], true );
+		$actions      = FrmOnSubmitHelper::get_actions( $args['form']->id );
+		$met_actions  = array();
+		$has_redirect = false;
+
+		foreach ( $actions as $action ) {
+			if ( ! in_array( $event, $action->post_content['event'], true ) ) {
+				continue;
+			}
+
+			if ( FrmFormAction::action_conditions_met( $action, $entry ) ) {
+				continue;
+			}
+
+			$action_type = FrmOnSubmitHelper::get_action_type( $action );
+
+			if ( 'redirect' === $action_type && $has_redirect ) {
+				// Do not process because we run the first redirect action only.
+				continue;
+			}
+
+			if ( ! self::is_valid_on_submit_action( $action, $args, $event ) ) {
+				continue;
+			}
+
+			if ( 'redirect' === $action_type ) {
+				$has_redirect = true;
+			}
+
+			$met_actions[] = $action;
+			unset( $action );
+		}//end foreach
+
+		$args['event'] = $event;
+
+		/**
+		 * Filters the On Submit actions that meet the conditional logics.
+		 *
+		 * @since 6.0
+		 *
+		 * @param array $met_actions Actions that meet the conditional logics.
+		 * @param array $args        See {@see FrmFormsController::run_success_action()}. `$args['event']` is also added.
+		 */
+		$met_actions = apply_filters( 'frm_get_met_on_submit_actions', $met_actions, $args );
+
+		if ( ! $met_actions ) {
+			return array( FrmOnSubmitHelper::get_fallback_action( $event ) );
+		}
+
+		return $met_actions;
+	}
+
+	/**
+	 * Checks if a Confirmation action has the valid data.
+	 *
+	 * @since 6.1.2
+	 *
+	 * @param object $action Form action object.
+	 * @param array  $args   See {@see FrmFormsController::run_success_action()}.
+	 * @param string $event  Form event. Default is `create`.
+	 *
+	 * @return bool
+	 */
+	private static function is_valid_on_submit_action( $action, $args, $event = 'create' ) {
+		$action_type = FrmOnSubmitHelper::get_action_type( $action );
+
+		if ( 'redirect' === $action_type ) {
+			// Run through frm_redirect_url filter. This is used for the valid action check.
+			$action->post_content['success_url'] = apply_filters(
+				'frm_redirect_url',
+				$action->post_content['success_url'],
+				$args['form'],
+				$args + array( 'action' => $event )
+			);
+
+			return ! empty( $action->post_content['success_url'] );
+		}
+
+		if ( 'page' === $action_type ) {
+			if ( empty( $action->post_content['success_page_id'] ) ) {
+				return false;
+			}
+
+			$page = get_post( $action->post_content['success_page_id'] );
+
+			if ( ! $page || 'trash' === $page->post_status ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Runs On Submit actions.
+	 *
+	 * @since 6.0
+	 *
+	 * @param array $args See inside {@see FrmFormsController::get_form_contents()} method.
+	 */
+	public static function run_on_submit_actions( $args ) {
+		$args['conf_method'] = self::get_confirmation_method(
+			array(
+				'form'     => $args['form'],
+				'entry_id' => $args['entry_id'],
+				'action'   => FrmOnSubmitHelper::current_event( $args ),
+			)
+		);
+
+		if ( ! is_array( $args['conf_method'] ) ) {
+			self::run_success_action( $args );
+			return;
+		}
+
+		// If conf_method is an array, run On Submit actions.
+		if ( ! $args['conf_method'] ) {
+			// Use default message.
+			FrmOnSubmitHelper::populate_on_submit_data( $args['form']->options );
+			self::run_success_action( $args );
+		} elseif ( 1 === count( $args['conf_method'] ) ) {
+			FrmOnSubmitHelper::populate_on_submit_data( $args['form']->options, reset( $args['conf_method'] ) );
+			$args['conf_method'] = $args['form']->options['success_action'];
+			self::run_success_action( $args );
+		} else {
+			self::run_multi_on_submit_actions( $args );
+		}
+	}
+
+	/**
+	 * Runs multiple success actions.
+	 *
+	 * @since 6.0
+	 *
+	 * @param array $args See {@see FrmFormsController::run_success_action()}.
+	 */
+	public static function run_multi_on_submit_actions( $args ) {
+		$redirect_action = null;
+
+		foreach ( $args['conf_method'] as $action ) {
+			if ( 'redirect' === FrmOnSubmitHelper::get_action_type( $action ) ) {
+				// We catch the redirect action to run it last.
+				$redirect_action = $action;
+				continue;
+			}
+
+			self::run_single_on_submit_action( $args, $action );
+
+			unset( $action );
+		}
+
+		if ( ! $redirect_action ) {
+			return;
+		}
+
+		// Show script to delay the redirection.
+		$args['force_delay_redirect'] = true;
+		self::run_single_on_submit_action( $args, $redirect_action );
+	}
+
+	/**
+	 * Runs single On Submit action.
+	 *
+	 * @since 6.0
+	 *
+	 * @param array  $args   See {@see FrmFormsController::run_success_action()}.
+	 * @param object $action On Submit action object.
+	 */
+	public static function run_single_on_submit_action( $args, $action ) {
+		$new_args = self::get_run_success_action_args( $args, $action );
+		self::run_success_action( $new_args );
+	}
+
+	/**
+	 * Gets run_success_action() args from the On Submit action.
+	 *
+	 * @since 6.0
+	 *
+	 * @param array  $args   See {@see FrmFormsController::run_success_action()}.
+	 * @param object $action On Submit action object.
+	 *
+	 * @return array
+	 */
+	private static function get_run_success_action_args( $args, $action ) {
+		$new_args = $args;
+
+		FrmOnSubmitHelper::populate_on_submit_data( $new_args['form']->options, $action, $args['action'] );
+
+		$opt                     = 'update' === $args['action'] ? 'edit_' : 'success_';
+		$new_args['conf_method'] = $new_args['form']->options[ $opt . 'action' ];
+
+		/**
+		 * Filters the run success action args.
+		 *
+		 * @since 6.0
+		 *
+		 * @param array  $new_args The new args.
+		 * @param array  $args     The old args. See {@see FrmFormsController::run_success_action()}.
+		 * @param object $action   On Submit action object.
+		 */
+		return apply_filters( 'frm_get_run_success_action_args', $new_args, $args, $action );
+	}
+
+	/**
 	 * @since 3.0
+	 *
+	 * @param array $args
+	 *
+	 * @return void
 	 */
 	private static function load_page_after_submit( $args ) {
 		global $post;
 		$opt = $args['success_opt'];
+
+		// phpcs:ignore Universal.Operators.StrictComparisons
 		if ( ! $post || $args['form']->options[ $opt . '_page_id' ] != $post->ID ) {
 			$page     = get_post( $args['form']->options[ $opt . '_page_id' ] );
 			$old_post = $post;
 			$post     = $page;
 			$content  = apply_filters( 'frm_content', $page->post_content, $args['form'], $args['entry_id'] );
-			echo apply_filters( 'the_content', $content ); // WPCS: XSS ok.
+
+			// Fix the On Submit page content doesn't show when previewing In theme.
+			$has_preview_filter = has_filter( 'the_content', 'FrmFormsController::preview_content' );
+
+			if ( $has_preview_filter ) {
+				remove_filter( 'the_content', 'FrmFormsController::preview_content', 9999 );
+			}
+
+			echo apply_filters( 'the_content', $content ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+
+			if ( $has_preview_filter ) {
+				add_filter( 'the_content', 'FrmFormsController::preview_content', 9999 );
+			}
+
 			$post = $old_post;
-		}
+		}//end if
 	}
 
 	/**
 	 * @since 3.0
+	 *
+	 * @param array $args See {@see FrmFormsController::run_success_action()}.
 	 */
 	private static function redirect_after_submit( $args ) {
-		global $frm_vars;
-
 		add_filter( 'frm_use_wpautop', '__return_false' );
 
 		$opt         = $args['success_opt'];
@@ -1712,30 +3222,153 @@ class FrmFormsController {
 		$success_url = apply_filters( 'frm_content', $success_url, $args['form'], $args['entry_id'] );
 		$success_url = do_shortcode( $success_url );
 
-		$success_msg = isset( $args['form']->options[ $opt . '_msg' ] ) ? $args['form']->options[ $opt . '_msg' ] : __( 'Please wait while you are redirected.', 'formidable' );
-
-		$redirect_msg = self::get_redirect_message( $success_url, $success_msg, $args );
-
 		$args['id'] = $args['entry_id'];
 		FrmEntriesController::delete_entry_before_redirect( $success_url, $args['form'], $args );
 
 		add_filter( 'frm_redirect_url', 'FrmEntriesController::prepare_redirect_url' );
 		$success_url = apply_filters( 'frm_redirect_url', $success_url, $args['form'], $args );
+		$doing_ajax  = FrmAppHelper::doing_ajax();
 
-		$doing_ajax = FrmAppHelper::doing_ajax();
-
-		if ( isset( $args['ajax'] ) && $args['ajax'] && $doing_ajax ) {
-			echo json_encode( array( 'redirect' => $success_url ) );
+		if ( ! empty( $args['ajax'] ) && $doing_ajax && empty( $args['force_delay_redirect'] ) ) {
+			// Is AJAX submit and there is just one Redirect action runs.
+			echo json_encode( self::get_ajax_redirect_response_data( $args + compact( 'success_url' ) ) );
 			wp_die();
-		} elseif ( ! headers_sent() ) {
-			wp_redirect( esc_url_raw( $success_url ) );
-			die(); // do not use wp_die or redirect fails
-		} else {
-			add_filter( 'frm_use_wpautop', '__return_true' );
-
-			echo $redirect_msg; // WPCS: XSS ok.
-			echo "<script type='text/javascript'>window.onload = function(){setTimeout(window.location='" . esc_url_raw( $success_url ) . "', 8000);}</script>";
 		}
+
+		if ( ! headers_sent() && empty( $args['force_delay_redirect'] ) && empty( $args['form']->options['redirect_delay'] ) ) {
+			// Not AJAX submit, no headers sent, and there is just one Redirect action runs.
+			if ( ! empty( $args['form']->options['open_in_new_tab'] ) ) {
+				self::print_open_in_new_tab_js_with_fallback_handler( $success_url, $args );
+				self::$redirected_in_new_tab[ $args['form']->id ] = 1;
+				return;
+			}
+
+			wp_redirect( esc_url_raw( $success_url ) );
+			// Do not use wp_die or redirect fails.
+			die();
+		}
+
+		// Redirect with a delay.
+		self::redirect_after_submit_using_js( $args + compact( 'success_url', 'doing_ajax' ) );
+	}
+
+	/**
+	 * Prints open in new tab js with fallback handler.
+	 *
+	 * @since 6.3.1
+	 *
+	 * @param string $success_url Success URL.
+	 * @param array  $args        See {@see FrmFormsController::redirect_after_submit()}.
+	 */
+	private static function print_open_in_new_tab_js_with_fallback_handler( $success_url, $args ) {
+		echo '<script>var newTab = window.open("' . esc_url_raw( $success_url ) . '", "_blank");';
+		echo 'if ( ! newTab ) {';
+
+		$data = array(
+			'formId'  => intval( $args['form']->id ),
+			'message' => self::get_redirect_fallback_message( $success_url, $args ),
+		);
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo 'frmShowNewTabFallback = ' . FrmAppHelper::maybe_json_encode( $data ) . ';';
+		echo '}</script>';
+	}
+
+	/**
+	 * Gets response data for redirect action when AJAX submitting.
+	 *
+	 * @since 6.3.1
+	 *
+	 * @param array $args See {@see FrmFormsController::run_success_action()}.
+	 *
+	 * @return array
+	 */
+	private static function get_ajax_redirect_response_data( $args ) {
+		$response_data = array(
+			'redirect' => $args['success_url'],
+			'content'  => '',
+		);
+		$unset_content = true;
+
+		if ( ! empty( $args['form']->options['redirect_delay'] ) ) {
+			$response_data['delay']    = $args['form']->options['redirect_delay_time'];
+			$response_data['content'] .= self::get_redirect_message( $args['success_url'], $args['form']->options['redirect_delay_msg'], $args );
+			$unset_content             = false;
+		}
+
+		if ( ! empty( $args['form']->options['open_in_new_tab'] ) ) {
+			$response_data['openInNewTab'] = 1;
+
+			// Only show open in new tab text if there is no delay.
+			if ( empty( $response_data['content'] ) ) {
+				$args['message'] = FrmOnSubmitHelper::get_default_new_tab_msg();
+
+				$args['form']->options['success_msg'] = $args['message'];
+				$args['form']->options['edit_msg']    = $args['message'];
+
+				if ( ! isset( $args['fields'] ) ) {
+					$args['fields'] = FrmField::get_all_for_form( $args['form']->id );
+				}
+
+				$args['message'] = self::prepare_submit_message( $args['form'], $args['entry_id'], $args );
+
+				ob_start();
+				self::show_lone_success_message( $args );
+				$response_data['content'] .= ob_get_clean();
+				$unset_content             = false;
+			}//end if
+
+			$response_data['fallbackMsg'] = self::get_redirect_fallback_message( $args['success_url'], $args );
+		}//end if
+
+		if ( $unset_content && '' === $response_data['content'] ) {
+			unset( $response_data['content'] );
+		}
+
+		return $response_data;
+	}
+
+	/**
+	 * Redirects after submitting using JS. This is used when showing message before redirecting.
+	 *
+	 * @since 6.0
+	 *
+	 * @param array $args See {@see FrmFormsController::run_success_action()}.
+	 */
+	private static function redirect_after_submit_using_js( $args ) {
+		$success_msg  = $args['form']->options['redirect_delay_msg'];
+		$redirect_msg = self::get_redirect_message( $args['success_url'], $success_msg, $args );
+		$success_url  = esc_url_raw( $args['success_url'] );
+
+		/**
+		 * Filters the delay time before redirecting when On Submit Redirect action is delayed.
+		 *
+		 * @since 6.0
+		 *
+		 * @param int $delay_time Delay time in milliseconds.
+		 */
+		$delay_time = apply_filters( 'frm_redirect_delay_time', 1000 * $args['form']->options['redirect_delay_time'] );
+
+		if ( ! empty( $args['form']->options['open_in_new_tab'] ) ) {
+			$redirect_js = 'window.open("' . $success_url . '", "_blank")';
+		} else {
+			$redirect_js = 'window.location="' . $success_url . '";';
+		}
+
+		add_filter( 'frm_use_wpautop', '__return_true' );
+
+		echo FrmAppHelper::maybe_kses( $redirect_msg ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo '<script>';
+
+		if ( empty( $args['doing_ajax'] ) ) {
+			// Not AJAX submit, delay JS until window.load.
+			echo 'window.onload=function(){';
+		}
+		echo 'setTimeout(function(){' . $redirect_js . '}, ' . intval( $delay_time ) . ');'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+
+		if ( empty( $args['doing_ajax'] ) ) {
+			echo '};';
+		}
+		echo '</script>';
 	}
 
 	/**
@@ -1743,13 +3376,17 @@ class FrmFormsController {
 	 *
 	 * @param string $success_url
 	 * @param string $success_msg
-	 * @param array $args
+	 * @param array  $args
 	 */
 	private static function get_redirect_message( $success_url, $success_msg, $args ) {
-		$redirect_msg = '<div class="' . esc_attr( FrmFormsHelper::get_form_style_class( $args['form'] ) ) . '"><div class="frm-redirect-msg frm_message">' . $success_msg . '<br/>' .
-			/* translators: %1$s: Start link HTML, %2$s: End link HTML */
-			sprintf( __( '%1$sClick here%2$s if you are not automatically redirected.', 'formidable' ), '<a href="' . esc_url( $success_url ) . '">', '</a>' ) .
+		$success_msg = apply_filters( 'frm_content', $success_msg, $args['form'], $args['entry_id'] );
+		$success_msg = do_shortcode( FrmAppHelper::use_wpautop( $success_msg ) );
+
+		// phpcs:disable Generic.WhiteSpace.ScopeIndent
+		$redirect_msg = '<div class="' . esc_attr( FrmFormsHelper::get_form_style_class( $args['form'] ) ) . '"><div class="frm-redirect-msg" role="status">' . $success_msg . '<br/>' . // phpcs:ignore SlevomatCodingStandard.Files.LineLength.LineTooLong
+			self::get_redirect_fallback_message( $success_url, $args ) .
 			'</div></div>';
+		// phpcs:enable Generic.WhiteSpace.ScopeIndent
 
 		$redirect_args = array(
 			'entry_id' => $args['entry_id'],
@@ -1761,17 +3398,57 @@ class FrmFormsController {
 	}
 
 	/**
+	 * Gets fallback message when redirecting failed.
+	 *
+	 * @since 6.3.1
+	 *
+	 * @param string $success_url Redirect URL.
+	 * @param array  $args        Contains `form` object.
+	 *
+	 * @return string
+	 */
+	private static function get_redirect_fallback_message( $success_url, $args ) {
+		$target = '';
+
+		if ( ! empty( $args['form']->options['open_in_new_tab'] ) ) {
+			$target = ' target="_blank"';
+		}
+
+		return sprintf(
+			/* translators: %1$s: Start link HTML, %2$s: End link HTML */
+			__( '%1$sClick here%2$s if you are not automatically redirected.', 'formidable' ),
+			'<a href="' . esc_url( $success_url ) . '"' . $target . '>',
+			'</a>'
+		);
+	}
+
+	/**
 	 * Prepare to show the success message and empty form after submit
 	 *
 	 * @since 2.05
+	 *
+	 * @param array $atts
+	 *
+	 * @return void
 	 */
 	public static function show_message_after_save( $atts ) {
-		$atts['message'] = self::prepare_submit_message( $atts['form'], $atts['entry_id'] );
+		$atts['message'] = self::prepare_submit_message( $atts['form'], $atts['entry_id'], $atts );
 
 		if ( ! isset( $atts['form']->options['show_form'] ) || $atts['form']->options['show_form'] ) {
-			self::show_form_after_submit( $atts );
+			if ( isset( $atts['action'] ) && 'update' === $atts['action'] && is_callable( array( 'FrmProEntriesController', 'show_front_end_form_with_entry' ) ) ) {
+				$entry = FrmEntry::getOne( $atts['entry_id'] );
+
+				if ( $entry ) {
+					// This is copied from the Pro plugin.
+					$atts['conf_message'] = FrmProEntriesController::confirmation( 'message', $atts['form'], $atts['form']->options, $entry->id, $atts );
+					$atts['show_form']    = FrmProEntriesController::is_form_displayed_after_edit( $atts['form'] );
+					FrmProEntriesController::show_front_end_form_with_entry( $entry, $atts );
+				}
+			} else {
+				self::show_form_after_submit( $atts );
+			}
 		} else {
-			self::show_lone_success_messsage( $atts );
+			self::show_lone_success_message( $atts );
 		}
 	}
 
@@ -1779,6 +3456,10 @@ class FrmFormsController {
 	 * Show an empty form
 	 *
 	 * @since 2.05
+	 *
+	 * @param array $args
+	 *
+	 * @return void
 	 */
 	private static function show_form_after_submit( $args ) {
 		self::fill_atts_for_form_display( $args );
@@ -1790,26 +3471,77 @@ class FrmFormsController {
 		$description = $args['description'];
 
 		if ( empty( $args['fields'] ) ) {
-			$values = array();
+			$values = array(
+				'custom_style' => FrmAppHelper::custom_style_value( array() ),
+			);
 		} else {
 			$values = FrmEntriesHelper::setup_new_vars( $args['fields'], $form, $args['reset'] );
 		}
 		unset( $args );
 
 		$include_form_tag = apply_filters( 'frm_include_form_tag', true, $form );
+		$frm_settings     = FrmAppHelper::get_settings();
+		$submit           = $form->options['submit_value'] ?? $frm_settings->submit_value;
 
-		$frm_settings = FrmAppHelper::get_settings();
-		$submit       = isset( $form->options['submit_value'] ) ? $form->options['submit_value'] : $frm_settings->submit_value;
+		global $frm_vars;
+		self::maybe_load_css( $form, $values['custom_style'], $frm_vars['load_css'] );
 
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-entries/new.php' );
+		$message_placement = self::message_placement( $form, $message );
+
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-entries/new.php';
+	}
+
+	/**
+	 * Gets message placement.
+	 *
+	 * @since 4.05.02
+	 * @since 6.26 This method changed from `private` to `public`.
+	 *
+	 * @param object $form    Form object.
+	 * @param string $message The message.
+	 *
+	 * @return string Accepts 'before', 'after', or 'submit'.
+	 */
+	public static function message_placement( $form, $message ) {
+		$place = 'before';
+
+		if ( $message && isset( $form->options['form_class'] ) ) {
+			if ( str_contains( $form->options['form_class'], 'frm_below_success' ) ) {
+				$place = 'after';
+			} elseif ( str_contains( $form->options['form_class'], 'frm_inline_success' ) ) {
+				$place = 'submit';
+			}
+		}
+
+		/**
+		 * Filter the message placement.
+		 *
+		 * @since 4.05.02
+		 *
+		 * @param string $place Accepts 'before', 'after', or 'submit'.
+		 * @param array  $args  Args.
+		 */
+		return apply_filters( 'frm_message_placement', $place, compact( 'form', 'message' ) );
 	}
 
 	/**
 	 * Get all the values needed on the new.php entry page
 	 *
 	 * @since 2.05
+	 *
+	 * @param array $args
+	 *
+	 * @return void
 	 */
 	private static function fill_atts_for_form_display( &$args ) {
+		if ( ! isset( $args['title'] ) && isset( $args['show_title'] ) ) {
+			$args['title'] = $args['show_title'];
+		}
+
+		if ( ! isset( $args['description'] ) && isset( $args['show_description'] ) ) {
+			$args['description'] = $args['show_description'];
+		}
+
 		$defaults = array(
 			'errors'      => array(),
 			'message'     => '',
@@ -1826,31 +3558,42 @@ class FrmFormsController {
 	 * Show the success message without the form
 	 *
 	 * @since 2.05
+	 *
+	 * @param array $atts
+	 *
+	 * @return void
 	 */
-	private static function show_lone_success_messsage( $atts ) {
+	private static function show_lone_success_message( $atts ) {
 		global $frm_vars;
 		$values = FrmEntriesHelper::setup_new_vars( $atts['fields'], $atts['form'], true );
 		self::maybe_load_css( $atts['form'], $values['custom_style'], $frm_vars['load_css'] );
 
 		$include_extra_container = 'frm_forms' . FrmFormsHelper::get_form_style_class( $values );
+		$errors                  = array();
+		$form                    = $atts['form'];
+		$message                 = $atts['message'];
 
-		$errors  = array();
-		$form    = $atts['form'];
-		$message = $atts['message'];
-
-		include( FrmAppHelper::plugin_path() . '/classes/views/frm-entries/errors.php' );
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-entries/errors.php';
 	}
 
 	/**
 	 * Prepare the success message before it's shown
 	 *
 	 * @since 2.05
+	 * @since 6.0.x Added the third parameter.
+	 *
+	 * @param object     $form     Form object.
+	 * @param int|string $entry_id Entry ID.
+	 * @param array      $args     See {@see FrmFormsController::run_success_action()}.
+	 *
+	 * @return string
 	 */
-	private static function prepare_submit_message( $form, $entry_id ) {
+	private static function prepare_submit_message( $form, $entry_id, $args = array() ) {
 		$frm_settings = FrmAppHelper::get_settings( array( 'current_form' => $form->id ) );
+		$opt          = $args['success_opt'] ?? 'success';
 
 		if ( $entry_id && is_numeric( $entry_id ) ) {
-			$message = isset( $form->options['success_msg'] ) ? $form->options['success_msg'] : $frm_settings->success_msg;
+			$message = $form->options[ $opt . '_msg' ] ?? $frm_settings->success_msg;
 			$class   = 'frm_message';
 		} else {
 			$message = $frm_settings->failed_msg;
@@ -1862,11 +3605,14 @@ class FrmFormsController {
 		return apply_filters( 'frm_main_feedback', $message, $form, $entry_id );
 	}
 
+	/**
+	 * @return void
+	 */
 	public static function front_head() {
 		$version = FrmAppHelper::plugin_version();
 		$suffix  = FrmAppHelper::js_suffix();
 
-		if ( ! empty( $suffix ) && self::has_combo_js_file() ) {
+		if ( $suffix && self::has_combo_js_file() ) {
 			wp_register_script( 'formidable', FrmAppHelper::plugin_url() . '/js/frm.min.js', array( 'jquery' ), $version, true );
 		} else {
 			wp_register_script( 'formidable', FrmAppHelper::plugin_url() . "/js/formidable{$suffix}.js", array( 'jquery' ), $version, true );
@@ -1875,7 +3621,7 @@ class FrmFormsController {
 		add_filter( 'script_loader_tag', 'FrmFormsController::defer_script_loading', 10, 2 );
 
 		if ( FrmAppHelper::is_admin() ) {
-			// don't load this in back-end
+			// Don't load this in back-end
 			return;
 		}
 
@@ -1890,40 +3636,110 @@ class FrmFormsController {
 		return is_readable( FrmAppHelper::plugin_path() . '/js/frm.min.js' );
 	}
 
+	/**
+	 * @param object     $form
+	 * @param int|string $this_load
+	 * @param bool       $global_load
+	 *
+	 * @return void
+	 */
 	public static function maybe_load_css( $form, $this_load, $global_load ) {
 		$load_css = FrmForm::is_form_loaded( $form, $this_load, $global_load );
 
-		if ( $load_css ) {
-			global $frm_vars;
-			self::footer_js( 'header' );
-			$frm_vars['css_loaded'] = true;
+		if ( ! $load_css ) {
+			return;
+		}
+
+		global $frm_vars;
+		self::footer_js( 'header' );
+		$frm_vars['css_loaded'] = true;
+
+		self::load_late_css();
+	}
+
+	/**
+	 * If css is loaded only on applicable pages, include it before the form loads
+	 * to prevent a flash of unstyled form.
+	 *
+	 * @since 4.01
+	 *
+	 * @return void
+	 */
+	private static function load_late_css() {
+		$frm_settings = FrmAppHelper::get_settings();
+		$late_css     = $frm_settings->load_style === 'dynamic';
+
+		if ( ! $late_css || ! self::should_load_late() ) {
+			return;
+		}
+
+		global $wp_styles;
+
+		if ( is_array( $wp_styles->queue ) && in_array( 'formidable', $wp_styles->queue, true ) ) {
+			wp_print_styles( 'formidable' );
 		}
 	}
 
+	/**
+	 * Avoid late load if All in One SEO is active because it prevents CSS from loading entirely.
+	 *
+	 * @since 5.2.03
+	 *
+	 * @return bool
+	 */
+	private static function should_load_late() {
+		return ! function_exists( 'aioseo' );
+	}
+
+	/**
+	 * @param string $tag
+	 * @param string $handle
+	 *
+	 * @return string
+	 */
 	public static function defer_script_loading( $tag, $handle ) {
-		if ( 'recaptcha-api' == $handle && ! strpos( $tag, 'defer' ) ) {
-			$tag = str_replace( ' src', ' defer="defer" async="async" src', $tag );
+		if ( 'captcha-api' === $handle && ! str_contains( $tag, 'defer' ) ) {
+			return str_replace( ' src', ' defer="defer" async="async" src', $tag );
 		}
 
 		return $tag;
 	}
 
+	/**
+	 * @param string $location
+	 *
+	 * @return void
+	 */
 	public static function footer_js( $location = 'footer' ) {
 		global $frm_vars;
 
 		FrmStylesController::enqueue_css();
 
-		if ( ! FrmAppHelper::is_admin() && $location != 'header' && ! empty( $frm_vars['forms_loaded'] ) ) {
-			// load formidable js
-			wp_enqueue_script( 'formidable' );
+		if ( FrmAppHelper::is_admin() || $location === 'header' || empty( $frm_vars['forms_loaded'] ) ) {
+			return;
+		}
+
+		// Load formidable js
+		wp_enqueue_script( 'formidable' );
+
+		FrmHoneypot::maybe_print_honeypot_js();
+
+		if ( ! method_exists( 'FrmProFormsHelper', 'load_currency_js' ) ) {
+			// Load currency JS if Pro is not installed.
+			FrmFormsHelper::load_currency_js();
 		}
 	}
 
 	/**
 	 * @since 2.0.8
+	 *
+	 * @param array  $atts
+	 * @param string $content
+	 *
+	 * @return void
 	 */
 	private static function maybe_minimize_form( $atts, &$content ) {
-		// check if minimizing is turned on
+		// Check if minimizing is turned on
 		if ( self::is_minification_on( $atts ) ) {
 			$content = str_replace( array( "\r\n", "\r", "\n", "\t", '    ' ), '', $content );
 		}
@@ -1931,21 +3747,174 @@ class FrmFormsController {
 
 	/**
 	 * @since 2.0.8
-	 * @return boolean
+	 *
+	 * @param array $atts
+	 *
+	 * @return bool
 	 */
 	private static function is_minification_on( $atts ) {
-		return isset( $atts['minimize'] ) && ! empty( $atts['minimize'] );
+		return ! empty( $atts['minimize'] );
 	}
 
 	/**
-	 * @deprecated 4.0
+	 * @since 5.0.16
+	 *
+	 * @return void
 	 */
-	public static function new_form( $values = array() ) {
-		FrmDeprecated::new_form( $values );
+	public static function landing_page_preview_option() {
+		$dir = apply_filters( 'frm_landing_page_preview_option', false );
+
+		if ( false === $dir || ! file_exists( $dir . 'landing-page-preview-option.php' ) ) {
+			$dir = self::get_form_views_path();
+		}
+
+		include $dir . 'landing-page-preview-option.php';
+	}
+
+	/**
+	 * @since 5.0.16
+	 *
+	 * @return string
+	 */
+	private static function get_form_views_path() {
+		return FrmAppHelper::plugin_path() . '/classes/views/frm-forms/';
+	}
+
+	/**
+	 * Create a page with an embedded formidable Gutenberg block.
+	 *
+	 * @since 5.2
+	 *
+	 * @return void
+	 */
+	public static function create_page_with_shortcode() {
+		if ( ! current_user_can( 'publish_posts' ) ) {
+			die( 0 );
+		}
+
+		check_ajax_referer( 'frm_ajax', 'nonce' );
+
+		$type = FrmAppHelper::get_post_param( 'type', '', 'sanitize_text_field' );
+
+		if ( ! $type || ! in_array( $type, array( 'form', 'view' ), true ) ) {
+			die( 0 );
+		}
+
+		$object_id = FrmAppHelper::get_post_param( 'object_id', '', 'absint' );
+
+		if ( ! $object_id ) {
+			die( 0 );
+		}
+
+		$postarr = array( 'post_type' => 'page' );
+
+		if ( 'form' === $type ) {
+			$postarr['post_content'] = self::get_page_shortcode_content_for_form( $object_id );
+		} else {
+			$postarr['post_content'] = apply_filters( 'frm_create_page_with_' . $type . '_shortcode_content', '', $object_id );
+		}
+
+		$name = FrmAppHelper::get_post_param( 'name', '', 'sanitize_text_field' );
+
+		if ( $name ) {
+			$postarr['post_title'] = $name;
+		}
+
+		$success = wp_insert_post( $postarr );
+
+		if ( ! is_numeric( $success ) || ! $success ) {
+			die( 0 );
+		}
+
+		wp_send_json(
+			array(
+				'redirect' => get_edit_post_link( $success, 'redirect' ),
+			)
+		);
+	}
+
+	/**
+	 * @since 5.3
+	 *
+	 * @param int $form_id
+	 *
+	 * @return string
+	 */
+	private static function get_page_shortcode_content_for_form( $form_id ) {
+		$shortcode          = '[formidable id="' . $form_id . '"]';
+		$html_comment_start = '<!-- wp:formidable/simple-form {"formId":"' . $form_id . '"} -->';
+		$html_comment_end   = '<!-- /wp:formidable/simple-form -->';
+		return $html_comment_start . '<div>' . $shortcode . '</div>' . $html_comment_end;
+	}
+
+	/**
+	 * Get page dropdown for AJAX request for embedding form in an existing page.
+	 *
+	 * @return void
+	 */
+	public static function get_page_dropdown() {
+		if ( ! current_user_can( 'publish_posts' ) ) {
+			die( 0 );
+		}
+
+		check_ajax_referer( 'frm_ajax', 'nonce' );
+
+		$html = FrmAppHelper::clip(
+			function () {
+				FrmAppHelper::maybe_autocomplete_pages_options(
+					array(
+						'field_name'  => 'frm_page_dropdown',
+						'page_id'     => '',
+						'placeholder' => __( 'Select a Page', 'formidable' ),
+					)
+				);
+			}
+		);
+		wp_send_json(
+			array(
+				'html'          => $html,
+				'edit_page_url' => admin_url( sprintf( get_post_type_object( 'page' )->_edit_link . '&action=edit', 0 ) ),
+			)
+		);
+	}
+
+	/**
+	 * Prints necessary templates for the forms list page.
+	 *
+	 * @since 6.32
+	 *
+	 * @return void
+	 */
+	public static function print_forms_list_templates() {
+		if ( ! FrmAppHelper::on_form_listing_page() ) {
+			return;
+		}
+
+		$screen = get_current_screen();
+
+		if ( ! $screen ) {
+			return;
+		}
+
+		$columns             = get_column_headers( $screen );
+		$hidden              = get_hidden_columns( $screen );
+		$skip_cols           = array( 'cb', 'name', 'settings' );
+		$per_page            = get_user_option( 'formidable_page_formidable_per_page' );
+		$show_screen_options = $screen->show_screen_options();
+
+		if ( $per_page < 1 ) {
+			$per_page = 20;
+		}
+
+		include FrmAppHelper::plugin_path() . '/classes/views/frm-forms/forms-list-settings.php';
 	}
 
 	/**
 	 * @deprecated 4.0
+	 *
+	 * @param array $values
+	 *
+	 * @return void
 	 */
 	public static function create( $values = array() ) {
 		_deprecated_function( __METHOD__, '4.0', 'FrmFormsController::update' );
@@ -1953,42 +3922,13 @@ class FrmFormsController {
 	}
 
 	/**
-	 * @deprecated 1.07.05
-	 * @codeCoverageIgnore
+	 * @deprecated 6.33
+	 *
+	 * @param array $values
+	 *
+	 * @return void
 	 */
-	public static function add_default_templates( $path, $default = true, $template = true ) {
-		FrmDeprecated::add_default_templates( $path, $default, $template );
-	}
-
-	/**
-	 * @deprecated 3.0
-	 * @codeCoverageIgnore
-	 */
-	public static function bulk_create_template( $ids ) {
-		return FrmDeprecated::bulk_create_template( $ids );
-	}
-
-	/**
-	 * @deprecated 2.03
-	 * @codeCoverageIgnore
-	 */
-	public static function register_pro_scripts() {
-		FrmDeprecated::register_pro_scripts();
-	}
-
-	/**
-	 * @deprecated 3.0
-	 * @codeCoverageIgnore
-	 */
-	public static function edit_key() {
-		FrmDeprecated::edit_key();
-	}
-
-	/**
-	 * @deprecated 3.0
-	 * @codeCoverageIgnore
-	 */
-	public static function edit_description() {
-		FrmDeprecated::edit_description();
+	public static function render_spam_settings( $values ) {
+		_deprecated_function( __METHOD__, '6.33' );
 	}
 }

@@ -15,7 +15,7 @@ class FrmRegResetPasswordController {
 	 * @since 2.0
 	 */
 	public static function redirect_to_custom_lost_password() {
-		if ( 'GET' == $_SERVER[ 'REQUEST_METHOD' ] ) {
+		if ( 'GET' === FrmRegAppHelper::request_method() ) {
 			$redirect_url = self::reset_password_page_url( 'none' );
 
 			if ( $redirect_url ) {
@@ -36,15 +36,19 @@ class FrmRegResetPasswordController {
 			return;
 		}
 
-		if ( 'POST' == $_SERVER[ 'REQUEST_METHOD' ] ) {
+		if ( 'POST' === FrmRegAppHelper::request_method() ) {
 
 			// Attempt to send reset password email
 			$errors = retrieve_password();
 
 			if ( is_wp_error( $errors ) ) {
+				$errors->remove( 'invalidcombo' );
+				$errors->remove( 'invalid_email' );
+			}
+
+			if ( is_wp_error( $errors ) && $errors->has_errors() ) {
 				// Errors found
 				self::lost_password_redirect_with_errors( $errors );
-
 			} else {
 				// Email sent
 				self::lost_password_redirect_no_errors();
@@ -95,7 +99,7 @@ class FrmRegResetPasswordController {
 			return;
 		}
 
-		if ( 'GET' == $_SERVER[ 'REQUEST_METHOD' ] ) {
+		if ( 'GET' === FrmRegAppHelper::request_method() ) {
 
 			if ( ! isset( $_REQUEST[ 'key' ] ) || ! isset( $_REQUEST[ 'login' ] ) ) {
 				$query_args = array();
@@ -175,7 +179,7 @@ class FrmRegResetPasswordController {
 			return;
 		}
 
-		if ( 'POST' == $_SERVER[ 'REQUEST_METHOD' ] && isset( $_REQUEST[ 'rp_key' ] ) && isset( $_REQUEST[ 'rp_login' ] ) ) {
+		if ( 'POST' === FrmRegAppHelper::request_method() && isset( $_REQUEST[ 'rp_key' ] ) && isset( $_REQUEST[ 'rp_login' ] ) ) {
 			$rp_key   = sanitize_text_field( $_REQUEST['rp_key'] );
 			$rp_login = sanitize_text_field( $_REQUEST['rp_login'] );
 
@@ -189,6 +193,7 @@ class FrmRegResetPasswordController {
 
 				self::redirect_if_passwords_not_equal( $rp_key, $rp_login );
 				self::redirect_if_empty_password( $rp_key, $rp_login );
+				self::redirect_if_password_weak( $rp_key, $rp_login );
 				self::reset_password_and_redirect( $user );
 
 			} else {
@@ -205,7 +210,7 @@ class FrmRegResetPasswordController {
 	 * @param string $rp_login
 	 */
 	private static function redirect_if_passwords_not_equal( $rp_key, $rp_login ) {
-		if ( $_POST[ 'pass1' ] != $_POST[ 'pass2' ] ) {
+		if ( FrmAppHelper::get_post_param( 'pass1' ) != FrmAppHelper::get_post_param( 'pass2' ) ) {
 
 			$query_args = array(
 				'key'   => $rp_key,
@@ -235,6 +240,84 @@ class FrmRegResetPasswordController {
 	}
 
 	/**
+	 * If password is weak, redirect to reset password page with error parameters.
+	 *
+	 * @since 2.05
+	 *
+	 * @param string $rp_key   Reset password key.
+	 * @param string $rp_login Reset password username.
+	 */
+	private static function redirect_if_password_weak( $rp_key, $rp_login ) {
+		/**
+		 * Allows enabling or disabling the password strength check.
+		 *
+		 * @since 2.05
+		 *
+		 * @param bool $enabled Is `true` if password strength check is enabled.
+		 */
+		if ( ! apply_filters( 'frm_reg_password_strength_check', true ) ) {
+			return;
+		}
+
+		$field_obj  = self::get_fake_password_field_obj();
+		if ( ! is_callable( array( $field_obj, 'password_checks' ) ) ) {
+			return;
+		}
+
+		$error_type = self::check_password( FrmAppHelper::get_post_param( 'pass1' ) );
+		if ( $error_type ) {
+			$query_args = array(
+				'key'   => $rp_key,
+				'login' => $rp_login,
+				'errors' => 'weak_password_' . $error_type,
+			);
+
+			self::redirect_to_selected_reset_password_page( $query_args );
+		}
+	}
+
+	/**
+	 * Checks the password format. This is modified from FrmProFieldPassword::check_format().
+	 *
+	 * @since 2.05
+	 *
+	 * @param string $password The password.
+	 * @return string|false Return `false` if check is valid, return the error type if invalid.
+	 */
+	private static function check_password( $password ) {
+		$field_obj  = self::get_fake_password_field_obj();
+		$error_type = false;
+		foreach ( $field_obj->password_checks() as $type => $check ) {
+			if ( ! $field_obj->check_regex( $check['regex'], $password ) ) {
+				$error_type = $type;
+				break;
+			}
+		}
+
+		return $error_type;
+	}
+
+	/**
+	 * Gets a fake password field type object.
+	 *
+	 * @since 2.05
+	 *
+	 * @return FrmProFieldPassword
+	 */
+	public static function get_fake_password_field_obj() {
+		$field        = new stdClass();
+		$field->name  = __( 'Password', 'frmreg' );
+		$field->type  = 'password';
+		$field_object = new FrmProFieldPassword( $field, 'password' );
+		$defaults     = $field_object->get_new_field_defaults();
+
+		// Set the invalid message to pull the "Passwords must contain at least one special character" string from Pro.
+		$field->field_options['invalid'] = $defaults['field_options']['invalid'];
+
+		return $field_object;
+	}
+
+	/**
 	 * Reset password and redirect from reset password page if no errors
 	 *
 	 * @since 2.0
@@ -242,7 +325,7 @@ class FrmRegResetPasswordController {
 	 * @param object $user
 	 */
 	private static function reset_password_and_redirect( $user ) {
-		reset_password( $user, $_POST[ 'pass1' ] );
+		reset_password( $user, FrmAppHelper::get_post_param( 'pass1' ) );
 
 		$redirect_url = FrmRegLoginController::login_page_url( 'wordpress' );
 
@@ -283,11 +366,11 @@ class FrmRegResetPasswordController {
 	 *
 	 * @return false|string
 	 */
-	private static function reset_password_page_url( $fallback = 'wordpress' ) {
+	public static function reset_password_page_url( $fallback = 'wordpress' ) {
 		$page_id = self::reset_password_page_id();
 
 		if ( $page_id ) {
-			$page_url = get_permalink( $page_id );
+			$page_url = FrmRegAppHelper::get_page_url( $page_id );
 		} else if ( $fallback === 'wordpress' ) {
 			$page_url = site_url( 'wp-login.php?action=resetpass' );
 		} else {

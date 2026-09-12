@@ -53,7 +53,7 @@ class Front_End_Media {
 			'frontend-js',
 			plugins_url( '/', __FILE__ ) . 'js/frontend.js',
 			array( 'jquery' ),
-			'2015-05-07'
+			'2021-05-07'
 		);
 	}
 
@@ -68,11 +68,11 @@ class Front_End_Media {
 		return $query;
 	}
 
-	function frontend_shortcode( $args ) {
+	function frontend_shortcode( ) {
 		// check if user can upload files
 		if ( current_user_can( 'upload_files' ) ) {
 			$str = __( 'Open Media Library', 'frontend-media' );
-			return '<input id="frontend-button" type="button" value="' . $str . '" class="btn btn-primary " style="position: relative; z-index: 1;"></p><p><img id="frontend-image" />';
+			return '<input id="frontend-button" type="button" value="' . $str . '" class="mt-3 mb-3 btn btn-primary " >';
 		}
 
 		return __( 'Please Login To Upload', 'frontend-media' );

@@ -19,7 +19,7 @@ class FrmRegUserController {
 
 		if ( self::is_profile_update( $entry_clone ) ) {
 
-			if ( FrmRegAppHelper::current_user_can_update_profile( self::$entry_user_id, $action ) ) {
+			if ( FrmRegAppHelper::current_user_can_update_profile( self::$entry_user_id, $action, $form ) ) {
 
 				self::update_user( $action->post_content, $entry_clone, $form );
 			}
@@ -87,6 +87,7 @@ class FrmRegUserController {
 	 * @param FrmRegUser $user
 	 */
 	private static function after_create_user( $settings, $entry, $user ) {
+		FrmRegEntry::maybe_set_password_from_hashed_password( $entry, $user );
 		FrmRegSubsiteController::maybe_create_subsite( $user, $settings, $entry );
 
 		FrmRegEntry::update_user_id_for_entry( $user->get_form_id(), $entry, $user->get_user_id() );
@@ -95,7 +96,9 @@ class FrmRegUserController {
 		// This is used in core Formidable code
 		$_POST['frm_user_id'] = $user->get_user_id();
 		if ( self::$user_id_field ) {
-			$_POST['item_meta'][ self::$user_id_field ] = $user->get_user_id();
+			if ( isset( $_POST['item_meta'] ) && is_array( $_POST['item_meta'] ) ) {
+				$_POST['item_meta'][ self::$user_id_field ] = $user->get_user_id();
+			}
 		}
 
 		if ( FrmRegModerationController::needs_moderation( $settings ) ) {
@@ -128,11 +131,97 @@ class FrmRegUserController {
 
 		$updated = $user->update();
 
+		if ( self::should_update_user_role( $form, $entry, $user ) ) {
+			self::update_user_role( $settings, $updated );
+		}
+
 		if ( $updated && $user->is_new_password_set() ) {
 			FrmRegEntry::delete_password_from_metas( $settings, $entry->id );
 		}
 
 		FrmRegSubsiteController::maybe_create_subsite( $user, $settings, $entry );
+	}
+
+	/**
+	 * Returns true if the user role should also be updated.
+	 *
+	 * @since 2.11
+	 *
+	 * @param object $form
+	 * @param object $entry
+	 * @param object $user
+	 *
+	 * @return bool
+	 */
+	private static function should_update_user_role( $form, $entry, $user ) {
+		/**
+		 * @since 2.11
+		 *
+		 * @param bool Whether to allow the role update
+		 * @param array $args {
+		 *     @type object   $form Form object.
+		 *     @type object   $entry Entry object.
+		 *     @type stdClass $user The user
+		 * }
+		 */
+		return apply_filters( 'frm_reg_update_user_role', false, compact( 'form', 'entry', 'user' ) );
+	}
+
+	/**
+	 * Updates user role based off the form action setting.
+	 *
+	 * @param array $settings
+	 * @param int   $user_id
+	 *
+	 * @return void
+	 */
+	private static function update_user_role( $settings, $user_id ) {
+		if ( ! empty( $settings['reg_role'] ) ) {
+			$updated_user = get_user_by( 'id', $user_id );
+			if ( $updated_user instanceof WP_User ) {
+				$updated_user->add_role( $settings['reg_role'] );
+			}
+		}
+	}
+
+	/**
+	 * Updates user meta based on the new field value.
+	 *
+	 * @since 2.12
+	 *
+	 * @param array $atts {
+	 *   @type object $field
+	 *   @type string $field_id
+	 *   @type mixed  $value
+	 *   @type int    $entry_id
+	 * }
+	 * @return void
+	 */
+	public static function update_user_metas( $atts ) {
+		$field = $atts['field'];
+		$value = $atts['value'];
+		if ( ! FrmProEntriesHelper::user_can_edit( $atts['entry_id'], $field->form_id ) ) {
+			return;
+		}
+
+		$reg_action = FrmFormAction::get_action_for_form( $field->form_id, 'register' );
+		foreach ( $reg_action as $action ) {
+			$reg_usermeta = $action->post_content['reg_usermeta'];
+			foreach ( $reg_usermeta as $usermeta ) {
+				if ( empty( $usermeta['meta_name'] ) || empty( $usermeta['field_id'] ) || $usermeta['field_id'] !== $field->id ) {
+					continue;
+				}
+
+				$user_id = FrmRegEntry::get_user_for_entry( $atts['entry_id'] );
+				if ( ! $user_id ) {
+					continue;
+				}
+
+				if ( metadata_exists( 'user', $user_id, $usermeta['meta_name'] ) ) {
+					update_user_meta( $user_id, $usermeta['meta_name'], $value );
+				}
+			}
+		}
 	}
 
 	/**

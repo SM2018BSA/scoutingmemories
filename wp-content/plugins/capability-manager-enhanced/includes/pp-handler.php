@@ -1,10 +1,18 @@
 <?php
+/*
+ * PublishPress Capabilities [Free]
+ * 
+ * Process updates to Type-Specific Types / Taxonomies, Detailed Taxonomies
+ * 
+ */
 
 function _cme_update_pp_usage() {
 	static $updated;
 	if ( ! empty($updated) ) { return true; }
 	
-	if ( ! current_user_can( 'manage_capabilities' ) ) {
+	check_admin_referer('capsman-general-manager');
+
+	if (!current_user_can( 'manage_capabilities' )) {
 		return false;
 	}
 	
@@ -14,6 +22,8 @@ function _cme_update_pp_usage() {
 		
 		$posted = $_POST;
 		
+		$pp_prefix = (defined('PPC_VERSION') && !defined('PRESSPERMIT_VERSION')) ? 'pp' : 'presspermit';
+
 		foreach( $options as $option_basename ) {
 			if ( ! isset( $posted["{$option_basename}-options"] ) )
 				continue;
@@ -36,43 +46,50 @@ function _cme_update_pp_usage() {
 				}
 			}
 
-			//$option_name = ( ( 'detailed_taxonomies' == $option_basename ) || ! defined( 'PRESSPERMIT_ACTIVE' ) ) ?  'cme_' . $option_basename : 'pp_' . $option_basename;
-			$option_name = ( 'detailed_taxonomies' == $option_basename ) ?  'cme_' . $option_basename : 'pp_' . $option_basename;
+			$option_name = ( 'detailed_taxonomies' == $option_basename ) ?  'cme_' . $option_basename : $pp_prefix . '_' . $option_basename;
 			
 			if ( $current = get_option( $option_name ) ) {
 				if ( $current = array_diff_key( $current, $unselected ) )
 					$value = array_merge( $current, $value );	// retain setting for any types which were previously enabled for filtering but are currently not registered
 			}
 			
-			$value = stripslashes_deep($value);
+			$value = array_map('sanitize_key', $value);
 			
 			update_option( $option_name, $value );
 			
-			if ( 'pp_enabled_post_types' == $option_name ) {
+			if (in_array($option_name, ['presspermit_enabled_post_types', 'pp_enabled_post_types'])) {
 				// ensure smooth transition if Press Permit Core is deactivated
 				update_option( 'cme_enabled_post_types', $value );
+			}
+
+			if (defined('PRESSPERMIT_ACTIVE') && in_array($option_basename, ['enabled_post_types', 'enabled_taxonomies'])) {
+				pp_capabilities_update_permissions_option($option_basename, $value);
 			}
 			
 			$updated = true;
 		}
 		
 		if ( ! empty( $_REQUEST['update_filtered_types']) ) {
-			update_option( 'pp_' . 'define_create_posts_cap', ! empty($_REQUEST['pp_define_create_posts_cap']) );
+			update_option( $pp_prefix . '_define_create_posts_cap', ! empty($_REQUEST['pp_define_create_posts_cap']) );
 		}
 	}
 	
 	if ( defined( 'PRESSPERMIT_ACTIVE' ) ) {
 		if ( ! empty( $_REQUEST['SaveRole']) ) {
 			if ( ! empty( $_REQUEST['role'] ) ) {
-				$pp_only = (array) capsman_get_pp_option( 'supplemental_role_defs' );
+				$pp_only = (array) pp_capabilities_get_permissions_option( 'supplemental_role_defs' );
 				
-				if ( empty($_REQUEST['pp_only_role']) )
-					$pp_only = array_diff( $pp_only, array($_REQUEST['role']) );
-				else
-					$pp_only[]= $_REQUEST['role'];
+				$role = sanitize_key($_REQUEST['role']);
 
-				pp_update_option( 'supplemental_role_defs', array_unique($pp_only) );
-				_cme_pp_default_pattern_role( $_REQUEST['role'] );
+				if (empty($_REQUEST['pp_only_role'])) {
+					$pp_only = array_diff($pp_only, [$role]);
+				} else {
+					$pp_only[]= $role;
+				}
+				
+				pp_capabilities_update_permissions_option('supplemental_role_defs', array_unique($pp_only));
+
+				_cme_pp_default_pattern_role($role);
 			}
 		}
 		
@@ -83,4 +100,3 @@ function _cme_update_pp_usage() {
 	
 	return $updated;
 }
-

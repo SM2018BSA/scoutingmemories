@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <div class="frm-right-panel">
 	<?php if ( has_action( 'frm_edit_entry_publish_box', $record ) ) { ?>
 		<div id="submitdiv" class="postbox ">

@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
@@ -23,6 +27,7 @@ class FrmProFieldAddress extends FrmFieldType {
 			'default_value'  => true,
 			'description'    => false,
 			'visibility'     => true,
+			'read_only'      => true,
 		);
 
 		if ( is_array( $this->default_value_to_array() ) ) {
@@ -52,7 +57,7 @@ class FrmProFieldAddress extends FrmFieldType {
 	 */
 	public function show_primary_options( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/addresses/back-end-field-opts.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/addresses/back-end-field-opts.php';
 
 		parent::show_primary_options( $args );
 	}
@@ -70,12 +75,12 @@ class FrmProFieldAddress extends FrmFieldType {
 		$sub_fields    = $this->all_default_labels();
 
 		foreach ( $sub_fields as $name => $field_label ) {
-			include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/default-placeholder.php' );
+			include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/default-placeholder.php';
 		}
 
 		if ( ! empty( $field['description'] ) ) {
 			// This is here only for reverse compatibility.
-			include( FrmAppHelper::plugin_path() . '/classes/views/frm-fields/back-end/field-description.php' );
+			include FrmAppHelper::plugin_path() . '/classes/views/frm-fields/back-end/field-description.php';
 		}
 	}
 
@@ -126,11 +131,11 @@ class FrmProFieldAddress extends FrmFieldType {
 		$field_name = $this->html_name( $name );
 		$html_id = $this->html_id();
 
-		include( FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/input-form-builder.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/combo-fields/input-form-builder.php';
 	}
 
 	public function front_field_input( $args, $shortcode_atts ) {
-		$pass_args = array( 'errors' => $args['errors'], 'html_id' => $args['html_id'] );
+		$pass_args = array( 'errors' => $args['errors'], 'html_id' => $args['html_id'], 'field_id' => $args['field_id'] );
 		ob_start();
 		FrmProAddressesController::show_in_form( $this->field, $args['field_name'], $pass_args );
 		$input_html = ob_get_contents();
@@ -257,8 +262,11 @@ class FrmProFieldAddress extends FrmFieldType {
 		return array_combine( $empty_array, $value );
 	}
 
+	/**
+	 * @return array
+	 */
 	private function empty_value_array() {
-		return array( 'line1' => '', 'line2' => '', 'city' => '', 'state' => '', 'zip' => '', 'country' => '' );
+		return FrmProAddressesController::empty_value_array();
 	}
 
 	/**

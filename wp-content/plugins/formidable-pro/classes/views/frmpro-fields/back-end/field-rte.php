@@ -1,4 +1,10 @@
-<div class="frm_rte">
-	<p class="howto"><?php esc_html_e( 'These buttons are for illustrative purposes only. They will be functional in your form.', 'formidable-pro' ) ?></p>
-	<textarea name="<?php echo esc_attr( $field_name ) ?>" rows="<?php echo esc_attr( $field['max'] ); ?>"><?php echo FrmAppHelper::esc_textarea( $field['default_value'] ); ?></textarea>
-</div>
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+$editor_args = array(
+	'textarea_name' => $field_name,
+	'textarea_rows' => $field['max'],
+	'media_buttons' => false,
+);
+wp_editor( $field['default_value'], $field['html_id'], $editor_args );

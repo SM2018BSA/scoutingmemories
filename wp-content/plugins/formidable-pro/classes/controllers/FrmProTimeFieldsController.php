@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 2.03.08
  */
@@ -46,7 +50,7 @@ class FrmProTimeFieldsController {
 	public static function load_timepicker_js( $datepicker ) {
 		global $frm_vars;
 
-		if ( ! isset( $frm_vars['timepicker_loaded'] ) || empty( $frm_vars['timepicker_loaded'] ) || ! $datepicker ) {
+		if ( empty( $frm_vars['timepicker_loaded'] ) || ! $datepicker ) {
 			return;
 		}
 
@@ -56,7 +60,10 @@ class FrmProTimeFieldsController {
 				continue;
 			}
 
-			$unique_time_fields[] = array( 'dateID' => $datepicker, 'timeID' => $time_field_id );
+			$unique_time_fields[] = array(
+				'dateID' => $datepicker,
+				'timeID' => $time_field_id,
+			);
 		}
 
 		if ( ! empty( $unique_time_fields ) ) {

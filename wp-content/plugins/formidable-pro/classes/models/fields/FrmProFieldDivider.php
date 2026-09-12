@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
@@ -47,12 +51,16 @@ DEFAULT_HTML;
 		return $settings;
 	}
 
+	/**
+	 * @return array
+	 */
 	protected function extra_field_opts() {
 		return array(
-			'slide'  => 0,
-			'repeat' => 0,
+			'slide'        => 0,
+			'repeat'       => 0,
+			'repeat_min'   => '',
 			'repeat_limit' => '',
-			'label'  => 'top',
+			'label'        => 'top',
 		);
 	}
 
@@ -62,7 +70,11 @@ DEFAULT_HTML;
 	 */
 	public function show_primary_options( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/repeat-options-top.php' );
+		if ( FrmField::get_option( $field, 'repeat' ) ) {
+			include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/repeat-options-top.php';
+		}
+
+		require FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/options-form-top.php';
 
 		parent::show_primary_options( $args );
 	}
@@ -155,10 +167,27 @@ DEFAULT_HTML;
 		}
 
 		if ( FrmField::is_option_true( $this->field, 'slide' ) ) {
+			/**
+			 * By default a collapsible section is closed.
+			 * This filter can be used to have it default as open instead.
+			 *
+			 * @since 5.5.6
+			 *
+			 * @param bool         $open
+			 * @param object|array $field
+			 */
+			$section_is_open = (bool) apply_filters( 'frm_section_is_open', false, $this->field );
+
 			$trigger = ' frm_trigger';
-			$collapse_div = '<div class="frm_toggle_container frm_grid_container" style="display:none;">';
+			if ( $section_is_open ) {
+				$trigger .= ' active';
+			}
+
+			$style        = $section_is_open ? '' : 'style="display:none;"';
+			$collapse_div = '<div class="frm_toggle_container frm_grid_container" ' . $style . '>';
 		} else {
-			$trigger = $collapse_div = '';
+			$trigger      = '';
+			$collapse_div = '';
 		}
 
 		if ( FrmField::is_option_true( $this->field, 'repeat' ) ) {
@@ -186,7 +215,8 @@ DEFAULT_HTML;
 			}
 		}
 
-		$this->maybe_add_collapse_icon( $trigger, $html );
+		$this->maybe_add_html_atts( $trigger, $html, array( 'tabindex' => '0', 'role' => 'button' ) );
+		$this->maybe_add_collapse_icon( $trigger, $html, isset( $section_is_open ) ? $section_is_open : false );
 		$this->maybe_hide_section( $html );
 
 		return str_replace( '[collapse_class]', $trigger, $html );
@@ -219,34 +249,106 @@ DEFAULT_HTML;
 	}
 
 	/**
+	 * Add the custom html attributes to collapsible section headings
+	 *
+	 * @since 5.3.2
+	 *
+	 * @param string $trigger
+	 * @param string $html, pass by reference
+	 * @param array $atts, key value pairs of html attributes.
+	 */
+	private function maybe_add_html_atts( $trigger, &$html, $atts ) {
+		if ( empty( $atts ) || ! is_array( $atts ) || ! $trigger ) {
+			return;
+		}
+
+		// matches h2 - h6 elements, from opening to closing tags
+		preg_match_all( "/\<h[2-6]\b(.*?)(?:(\/))?\>(.*?)(?:(\/))?\<\/h[2-6]>/su", $html, $headings, PREG_PATTERN_ORDER );
+
+		if ( empty( $headings[3] ) ) {
+			return;
+		}
+
+		foreach ( $atts as $att => $value ) {
+			// matches the atrribute if exists in the heading and remove it from html atts array.
+			if ( preg_match( "/{$att}=\"[^\"]*\"/", $headings[1][0] ) === 1 ) {
+				unset( $atts[ $att ] );
+			}
+		}
+
+		if ( ! $atts ) {
+			return;
+		}
+
+		$header_text        = reset( $headings[3] );
+		$search_header_text = '>' . $header_text . '<';
+		$old_header_html    = reset( $headings[0] );
+		$add_atts           = FrmAppHelper::array_to_html_params( $atts );
+		$new_header_html    = str_replace( $search_header_text, $add_atts . '>' . $header_text . '<', $old_header_html );
+
+		$html = str_replace( $old_header_html, $new_header_html, $html );
+	}
+
+	/**
 	 * Add the collapse icon next to collapsible section headings
 	 *
 	 * @since 3.0
 	 *
 	 * @param string $trigger
 	 * @param string $html, pass by reference
+	 * @param bool   $section_is_open
+	 * @return void
 	 */
-	private function maybe_add_collapse_icon( $trigger, &$html ) {
-		if ( ! empty( $trigger ) ) {
-			$style = FrmStylesController::get_form_style( $this->field['form_id'] );
-
-			preg_match_all( "/\<h[2-6]\b(.*?)(?:(\/))?\>(.*?)(?:(\/))?\<\/h[2-6]>/su", $html, $headings, PREG_PATTERN_ORDER);
-
-			if ( isset( $headings[3] ) && ! empty( $headings[3] ) ) {
-				$header_text = reset( $headings[3] );
-				$search_header_text = '>' . $header_text . '<';
-				$old_header_html = reset( $headings[0] );
-
-				$icon = '<i class="frm_icon_font frm_arrow_icon" aria-expanded="false" aria-label="' . esc_attr__( 'Toggle fields', 'formidable-pro' ) . '"></i>';
-				if ( 'before' == $style->post_content['collapse_pos'] ) {
-					$new_header_html = str_replace( $search_header_text, '>' . $icon . ' ' . $header_text . '<', $old_header_html );
-				} else {
-					$new_header_html = str_replace( $search_header_text, '>' . $header_text . $icon . '<', $old_header_html );
-				}
-
-				$html = str_replace( $old_header_html, $new_header_html, $html );
-			}
+	private function maybe_add_collapse_icon( $trigger, &$html, $section_is_open = false ) {
+		if ( ! $trigger ) {
+			return;
 		}
+
+		$style          = FrmStylesController::get_form_style( $this->field['form_id'] );
+		$style_settings = FrmStylesHelper::get_settings_for_output( $style );
+
+		preg_match_all( "/\<h[2-6]\b(.*?)(?:(\/))?\>(.*?)(?:(\/))?\<\/h[2-6]>/su", $html, $headings, PREG_PATTERN_ORDER );
+
+		if ( empty( $headings[3] ) ) {
+			return;
+		}
+
+		$header_text        = reset( $headings[3] );
+		$search_header_text = '>' . $header_text . '<';
+		$old_header_html    = reset( $headings[0] );
+		$aria_expanded      = $section_is_open ? 'true' : 'false';
+
+		$collapse_icon  = isset( $style_settings['collapse_icon'] ) ? $style_settings['collapse_icon'] : 1;
+		$svg_args       = array(
+			'echo'          => false,
+			'width'         => '1em',
+			'height'        => '1em',
+			'aria-expanded' => $aria_expanded,
+			'aria-label'    => __( 'Toggle fields', 'formidable-pro' ),
+		);
+
+		$icons_order = array( '+', '-' );
+
+		// Reverse order for arrow icons
+		if ( is_numeric( $collapse_icon ) ) {
+			$icons_order = array_reverse( $icons_order );
+		}
+
+		$icon_visible_svg_slug   = FrmStylesHelper::icon_key_to_class( $collapse_icon, $icons_order[0] );
+		$icon_invisible_svg_slug = FrmStylesHelper::icon_key_to_class( $collapse_icon, $icons_order[1] );
+
+		$icon_visible   = FrmProAppHelper::get_svg_icon( $icon_visible_svg_slug, 'frmsvg frm-svg-icon', $svg_args );
+		$icon_invisible = FrmProAppHelper::get_svg_icon( $icon_invisible_svg_slug, 'frmsvg frm-svg-icon', $svg_args );
+		$icon           = $icon_visible . $icon_invisible;
+
+		if ( 'before' === $style_settings['collapse_pos'] ) {
+			$replace_with = '>' . $icon . ' ' . $header_text . '<';
+		} else {
+			$replace_with = '>' . $header_text . ' ' . $icon . '<';
+		}
+
+		$new_header_html = str_replace( $search_header_text, $replace_with, $old_header_html );
+		$html            = str_replace( $old_header_html, $new_header_html, $html );
 	}
 
 	public function get_label_class() {
@@ -257,16 +359,13 @@ DEFAULT_HTML;
 		$classes = '';
 
 		// If the top margin needs to be removed from a section heading
-		if ( $this->field['label'] == 'none' ) {
+		if ( $this->field['label'] === 'none' ) {
 			$classes .= ' frm_hide_section';
 		}
 
 		// If this is a repeating section that should be hidden with exclude_fields or fields shortcode, hide it
-		if ( $this->field['repeat'] ) {
-			global $frm_vars;
-			if ( isset( $frm_vars['show_fields'] ) && ! empty( $frm_vars['show_fields'] ) && ! in_array( $this->field['id'], $frm_vars['show_fields'] ) && ! in_array( $this->field['field_key'], $frm_vars['show_fields'] ) ) {
-				$classes .= ' frm_hidden';
-			}
+		if ( $this->field['repeat'] && ! FrmProGlobalVarsHelper::get_instance()->field_is_visible( $this->field ) ) {
+			$classes .= ' frm_hidden';
 		}
 
 		return $classes;

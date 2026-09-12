@@ -1,6 +1,6 @@
 <div class="error" id="frmreg_install_message">
 	<p><?php
-	printf( __( 'Your Formidable Registration database needs to be updated.%1$sPlease deactivate and reactivate the plugin or %2$sUpdate Now%3$s', 'frmreg' ),
+	printf( esc_html__( 'Your Formidable Registration database needs to be updated.%1$sPlease deactivate and reactivate the plugin or %2$sUpdate Now%3$s', 'frmreg' ),
 		'<br/>',
 		'<a id="frmreg_install_link" href="javascript:frmreg_install_now()">',
 		'</a>' ); ?>

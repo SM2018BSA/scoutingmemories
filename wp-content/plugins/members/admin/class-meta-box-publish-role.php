@@ -4,14 +4,14 @@
  *
  * @package    Members
  * @subpackage Admin
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
-
 namespace Members\Admin;
 
+defined('ABSPATH') || exit;
 /**
  * Class to handle the role meta box edit/new role screen.
  *
@@ -51,7 +51,7 @@ final class Meta_Box_Publish_Role {
 	 */
 	public function load() {
 
-		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
+		add_action( 'members_add_role_meta_boxes', array( $this, 'add_meta_boxes' ) );
 	}
 
 	/**
@@ -97,8 +97,19 @@ final class Meta_Box_Publish_Role {
 
 				<div class="misc-pub-section misc-pub-section-users">
 					<i class="dashicons dashicons-admin-users"></i>
-					<?php esc_html_e( 'Users:', 'members' ); ?>
-					<strong class="user-count"><?php echo number_format_i18n( $user_count ); ?></strong>
+					<?php if ( 0 < $user_count && current_user_can( 'list_users' ) ) : ?>
+
+						<a href="<?php echo esc_url( add_query_arg( 'role', $role->name, admin_url( 'users.php' ) ) ); ?>"><?php echo esc_html(
+							sprintf(
+								_n( '%s User', '%s Users', absint( $user_count ), 'members' ),
+								number_format_i18n( $user_count )
+							)
+						); ?></a>
+
+					<?php else : ?>
+						<?php esc_html_e( 'Users:', 'members' ); ?>
+						<strong class="user-count"><?php echo number_format_i18n( $user_count ); ?></strong>
+					<?php endif; ?>
 				</div>
 
 				<div class="misc-pub-section misc-pub-section-granted">

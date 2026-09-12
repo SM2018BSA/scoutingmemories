@@ -4,7 +4,7 @@
  * @since 2.0
  * Class FrmRegGlobalSettings
  */
-class FrmRegGlobalSettings extends FrmRegSettings{
+class FrmRegGlobalSettings {
 
 	private $global_pages = array();
 	private $global_messages = array();
@@ -12,14 +12,38 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 	private $global_pages_key = 'frm_reg_global_pages';
 	private $global_messages_key = 'frm_reg_global_messages';
 
+	private $current_form = 0;
+
 	/**
 	 * FrmRegGlobalSettings constructor
 	 *
 	 * @since 2.0
 	 */
-	public function __construct() {
+	public function __construct( $args = array() ) {
+		$this->set_current_form( $args );
 		$this->init_global_pages();
 		$this->init_global_messages();
+		$this->maybe_translate_strings();
+	}
+
+	/**
+	 * If a form ID is passed, set it so it can be used for translations.
+	 *
+	 * @since 2.03
+	 */
+	private function set_current_form( $args ) {
+		if ( isset( $args['current_form'] ) ) {
+			$this->current_form = $args['current_form'];
+		}
+	}
+
+	/**
+	 * Return the form id if it has been set.
+	 *
+	 * @since 2.03
+	 */
+	public function get_current_form() {
+		return $this->current_form;
 	}
 
 	/**
@@ -31,9 +55,9 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 		$saved_settings = $this->get_saved_options( $this->global_pages_key, true );
 
 		$defaults = array(
-			'login_page'    => '',
+			'login_page'     => '',
 			'resetpass_page' => '',
-			'register_page'    => '',
+			'register_page'  => '',
 		);
 
 		if ( $saved_settings !== false ) {
@@ -49,6 +73,13 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 		} else {
 			$this->global_pages = $defaults;
 		}
+
+		/**
+		 * Change the global page ids if a different page should be used in special cases.
+		 *
+		 * @since 2.03
+		 */
+		$this->global_pages = apply_filters( 'frmreg_global_pages', $this->global_pages, $this );
 	}
 
 	/**
@@ -59,7 +90,20 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 	private function init_global_messages() {
 		$saved_settings = $this->get_saved_options( $this->global_messages_key );
 
-		$defaults = array(
+		$defaults = $this->default_messages();
+
+		if ( $saved_settings !== false ) {
+			$this->global_messages = wp_parse_args( $saved_settings, $defaults );
+		} else {
+			$this->global_messages = $defaults;
+		}
+	}
+
+	/**
+	 * @since 2.03
+	 */
+	private function default_messages() {
+		return array(
 			'existing_email'    => __( 'This email address is already registered.', 'frmreg' ),
 			'existing_username' => __( 'This username is already registered.', 'frmreg' ),
 			'blank_password'    => __( 'Please enter a valid password.', 'frmreg' ),
@@ -70,14 +114,8 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 			'update_username'   => __( 'Your username cannot be changed at this time.', 'frmreg' ),
 			'lost_password'     => __( 'Please enter your username or email address. You will receive a link to create a new password via email.', 'frmreg' ),
 			'reset_password'    => __( 'Enter your new password below.', 'frmreg' ),
-			'existing_subsite'    => __( 'Sorry, that site already exists!', 'frmreg' ),
+			'existing_subsite'  => __( 'Sorry, that site already exists!', 'frmreg' ),
 		);
-
-		if ( $saved_settings !== false ) {
-			$this->global_messages = wp_parse_args( $saved_settings, $defaults );
-		} else {
-			$this->global_messages = $defaults;
-		}
 	}
 
 	/**
@@ -105,7 +143,7 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 	}
 
 	/**
-	 * Get a global message
+	 * Get a global message. If this is a multisite network, get the value from the PO files.
 	 *
 	 * @since 2.0
 	 *
@@ -114,7 +152,57 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 	 * @return string
 	 */
 	public function get_global_message( $message_name ) {
+		if ( in_array( $message_name, $this->skip_multilingual_string() ) && $this->is_multilingual() ) {
+			$defaults = $this->default_messages();
+			return $defaults[ $message_name ];
+		}
+
 		return $this->get_item_from_property( 'global_messages', $message_name );
+	}
+
+	/**
+	 * @since 2.03
+	 */
+	private function maybe_translate_strings() {
+		if ( empty( $this->current_form ) ) {
+			return;
+		}
+
+		$this->global_messages = apply_filters( 'frmreg_global_messages', $this->global_messages, $this );
+	}
+
+	/**
+	 * Return a list of strings that may be different on multilingual sites.
+	 *
+	 * @since 2.03
+	 * @return array
+	 */
+	public function get_translatable_strings() {
+		$skip    = $this->skip_multilingual_string();
+		$strings = array();
+		foreach ( $this->global_messages as $name => $value ) {
+			if ( ! in_array( $name, $skip ) ) {
+				$strings[] = $name;
+			}
+		}
+
+		return $strings;
+	}
+
+	/**
+	 * @since 2.03
+	 * @return array
+	 */
+	private function skip_multilingual_string() {
+		return array( 'lost_password', 'reset_password' );
+	}
+
+	/**
+	 * @since 2.03
+	 * @return bool
+	 */
+	private function is_multilingual() {
+		return class_exists( 'FrmWpmlHooksController' ) || class_exists( 'FrmPllAppController' );
 	}
 
 	/**
@@ -159,11 +247,13 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 	 * Check to make sure a specific shortcode is present in a Login or Reset Password page's content
 	 *
 	 * @since 2.0
+	 * @since 2.05 This method is public.
+	 *
 	 * @param string $selected_page
 	 * @param string $page_key
 	 * @param array $errors
 	 */
-	private function check_page_content( $selected_page, $page_key, &$errors ) {
+	public function check_page_content( $selected_page, $page_key, &$errors ) {
 		if ( $selected_page === '' ) {
 			return;
 		}
@@ -178,7 +268,14 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 		if ( '' === $content ) {
 			// check the post content if the remote get failed
 			$content = $this->get_page_content( $selected_page );
+			if ( strpos( $content, $check_content ) !== false ) {
+				return;
+			}
 			$check_content = $this->check_for_shortcode( $page_key );
+		}
+
+		if ( ! $content ) {
+			return;
 		}
 
 		if ( strpos( $content, $check_content ) === false ) {
@@ -214,7 +311,8 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 	 */
 	private function get_page_content( $selected_page ) {
 		$content = get_post( $selected_page );
-		return $content->post_content;
+
+		return $content ? $content->post_content : '';
 	}
 
 	/**
@@ -251,7 +349,7 @@ class FrmRegGlobalSettings extends FrmRegSettings{
 		$messages = array(
 			'login_page'     => sprintf( __( 'The selected Login/Logout page does not include a login form. Please select a page that includes the %s shortcode.', 'frmreg' ), '[frm-login]' ),
 			'resetpass_page' => sprintf( __( 'The selected Reset Password page does not include a reset password form. Please select a page that includes the %s shortcode.', 'frmreg' ), '[frm-reset-password]' ),
-			'register_page'  => __( 'The selected registration page does not include a registration form. Please select a page that has a registration form published on it.', 'frmreg' ),
+			'register_page'  => __( 'The selected registration page does not include a registration form. Please select a page that has a registration form that can be viewed when logged out.', 'frmreg' ),
 		);
 		return isset( $messages[ $page_key ] ) ? $messages[ $page_key ] : '';
 	}

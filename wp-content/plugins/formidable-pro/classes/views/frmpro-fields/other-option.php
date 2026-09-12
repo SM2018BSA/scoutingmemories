@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <li id="frm_delete_field_<?php echo esc_attr( $field['id'] . '-' . $opt_key ); ?>_container" data-optkey="<?php echo esc_attr( $opt_key ); ?>" class="frm_single_option frm_other_option">
 	<?php FrmProAppHelper::icon_by_class( 'frm_icon_font frm_drag_icon frm-drag' ); ?>
 
@@ -8,14 +13,13 @@
 		// Get string for Other text field.
 		$other_val = FrmFieldsHelper::get_other_val( compact( 'opt_key', 'field' ) );
 
-		$checked = $other_val ? ' checked="checked"' : '';
+		$checked = (bool) $other_val;
 	}
 	?>
-	<input type="<?php echo esc_attr( $default_type ); ?>" name="<?php echo esc_attr( $field_name ); ?>" <?php echo $checked; // WPCS: XSS ok. ?> value="<?php echo esc_attr( $field_val ); ?>" />
-
+	<input type="<?php echo esc_attr( $default_type ); ?>" name="<?php echo esc_attr( $field_name ); ?>" <?php checked( ! empty( $checked ) ); ?> value="<?php echo esc_attr( $field_val ); ?>" />
 
 	<span class="frm-with-right-icon">
-		<input type="text" name="field_options[options_<?php echo esc_attr( $field['id'] ); ?>][<?php echo esc_attr( $opt_key ); ?>]" value="<?php echo esc_attr( $opt ); ?>" class="field_<?php echo esc_attr( $field['id'] ); ?>_option <?php echo esc_attr( $field['separate_value'] ? 'frm_with_key' : '' ); ?>" id="<?php echo esc_attr( $html_id . '-' . $opt_key ); ?>" />
+		<input type="text" name="field_options[options_<?php echo esc_attr( $field['id'] ); ?>][<?php echo esc_attr( $opt_key ); ?>]" value="<?php echo esc_attr( $opt ); ?>" class="field_<?php echo esc_attr( $field['id'] ); ?>_option <?php echo esc_attr( $field['separate_value'] ? 'frm_with_key' : '' ); ?>" id="<?php echo esc_attr( $html_id . '-' . $opt_key ); ?>" data-frmchange="updateDefault" />
 		<?php
 		FrmProAppHelper::icon_by_class(
 			'frm_icon_font frm_pencil_icon',

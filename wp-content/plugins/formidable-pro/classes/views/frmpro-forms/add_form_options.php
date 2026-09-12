@@ -1,153 +1,128 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <p class="howto">
-	<?php esc_html_e( 'Determine who can see, submit, and edit form entries.', 'formidable-pro' ) ?>
+	<?php esc_html_e( 'Determine who can see, submit, and edit form entries.', 'formidable-pro' ); ?>
 </p>
 
 <div class="frm_grid_container">
 	<p class="frm4 frm_form_field">
-        <label for="logged_in">
-			<input type="checkbox" name="logged_in" id="logged_in" value="1" <?php checked( $values['logged_in'], 1 ); ?> />
-			<?php printf( __( 'Limit form visibility %1$sto%2$s', 'formidable-pro' ), '<span class="hide_logged_in ' . esc_attr( $values['logged_in'] ? '' : 'frm_invisible' ) . '">', '</span>' ) ?>
-        </label>
+		<label id="for_logged_in_role" for="logged_in">
+			<input type="checkbox" name="logged_in" id="logged_in" value="1" <?php checked( $values['logged_in'], 1 ); ?> data-frmshow="#logged_in_role" data-toggleclass="frm_invisible" />
+			<?php printf( esc_html__( 'Limit form visibility %1$sto%2$s', 'formidable-pro' ), '<span class="hide_logged_in ' . esc_attr( $values['logged_in'] ? '' : 'frm_invisible' ) . '">', '</span>' ); ?>
+		</label>
 	</p>
-    <p class="frm8 frm_form_field frm_select_with_label">
-        <select name="options[logged_in_role]" id="logged_in_role" class="hide_logged_in <?php echo esc_attr( $values['logged_in'] ? '' : 'frm_invisible' ); ?>">
-			<option value=""><?php esc_html_e( 'Logged-in Users', 'formidable-pro' ); ?></option>
-            <?php FrmAppHelper::roles_options($values['logged_in_role']); ?>
-        </select>
+	<p class="frm8 frm_form_field frm_select_with_label">
+		<select name="options[logged_in_role][]" id="logged_in_role" class="frm_multiselect hide_logged_in <?php echo esc_attr( $values['logged_in'] ? '' : 'frm_invisible' ); ?>" multiple="multiple">
+			<option value="" <?php FrmProAppHelper::selected( $values['logged_in_role'], '' ); ?>><?php esc_html_e( 'Logged-in Users', 'formidable-pro' ); ?></option>
+			<?php FrmAppHelper::roles_options($values['logged_in_role']); ?>
+		</select>
 	</p>
 
-    <p class="frm4 frm_form_field">
+	<p class="frm4 frm_form_field">
 		<label for="single_entry">
 			<input type="checkbox" name="options[single_entry]" id="single_entry" value="1" <?php checked( $values['single_entry'], 1 ); ?> />
-			<?php printf( __( 'Limit number of entries %1$sto one per%2$s', 'formidable-pro' ), '<span class="hide_single_entry' . esc_attr( $values['single_entry'] ? '' : ' frm_invisible' ) . '">', '</span>' ) ?>
+			<?php printf( esc_html__( 'Limit number of entries %1$sto one per%2$s', 'formidable-pro' ), '<span class="frm-single-entry-setting' . esc_attr( $values['single_entry'] ? '' : ' frm_invisible' ) . '">', '</span>' ); ?>
 		</label>
-    </p>
-    <p class="frm8 frm_form_field frm_select_with_label">
-        <select name="options[single_entry_type]" id="frm_single_entry_type" class="hide_single_entry <?php echo esc_attr( $values['single_entry'] ? '' : 'frm_invisible' ); ?>">
-			<option value="user" <?php selected( $values['single_entry_type'], 'user' ); ?>>
+	</p>
+	<p class="frm8 frm_form_field frm_select_with_label">
+		<select id="frm_single_entry_type" name="options[single_entry_type][]" class="frm_multiselect frm-single-entry-setting<?php echo esc_attr( $values['single_entry'] ? '' : ' frm_invisible' ); ?>" multiple="multiple">
+			<option value="user" <?php selected( in_array( 'user', $values['single_entry_type'], true ) ); ?>>
 				<?php esc_html_e( 'Logged-in User', 'formidable-pro' ); ?>
 			</option>
 			<?php if ( FrmAppHelper::ips_saved() ) { ?>
-			<option value="ip" <?php selected( $values['single_entry_type'], 'ip' ); ?>>
+			<option value="ip" <?php selected( in_array( 'ip', $values['single_entry_type'], true ) ); ?>>
 				<?php esc_html_e( 'IP Address', 'formidable-pro' ); ?>
 			</option>
 			<?php } ?>
-			<option value="cookie" <?php selected( $values['single_entry_type'], 'cookie' ); ?>>
+			<option value="cookie" <?php selected( in_array( 'cookie', $values['single_entry_type'], true ) ); ?>>
 				<?php esc_html_e( 'Saved Cookie', 'formidable-pro' ); ?>
 			</option>
-        </select>
-    </p>
-
-	<p id="frm_cookie_expiration" class="frm_indent_opt <?php echo ( $values['single_entry'] && $values['single_entry_type'] == 'cookie' ) ? '' : 'frm_hidden'; ?>">
-		<label><?php esc_html_e( 'Cookie Expiration', 'formidable-pro' ); ?></label>
-		<input type="text" name="options[cookie_expiration]" value="<?php echo esc_attr($values['cookie_expiration']) ?>"/> 
-		<span class="howto"><?php esc_html_e( 'hours', 'formidable-pro' ); ?></span>
-	</p>
-
-    <p>
-		<label for="editable">
-			<input type="checkbox" name="editable" id="editable" value="1" <?php checked( $values['editable'], 1 ) ?> />
-			<?php esc_html_e( 'Allow front-end editing of entries', 'formidable-pro' ); ?>
-		</label>
-    </p>
-
-	<p class="frm4 frm_form_field hide_editable frm_indent_opt <?php echo esc_attr( $values['editable'] ? '' : 'frm_hidden' ); ?>">
-		<label for="editable_role">
-			<?php esc_html_e( 'Role required to edit one\'s own entries', 'formidable-pro' ); ?>
-		</label>
-	</p>
-	<p class="frm8 frm_form_field hide_editable <?php echo esc_attr( $values['editable'] ? '' : 'frm_hidden' ); ?>">
-        <select name="options[editable_role]" id="editable_role">
-			<option value=""><?php esc_html_e( 'Logged-in Users', 'formidable-pro' ); ?></option>
-            <?php FrmAppHelper::roles_options($values['editable_role']); ?>
-        </select>
-	</p>
-
-<?php
-if ( isset( $values['open_editable'] ) && empty( $values['open_editable'] ) ) {
-    $values['open_editable_role'] = '-1';
-}
-?>
-	<p class="frm4 frm_form_field hide_editable frm_indent_opt <?php echo esc_attr( $values['editable'] ? '' : 'frm_hidden' ); ?>">
-		<label for="open_editable_role">
-			<?php esc_html_e( 'Role required to edit other users\' entries', 'formidable-pro' ); ?>
-		</label>
-	</p>
-	<p class="frm8 frm_form_field hide_editable <?php echo esc_attr( $values['editable'] ? '' : 'frm_hidden' ); ?>">
-		<select name="options[open_editable_role]" id="open_editable_role">
-			<option value="-1"></option>
-			<option value="" <?php selected( $values['open_editable_role'], '' ); ?>>
-				<?php esc_html_e( 'Logged-in Users', 'formidable-pro' ); ?>
+			<?php if ( $email_fields ) { ?>
+			<option value="email" <?php selected( in_array( 'email', $values['single_entry_type'], true ) ); ?>>
+				<?php esc_html_e( 'Email Address', 'formidable-pro' ); ?>
 			</option>
-			<?php FrmAppHelper::roles_options( $values['open_editable_role'] ); ?>
+			<?php } ?>
 		</select>
 	</p>
-	<p class="frm4 frm_form_field hide_editable frm_indent_opt <?php echo esc_attr( $values['editable'] ? '' : 'frm_hidden' ); ?>">
-	        <label for="edit_action">
-				<?php esc_html_e( 'On Update', 'formidable-pro' ); ?>
+
+	<div id="frm_cookie_expiration" class="frm-single-entry-type-cookie-setting frm_grid_container <?php echo FrmProFormsHelper::check_single_entry_type( $values, 'cookie' ) ? '' : 'frm_hidden'; ?>">
+		<p class="frm4 frm_indent_opt frm_first">
+			<label for="cookie_expiration">
+				<?php esc_html_e( 'Cookie Expiration', 'formidable-pro' ); ?>
 			</label>
-	</p>
-	<p class="frm8 frm_form_field hide_editable <?php echo esc_attr( $values['editable'] ? '' : 'frm_hidden' ); ?>">
-            <select name="options[edit_action]" id="edit_action">
-				<option value="message" <?php selected( $values['edit_action'], 'message' ); ?>>
-					<?php esc_html_e( 'Show Message', 'formidable-pro' ); ?>
-				</option>
-				<option value="redirect" <?php selected( $values['edit_action'], 'redirect' ); ?>>
-					<?php esc_html_e( 'Redirect to URL', 'formidable-pro' ); ?>
-				</option>
-				<option value="page" <?php selected( $values['edit_action'], 'page' ); ?>>
-					<?php esc_html_e( 'Show Page Content', 'formidable-pro' ); ?>
-				</option>
-            </select>
-	</p>
-	<p class="frm_has_shortcodes frm8 frm_form_field hide_editable edit_action_redirect_box edit_action_box <?php echo esc_attr( $values['edit_action'] === 'redirect' && $values['editable'] ? '' : 'frm_hidden' ); ?>">
-		<label for="edit_url">
-			<?php esc_html_e( 'Redirect URL', 'formidable-pro' ); ?>
-		</label>
-		<input type="text" name="options[edit_url]" id="edit_url" value="<?php echo esc_attr( isset( $values['edit_url'] ) ? $values['edit_url'] : '' ); ?>" placeholder="http://example.com" />
-	</p>
+		</p>
+		<p class="frm8">
+			<input type="text" id="cookie_expiration" name="options[cookie_expiration]" value="<?php echo esc_attr( $values['cookie_expiration'] ); ?>" size="6" class="frm-w-auto">
+			<span class="howto"><?php esc_html_e( 'hours', 'formidable-pro' ); ?></span>
+		</p>
+	</div>
 
-	<p class="frm8 frm_form_field hide_editable edit_action_page_box edit_action_box <?php echo esc_attr( $values['edit_action'] == 'page' && $values['editable'] ? '' : 'frm_hidden' ); ?>">
-		<label for="options[edit_page_id]">
-			<?php esc_html_e( 'Use Content from Page', 'formidable-pro' ); ?>
-		</label>
-		<?php FrmAppHelper::wp_pages_dropdown( 'options[edit_page_id]', $values['edit_page_id'] ) ?>
-	</p>
-
-    <p>
-		<label for="save_draft">
-			<input type="checkbox" name="options[save_draft]" id="save_draft" value="1" <?php checked( $values['save_draft'], 1 ) ?> />
-			<?php esc_html_e( 'Allow logged-in users to save drafts', 'formidable-pro' ); ?>
-		</label>
-    </p>
-
-<?php if ( $has_file_field ) { ?>
-	<p>
-		<label for="protect_files">
-			<input type="checkbox" name="options[protect_files]" id="protect_files" value="1" <?php checked( $values['protect_files'], 1 ) ?> />
-			<?php esc_html_e( 'Protect all files uploaded in this form', 'formidable-pro' ); ?>
+	<?php
+	if ( count( $email_fields ) === 1 ) {
+		?>
+		<input type="hidden" name="options[unique_email_id]" value="<?php echo esc_attr( reset( $email_fields )->id ); ?>" />
+		<?php
+	} elseif ( $email_fields ) {
+		$single_entry_email_wrapper_params = array(
+			'class' => 'frm8 frm_first frm_form_field frm_select_with_label frm-single-entry-type-email-setting',
+		);
+		if ( ! FrmProFormsHelper::check_single_entry_type( $values, 'email' ) ) {
+			$single_entry_email_wrapper_params['class'] .= ' frm_hidden';
+		}
+		$single_entry_label_wrapper_params['class'] = str_replace( 'frm8', 'frm4 frm_indent_opt', $single_entry_email_wrapper_params['class'] );
+		?>
+	<p <?php FrmAppHelper::array_to_html_params( $single_entry_label_wrapper_params, true ); ?>>
+		<label for="frm_unique_email_id">
+			<?php esc_html_e( 'Email Address Field', 'formidable-pro' ); ?>
 		</label>
 	</p>
-<?php } else { ?>
-	<input type="hidden" value="0" name="options[protect_files]" />
-<?php } ?>
+	<p <?php FrmAppHelper::array_to_html_params( $single_entry_email_wrapper_params, true ); ?>>
+		<select id="frm_unique_email_id" name="options[unique_email_id]">
+			<option value="">
+				<?php echo esc_html_e( '&mdash; Select Field &mdash;', 'formidable-pro' ); ?>
+			</option>
+			<?php
+			foreach ( $email_fields as $email_field ) {
+				FrmProHtmlHelper::echo_dropdown_option(
+					$email_field->name,
+					isset( $values['unique_email_id'] ) && (string) $values['unique_email_id'] === (string) $email_field->id,
+					array(
+						'value' => $email_field->id,
+					)
+				);
+			}
+			?>
+		</select>
+	</p>
+		<?php
+		unset( $single_entry_email_wrapper_params, $single_entry_label_wrapper_params );
+	}
+	?>
 
 <?php
+require FrmProAppHelper::plugin_path() . '/classes/views/frmpro-forms/file-protection-options.php';
+
 if ( is_multisite() ) {
 	if ( current_user_can( 'setup_network' ) ) {
 	?>
-        <p>
+		<p>
 			<label for="copy">
 				<input type="checkbox" name="options[copy]" id="copy" value="1" <?php echo ( $values['copy'] ) ? ' checked="checked"' : ''; ?> />
 				<?php esc_html_e( 'Copy this form to other blogs when Formidable Forms is activated', 'formidable-pro' ); ?>
 			</label>
 		</p>
-		<?php
+	<?php
 	} elseif ( $values['copy'] ) {
 		?>
-        <input type="hidden" name="options[copy]" id="copy" value="1" />
+		<input type="hidden" name="options[copy]" id="copy" value="1" />
 		<?php
-    }
+	}
 }
+
+require FrmProAppHelper::plugin_path() . '/classes/views/frmpro-forms/edit-entry-options.php';
+require FrmProAppHelper::plugin_path() . '/classes/views/frmpro-forms/save-draft-options.php';
 ?>
 </div>

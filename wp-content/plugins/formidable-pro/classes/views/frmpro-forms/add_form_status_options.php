@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <p class="howto">
 	<?php esc_html_e( 'Prevent the form from showing when submissions should not be accepted. Close it now, or schedule the form to open and/or close later.', 'formidable-pro' ); ?>
 </p>
@@ -38,17 +43,20 @@
 	<input type="text" name="options[close_date]" id="frm_close_date" class="frm_date" value="<?php echo esc_attr( $values['close_date'] ); ?>" />
 </p>
 <p class="hide_form_status hide_hide_form_status_closed hide_hide_form_status_schedule<?php echo ( strpos( $values['open_status'], 'limit' ) === false ) ? ' frm_hidden' : ''; ?>">
-	<label class="frm_left_label frm_help" title="<?php esc_attr_e( 'Close the form after a specific number of entries have been received.', 'formidable-pro' ); ?>">
+	<label class="frm_left_label">
 		<?php esc_html_e( 'Entry Limit', 'formidable' ); ?>
+		<span class="frm_help frm_icon_font frm_tooltip_icon"  data-placement="right" title="<?php esc_attr_e( 'Close the form after a specific number of entries have been received.', 'formidable-pro' ); ?>"></span>
+
 	</label>
 
 	<input type="text" name="options[max_entries]" id="frm_max_entries" size="4" value="<?php echo esc_attr( $values['max_entries'] ); ?>" />
 </p>
 <p class="hide_form_status<?php echo ( empty( $values['open_status'] ) ) ? ' frm_hidden' : ''; ?>">
-	<label for="frm_closed_msg" class="frm_left_label frm_help" title="<?php esc_attr_e( 'This message is shown when a form is closed for new entries.', 'formidable-pro' ); ?>">
+	<label for="frm_closed_msg" class="frm_left_label">
 		<?php esc_html_e( 'Form Closed Message', 'formidable' ); ?>
+		<span class="frm_help frm_icon_font frm_tooltip_icon" data-placement="right" title="<?php esc_attr_e( 'This message is shown when a form is closed for new entries.', 'formidable-pro' ); ?>"></span>
 	</label>
-	<textarea name="options[closed_msg]" id="frm_closed_msg" rows="3"><?php echo FrmAppHelper::esc_textarea( $values['closed_msg'] ); ?></textarea>
+	<textarea name="options[closed_msg]" id="frm_closed_msg" rows="3"><?php echo FrmAppHelper::esc_textarea( $values['closed_msg'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></textarea>
 </p>
 
 <script>

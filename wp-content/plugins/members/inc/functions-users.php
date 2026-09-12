@@ -4,11 +4,14 @@
  *
  * @package    Members
  * @subpackage Includes
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
+if (!defined('ABSPATH')) {
+    die('You are not allowed to call this page directly.');
+}
 
 // Filter `user_has_cap` if denied caps should take precedence.
 if ( members_explicitly_deny_caps() ) {
@@ -38,7 +41,7 @@ function members_user_has_cap_filter( $allcaps, $caps, $args, $user ) {
 		return $allcaps;
 
 	// Get the denied caps.
-	$denied_caps = array_keys( $allcaps, false );
+	$denied_caps = array_keys( (array) $allcaps, false );
 
 	// Loop through the user's roles and find any denied caps.
 	foreach ( (array) $user->roles as $role ) {
@@ -47,8 +50,12 @@ function members_user_has_cap_filter( $allcaps, $caps, $args, $user ) {
 		$role_obj = get_role( $role );
 
 		// If we have an object, merge it's denied caps.
-		if ( ! is_null( $role_obj ) )
-			$denied_caps = array_merge( $denied_caps, array_keys( $role_obj->capabilities, false ) );
+		if ( ! is_null( $role_obj ) ) {
+			$denied_caps = array_merge(
+				(array) $denied_caps,
+				array_keys( (array) $role_obj->capabilities, false )
+			);
+		}
 	}
 
 	// If there are any denied caps, make sure they take precedence.

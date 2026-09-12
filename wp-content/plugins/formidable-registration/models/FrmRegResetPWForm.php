@@ -121,6 +121,10 @@ class FrmRegResetPWForm extends FrmRegForm{
 	 * @return string
 	 */
 	protected function get_error_message( $error_code ) {
+		if ( 0 === strpos( $error_code, 'weak_password_' ) ) {
+			return $this->get_weak_password_error_message( $error_code );
+		}
+
 		switch ( $error_code ) {
 			case 'expiredkey':
 			case 'invalidkey':
@@ -137,5 +141,28 @@ class FrmRegResetPWForm extends FrmRegForm{
 		}
 
 		return $error_code;
+	}
+
+	/**
+	 * Gets weak password error message from the error type.
+	 *
+	 * @since 2.05
+	 *
+	 * @param string $error_type Weak password type.
+	 * @return string
+	 */
+	protected function get_weak_password_error_message( $error_type ) {
+		$field_obj = FrmRegResetPasswordController::get_fake_password_field_obj();
+		if ( ! is_callable( array( $field_obj, 'password_checks' ) ) ) {
+			return $error_type;
+		}
+
+		$checks     = $field_obj->password_checks();
+		$error_type = str_replace( 'weak_password_', '', $error_type );
+		if ( isset( $checks[ $error_type ]['message'] ) ) {
+			return $checks[ $error_type ]['message'];
+		}
+
+		return $error_type;
 	}
 }

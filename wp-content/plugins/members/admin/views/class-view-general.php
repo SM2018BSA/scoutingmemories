@@ -4,14 +4,14 @@
  *
  * @package    Members
  * @subpackage Admin
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
-
 namespace Members\Admin;
 
+defined('ABSPATH') || exit;
 /**
  * Sets up and handles the general settings view.
  *
@@ -37,8 +37,16 @@ class View_General extends View {
 	 * @return void
 	 */
 	public function enqueue() {
-
 		wp_enqueue_script( 'members-settings' );
+
+		// Add reset roles data to the settings script (must run after enqueue).
+		wp_localize_script( 'members-settings', 'membersResetRoles', array(
+			'nonce' => wp_create_nonce( 'members_reset_roles' ),
+			'ajaxurl' => admin_url( 'admin-ajax.php' ),
+			'confirmMessage' => esc_html__( 'This will remove only roles created with Members and reset the five WordPress roles (Administrator, Editor, Author, Contributor, Subscriber) to their default capabilities. Roles from other plugins (e.g. WooCommerce) will not be removed. Continue?', 'members' ),
+			'successMessage' => esc_html__( 'Members-created roles have been removed and WordPress roles have been reset to their defaults.', 'members' ),
+			'errorMessage' => esc_html__( 'An error occurred while resetting roles. Please try again.', 'members' )
+		) );
 	}
 
 	/**
@@ -61,8 +69,8 @@ class View_General extends View {
 		// Add settings sections.
 		add_settings_section( 'roles_caps',          esc_html__( 'Roles and Capabilities', 'members' ), array( $this, 'section_roles_caps' ), 'members-settings' );
 		add_settings_section( 'content_permissions', esc_html__( 'Content Permissions',    'members' ), '__return_false',                     'members-settings' );
-		add_settings_section( 'sidebar_widgets',     esc_html__( 'Sidebar Widgets',        'members' ), '__return_false',                     'members-settings' );
 		add_settings_section( 'private_site',        esc_html__( 'Private Site',           'members' ), '__return_false',                     'members-settings' );
+		add_settings_section( 'misc',        		 esc_html__( 'Miscellaneous',          'members' ), '__return_false',                     'members-settings' );
 
 		/* === Settings Fields === */
 
@@ -73,17 +81,19 @@ class View_General extends View {
 
 		// Content permissions fields.
 		add_settings_field( 'enable_content_permissions', esc_html__( 'Enable Permissions', 'members' ), array( $this, 'field_enable_content_permissions' ), 'members-settings', 'content_permissions' );
+		add_settings_field( 'hide_protected_posts_rest_api', esc_html__( 'Hide Protected Posts from WP REST API', 'members' ), array( $this, 'field_hide_protected_posts_rest_api' ), 'members-settings', 'content_permissions' );
 		add_settings_field( 'content_permissions_error',  esc_html__( 'Error Message',      'members' ), array( $this, 'field_content_permissions_error'  ), 'members-settings', 'content_permissions' );
-
-		// Widgets fields.
-		add_settings_field( 'widget_login', esc_html__( 'Login Widget', 'members' ), array( $this, 'field_widget_login' ), 'members-settings', 'sidebar_widgets' );
-		add_settings_field( 'widget_users', esc_html__( 'Users Widget', 'members' ), array( $this, 'field_widget_users' ), 'members-settings', 'sidebar_widgets' );
 
 		// Private site fields.
 		add_settings_field( 'enable_private_site', esc_html__( 'Enable Private Site', 'members' ), array( $this, 'field_enable_private_site' ), 'members-settings', 'private_site' );
-		add_settings_field( 'private_rest_api',    esc_html__( 'REST API',            'members' ), array( $this, 'field_private_rest_api'    ), 'members-settings', 'private_site' );
-		add_settings_field( 'enable_private_feed', esc_html__( 'Disable Feed',        'members' ), array( $this, 'field_enable_private_feed' ), 'members-settings', 'private_site' );
-		add_settings_field( 'private_feed_error',  esc_html__( 'Feed Error Message',  'members' ), array( $this, 'field_private_feed_error'  ), 'members-settings', 'private_site' );
+		add_settings_field( 'private_rest_api', esc_html__( 'REST API', 'members' ), array( $this, 'field_private_rest_api'    ), 'members-settings', 'private_site' );
+		add_settings_field( 'enable_private_feed', esc_html__( 'Disable Feed', 'members' ), array( $this, 'field_enable_private_feed' ), 'members-settings', 'private_site' );
+		add_settings_field( 'private_feed_error', esc_html__( 'Feed Error Message', 'members' ), array( $this, 'field_private_feed_error'  ), 'members-settings', 'private_site' );
+
+		// Misc fields.
+		add_settings_field( 'review_prompt_removed',  esc_html__( 'Disable Review Prompt',  'members' ), array( $this, 'field_remove_review_prompt'  ), 'members-settings', 'misc' );
+
+		do_action( 'members_register_settings' );
 	}
 
 	/**
@@ -102,10 +112,9 @@ class View_General extends View {
 		$settings['show_human_caps']      = ! empty( $settings['show_human_caps'] )      ? true : false;
 		$settings['multi_roles']          = ! empty( $settings['multi_roles'] )          ? true : false;
 		$settings['content_permissions']  = ! empty( $settings['content_permissions'] )  ? true : false;
-		$settings['login_form_widget']    = ! empty( $settings['login_form_widget'] )    ? true : false;
-		$settings['users_widget']         = ! empty( $settings['users_widget'] )         ? true : false;
 		$settings['private_blog']         = ! empty( $settings['private_blog'] )         ? true : false;
 		$settings['private_rest_api']     = ! empty( $settings['private_rest_api'] )     ? true : false;
+		$settings['hide_posts_rest_api']  = ! empty( $settings['hide_posts_rest_api'] )  ? true : false;
 		$settings['private_feed']         = ! empty( $settings['private_feed'] )         ? true : false;
 
 		// Kill evil scripts.
@@ -113,7 +122,7 @@ class View_General extends View {
 		$settings['private_feed_error']        = stripslashes( wp_filter_post_kses( addslashes( $settings['private_feed_error']        ) ) );
 
 		// Return the validated/sanitized settings.
-		return $settings;
+		return apply_filters( 'members_validate_settings', $settings );
 	}
 
 	/**
@@ -124,7 +133,6 @@ class View_General extends View {
 	 * @return void
 	 */
 	public function section_roles_caps() { ?>
-
 		<p class="description">
 			<?php esc_html_e( 'Your roles and capabilities will not revert back to their previous settings after deactivating or uninstalling this plugin, so use this feature wisely.', 'members' ); ?>
 		</p>
@@ -224,36 +232,6 @@ class View_General extends View {
 	}
 
 	/**
-	 * Login widget field callback.
-	 *
-	 * @since  2.0.0
-	 * @access public
-	 * @return void
-	 */
-	public function field_widget_login() { ?>
-
-		<label>
-			<input type="checkbox" name="members_settings[login_form_widget]" value="true" <?php checked( members_login_widget_enabled() ); ?> />
-			<?php esc_html_e( 'Enable the login form widget.', 'members' ); ?>
-		</label>
-	<?php }
-
-	/**
-	 * Uers widget field callback.
-	 *
-	 * @since  2.0.0
-	 * @access public
-	 * @return void
-	 */
-	public function field_widget_users() { ?>
-
-		<label>
-			<input type="checkbox" name="members_settings[users_widget]" value="true" <?php checked( members_users_widget_enabled() ); ?> />
-			<?php esc_html_e( 'Enable the users widget.', 'members' ); ?>
-		</label>
-	<?php }
-
-	/**
 	 * Enable private site field callback.
 	 *
 	 * @since  2.0.0
@@ -267,6 +245,21 @@ class View_General extends View {
 			<?php esc_html_e( 'Redirect all logged-out users to the login page before allowing them to view the site.', 'members' ); ?>
 		</label>
 	<?php }
+
+    /**
+     * Hide protected posts REST API field callback.
+     *
+     * @since  3.2.11
+     * @access public
+     * @return void
+     */
+    public function field_hide_protected_posts_rest_api() { ?>
+
+      <label>
+        <input type="checkbox" name="members_settings[hide_posts_rest_api]" value="true" <?php checked( members_is_hidden_protected_posts_enabled() ); ?> />
+          <?php esc_html_e( 'Block protected posts from showing in the REST API requests.', 'members' ); ?>
+      </label>
+    <?php }
 
 	/**
 	 * Enable private REST API field callback.
@@ -319,6 +312,23 @@ class View_General extends View {
 	}
 
 	/**
+	 * Private feed error message field callback.
+	 *
+	 * @since  2.0.0
+	 * @access public
+	 * @return void
+	 */
+	public function field_remove_review_prompt() {
+
+		?>
+		<label>
+			<input type="checkbox" name="members_settings[review_prompt_removed]" value="1" <?php checked( members_get_setting( 'review_prompt_removed' ) ); ?> />
+			<?php esc_html_e( 'Permanently remove Members review prompt.', 'members' ); ?>
+		</label>
+		<?php
+	}
+
+	/**
 	 * Renders the settings page.
 	 *
 	 * @since  2.0.0
@@ -326,13 +336,28 @@ class View_General extends View {
 	 * @return void
 	 */
 	public function template() { ?>
-
 		<form method="post" action="options.php">
 			<?php settings_fields( 'members_settings' ); ?>
 			<?php do_settings_sections( 'members-settings' ); ?>
+			
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Reset Roles', 'members' ); ?></th>
+					<td>
+						<button type="button" id="members-reset-roles" class="button button-warning">
+							<?php esc_html_e( 'Reset to Default WordPress Roles', 'members' ); ?>
+						</button>
+						<span class="spinner members-reset-spinner"></span>
+						<div id="members-reset-roles-message"></div>
+						<p class="description">
+							<?php esc_html_e( 'Removes only roles created with Members and resets the five WordPress roles to their default capabilities. Roles from other plugins (e.g. WooCommerce) are not removed.', 'members' ); ?>
+						</p>
+					</td>
+				</tr>
+			</table>
+
 			<?php submit_button( esc_attr__( 'Update Settings', 'members' ), 'primary' ); ?>
 		</form>
-
 	<?php }
 
 	/**

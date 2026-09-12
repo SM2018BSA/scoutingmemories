@@ -1,38 +1,30 @@
-<p class="howto">
-	<?php esc_html_e( 'Select a style for this form and set your button text.', 'formidable' ); ?>
-</p>
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
+
 <table class="form-table">
+	<?php
+	do_action_deprecated( 'frm_add_form_style_tab_options', array( $values ), '6.16.3' );
+	?>
 	<tr>
-		<td class="frm_left_label">
-			<label for="custom_style">
-				<?php esc_html_e( 'Style Template', 'formidable' ); ?>
-			</label>
-		</td>
-		<td>
-			<select name="options[custom_style]" id="custom_style">
-			<option value="1" <?php selected( $values['custom_style'], 1 ); ?>>
-				<?php esc_html_e( 'Always use default', 'formidable' ); ?>
-			</option>
-			<?php foreach ( $styles as $s ) { ?>
-				<option value="<?php echo esc_attr( $s->ID ); ?>" <?php selected( $s->ID, $values['custom_style'] ); ?>>
-					<?php echo esc_html( $s->post_title . ( empty( $s->menu_order ) ? '' : ' (' . __( 'default', 'formidable' ) . ')' ) ); ?>
-				</option>
-				<?php } ?>
-				<option value="0"
-				<?php
-				selected( $values['custom_style'], 0 );
-				selected( $values['custom_style'], '' );
-				?>>
-				<?php esc_html_e( 'Do not use Formidable styling', 'formidable' ); ?>
-			</option>
-			</select>
+		<td colspan="2">
+			<h3><?php esc_html_e( 'Buttons', 'formidable' ); ?></h3>
 		</td>
 	</tr>
 	<tr>
-		<td><label><?php esc_html_e( 'Submit Button Text', 'formidable' ); ?></label></td>
-		<td>
-			<input type="text" name="options[submit_value]" value="<?php echo esc_attr( $values['submit_value'] ); ?>" />
+		<td colspan="2">
+			<div class="frm_note_style" style="margin-top: 0;">
+				<?php esc_html_e( 'Submit button settings were moved to the Submit button in the form builder.', 'formidable' ); ?>
+			</div>
 		</td>
 	</tr>
-	<?php do_action( 'frm_add_form_button_options', $values ); ?>
+	<?php
+	if ( $should_deprecate_hook ) {
+		do_action_deprecated( 'frm_add_form_button_options', array( $values ), '6.16.3' );
+	} else {
+		do_action( 'frm_add_form_button_options', $values );
+	}
+	?>
 </table>

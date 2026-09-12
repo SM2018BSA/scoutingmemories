@@ -37,12 +37,9 @@
  * @return array All defined roles. If translated, the key is the role name and value is the translated role.
  */
 function ak_get_roles( $translate = false ) {
-	global $wp_roles;
-	if ( ! isset( $wp_roles ) ) {
-		$wp_roles = new WP_Roles();
-	}
+	$wp_roles_obj = wp_roles();
 
-	$roles = $wp_roles->get_names();
+	$roles = $wp_roles_obj->get_names();
 	if ( $translate ) {
 		foreach ($roles as $k => $r) {
 			$roles[$k] = _x($r, 'User role');
@@ -85,6 +82,10 @@ function ak_level2caps( $level ) {
  * @return int 			Level found, if no level found, will return 0.
  */
 function ak_caps2level( $caps ) {
+	if (!is_array($caps)) {
+		return 0;
+	}
+
 	$level = array_reduce( array_keys( $caps ), '_ak_caps2level_CB', 0);
 	return $level;
 }

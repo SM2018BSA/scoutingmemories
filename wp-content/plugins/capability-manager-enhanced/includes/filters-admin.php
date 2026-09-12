@@ -1,4 +1,10 @@
 <?php
+/*
+ * PublishPress Capabilities [Free]
+ * 
+ * Filters which are loaded for certain admin URLs
+ * 
+ */
 class CME_AdminMenuNoPrivWorkaround {
 	var $create_posts_cap = '';
 
@@ -8,8 +14,8 @@ class CME_AdminMenuNoPrivWorkaround {
         if ( 'edit.php' == $pagenow ) {
             // Prevent lack of create_posts capability from completely blocking admin menu access to a post type.
             // The "Add New" page is already successfully blocked by other means.
-            add_action( '_admin_menu', array( $this, 'menu_nopriv_workaround_enable' ), PHP_INT_MAX );
-            add_action( 'admin_menu', array( $this, 'menu_nopriv_workaround_disable' ), PHP_INT_MIN );
+			add_action( '_admin_menu', array( $this, 'menu_nopriv_workaround_enable' ), PHP_INT_MAX );
+            add_action( 'admin_menu', array( $this, 'menu_nopriv_workaround_disable' ), - PHP_INT_MAX );
         }
 	}
 

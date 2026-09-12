@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 2.03.05
  */
@@ -17,5 +21,4 @@ class FrmProFieldHiddenSettings extends FrmProFieldSettings {
 	protected function set_use_key() {
 		$this->use_key = false;
 	}
-
 }

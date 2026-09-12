@@ -1,14 +1,22 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 class FrmProFileImport {
 
+	/**
+	 * @param mixed    $val
+	 * @param stdClass $field
+	 * @return mixed
+	 */
 	public static function import_attachment( $val, $field ) {
-		if ( $field->type != 'file' || is_numeric( $val ) || empty( $val ) ) {
+		if ( $field->type !== 'file' || is_numeric( $val ) || ! $val ) {
 			return $val;
 		}
 
-		$should_import_files = FrmAppHelper::get_param( 'csv_files', '', 'REQUEST', 'absint' );
-		if ( ! $should_import_files ) {
+		if ( ! self::should_import_files() ) {
 			return $val;
 		}
 
@@ -32,7 +40,7 @@ class FrmProFileImport {
 				$new_val[] = $exists;
 			} else {
 				// Get media ID for newly uploaded image
-				$mid = self::curl_image( $v );
+				$mid = self::curl_file( $v, $field );
 				$new_val[] = $mid;
 				if ( is_numeric( $mid ) ) {
 					// Add newly uploaded images to the global media IDs for this field.
@@ -45,6 +53,34 @@ class FrmProFileImport {
 		$val = self::convert_to_string( $new_val );
 
 		return $val;
+	}
+
+	/**
+	 * @since 5.4.4
+	 *
+	 * @return bool
+	 */
+	private static function should_import_files() {
+		$should_import_files = (bool) FrmAppHelper::get_param( 'csv_files', '', 'REQUEST', 'absint' );
+
+		/**
+		 * @since 5.4.4
+		 *
+		 * @param bool $should_import_files
+		 */
+		return apply_filters( 'frm_should_import_files', $should_import_files );
+	}
+
+	/**
+	 * Return true when this filter is set. frm_should_import_files is false by default and can be temporarily toggled on with this filter.
+	 * To revert this filter after use make sure to also use remove_filter( 'frm_should_import_files', 'FrmProFileImport::allow_file_import' );
+	 *
+	 * @since 5.4.4
+	 *
+	 * @return true
+	 */
+	public static function allow_file_import() {
+		return true;
 	}
 
 	/**
@@ -81,11 +117,22 @@ class FrmProFileImport {
 		return $val;
 	}
 
-	private static function curl_image( $img_url ) {
-		$ch = curl_init( str_replace( array( ' ' ), array( '%20' ), $img_url ) );
-		$uploads = self::get_upload_dir();
-		$filename = wp_unique_filename( $uploads['path'], basename( $img_url ) );
-		$path = trailingslashit( $uploads['path'] );
+	/**
+	 * Import a file from a target URL.
+	 *
+	 * @param string   $url   The URL we're downloading a file from.
+	 * @param stdClass $field The target field for the imported file.
+	 * @return string|int     An integer Post ID is returned when a new attachment is created. Otherwise a string URL is returned.
+	 */
+	private static function curl_file( $url, $field ) {
+		if ( 'file' !== $field->type || ! self::validate_file_url( $url, $field ) ) {
+			return $url;
+		}
+
+		$ch       = curl_init( str_replace( array( ' ' ), array( '%20' ), $url ) );
+		$uploads  = self::get_upload_dir();
+		$filename = wp_unique_filename( $uploads['path'], basename( $url ) );
+		$path     = trailingslashit( $uploads['path'] );
 
 		$fp = fopen( $path . $filename, 'wb' );
 		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
@@ -94,16 +141,58 @@ class FrmProFileImport {
 		$user_agent = apply_filters( 'http_headers_useragent', 'WordPress/' . get_bloginfo( 'version' ) . '; ' . get_bloginfo( 'url' ) );
 		curl_setopt( $ch, CURLOPT_USERAGENT, $user_agent );
 		curl_setopt( $ch, CURLOPT_REFERER, FrmAppHelper::site_url() );
+		curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true );
 		$result = curl_exec( $ch );
 		curl_close( $ch );
 		fclose( $fp );
+
 		if ( $result ) {
-			$img_url = self::attach_existing_image( $filename );
+			$url = self::attach_existing_image( $filename );
 		} else {
+			// Remove the file if it fails to attach.
 			unlink( $path . $filename );
-			//echo "<p>Failed to download image $img_url";
 		}
-		return $img_url;
+
+		return $url;
+	}
+
+	/**
+	 * Check that a target file URL is valid before trying to download it.
+	 * This is done by checking against the allow mime type extensions for the target file field we're uploading for.
+	 *
+	 * @since 5.5.6
+	 *
+	 * @param string   $url
+	 * @param stdClass $field
+	 * @return bool
+	 */
+	private static function validate_file_url( $url, $field ) {
+		$parsed = parse_url( $url );
+		if ( ! is_array( $parsed ) ) {
+			// URL is malformed.
+			return false;
+		}
+
+		$path = $parsed['path'];
+		$ext  = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+
+		$allowed_mimes = FrmProFileField::get_allowed_mimes( $field );
+		if ( is_null( $allowed_mimes ) ) {
+			// File type is not restricted so allow what WordPress allows.
+			$allowed_mimes = get_allowed_mime_types();
+		}
+
+		$allowed_extensions = array_reduce(
+			array_keys( $allowed_mimes ),
+			function ( $total, $current ) {
+				// Explode on | because some mime types use keys like jpg|jpeg|jpe.
+				$total = array_merge( $total, explode( '|', $current ) );
+				return $total;
+			},
+			array()
+		);
+
+		return in_array( $ext, $allowed_extensions, true );
 	}
 
 	/**
@@ -127,8 +216,8 @@ class FrmProFileImport {
 
 		$id = wp_insert_attachment( $attachment, $file );
 
-		if ( ! function_exists('wp_generate_attachment_metadata') ) {
-			require_once( ABSPATH . 'wp-admin/includes/image.php' );
+		if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/image.php';
 		}
 
 		wp_update_attachment_metadata( $id, wp_generate_attachment_metadata( $id, $file ) );
@@ -153,13 +242,13 @@ class FrmProFileImport {
 	}
 
 	private static function get_mime_type( $file, &$attachment ) {
-		if ( function_exists('finfo_file') ) {
+		if ( function_exists( 'finfo_file' ) ) {
 			$finfo = finfo_open( FILEINFO_MIME_TYPE ); // return mime type ala mimetype extension
 			$type = finfo_file( $finfo, $file );
 			finfo_close( $finfo );
 			unset( $finfo );
 		} else {
-			$type = mime_content_type( $file );
+			$type = FrmProAppHelper::get_mime_content_type( $file );
 		}
 		$attachment['post_mime_type'] = $type;
 	}

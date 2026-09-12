@@ -26,6 +26,7 @@ class FrmRegHooksController{
 		add_action( 'frm_trigger_register_action', 'FrmRegUserController::register_user', 10, 3 );
 		add_action( 'wp_ajax_frm_payments_paypal_ipn', 'FrmRegUserController::set_allow_edit', 5 );
 		add_action( 'wp_ajax_nopriv_frm_payments_paypal_ipn', 'FrmRegUserController::set_allow_edit', 5 );
+		add_action( 'frm_after_update_field', 'FrmRegUserController::update_user_metas' );
 
 		// FrmRegProfileController
 		add_action( 'show_user_profile', 'FrmRegProfileController::show_user_meta', 200 );
@@ -39,6 +40,8 @@ class FrmRegHooksController{
 		add_filter( 'frm_get_default_value', 'FrmRegEntry::reset_user_id_for_user_creation', 10, 2 );
 		add_filter( 'frm_setup_new_fields_vars', 'FrmRegEntry::reset_user_id_for_back_user_creation', 20, 2 );
 		add_filter( 'frm_setup_edit_fields_vars', 'FrmRegEntry::check_updated_user_meta', 10, 3 );
+		add_action( 'frm_after_create_entry', 'FrmRegEntry::maybe_hash_password', 40, 2);
+		add_action( 'frm_after_update_entry', 'FrmRegEntry::maybe_hash_password', 40, 2);
 
 		new FrmRegEntryController();
 
@@ -68,11 +71,21 @@ class FrmRegHooksController{
 		add_action( 'login_form_resetpass', 'FrmRegResetPasswordController::do_reset_password' );
 		add_filter( 'allow_password_reset', 'FrmRegResetPasswordController::prevent_password_reset',  10, 2 );
 
+		add_action( 'wp', 'FrmRegSessionErrorController::maybe_start_session' );
+
 		// Shortcodes
 		add_shortcode( 'frm-login', 'FrmRegShortcodesController::do_login_form_shortcode' );
 		add_shortcode( 'frm-reset-password', 'FrmRegShortcodesController::do_reset_password_shortcode' );
-		add_shortcode( 'frm-set-password-link', 'FrmRegShortcodesController::set_password_link' );
 		add_shortcode( 'frm-primary-blog', 'FrmRegShortcodesController::do_primary_blog_shortcode' );
+
+		// Only support frm-set-password-link in email actions.
+		// This is for security. Contributors can use this shortcode in posts/pages otherwise.
+		add_action( 'frm_trigger_email_action', function() {
+			add_shortcode( 'frm-set-password-link', 'FrmRegShortcodesController::set_password_link' );
+		}, 1 );
+		add_action( 'frm_trigger_email_action', function() {
+			remove_shortcode( 'frm-set-password-link' );
+		}, 99 );
 
 		self::load_admin_hooks();
 	}
@@ -86,6 +99,7 @@ class FrmRegHooksController{
 
 		add_action( 'admin_init', 'FrmRegAppController::initialize', 0 );
 		add_action( 'admin_init', 'FrmRegAppHelper::enqueue_admin_js', 1 );
+		add_action( 'admin_init', 'FrmRegAppHelper::enqueue_global_js', 11 );
 
 		new FrmRegGlobalSettingsController();
 
@@ -100,12 +114,15 @@ class FrmRegHooksController{
 		add_filter( 'frm_form_email_action_settings', 'FrmRegActionController::customize_new_email_action' );
 		add_action( 'wp_ajax_frm_add_user_meta_row', 'FrmRegActionController::add_user_meta_row' );
 		add_filter( 'frm_form_options_before_update', 'FrmRegActionController::before_update_form', 15, 2 );
-		add_action( 'frm_after_import_form', 'FrmRegActionController::migrate_settings_to_action_after_import', 10, 2 );
 		add_action( 'frm_after_import_view', 'FrmRegActionController::migrate_action_after_import', 10, 2 );
+
+		// FrmRegActionHelper
+		add_filter( 'frm_before_save_register_action','FrmRegActionHelper::filter_user_meta', 10, 1 );
 
 		// FrmRegShortcodesController
 		add_filter( 'frm_popup_shortcodes', 'FrmRegShortcodesController::add_login_form_to_sc_builder', 11 );
 		add_filter( 'frm_sc_popup_opts', 'FrmRegShortcodesController::get_login_form_sc_opts', 11, 2 );
+		add_filter( 'frm_before_save_email_action', 'FrmRegShortcodesController::before_save_email_action' );
 	}
 
 	/**

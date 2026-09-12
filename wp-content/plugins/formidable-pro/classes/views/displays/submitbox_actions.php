@@ -1,3 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/submitbox_actions.php' );
+?>
 <div class="misc-pub-section">
 	<span id="frm_shortcode">
 		<?php FrmProAppHelper::icon_by_class( 'frmfont frm_code_icon frm_svg20' ); ?>

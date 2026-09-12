@@ -4,14 +4,14 @@
  *
  * @package    Members
  * @subpackage Admin
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
-
 namespace Members\Admin;
 
+defined('ABSPATH') || exit;
 /**
  * Role list table for the roles management page in the admin. Extends the core `WP_List_Table`
  * class in the admin.
@@ -205,11 +205,15 @@ class Role_List_Table extends \WP_List_Table {
 	 */
 	protected function column_cb( $role ) {
 
-		if ( $role == get_option( 'default_role' ) || in_array( $role, $this->current_user->roles ) || ! members_is_role_editable( $role ) )
-			$out = '';
-
-		else
+		if ( $role == get_option( 'default_role' ) ) {
+			$out = sprintf( '<input type="checkbox" disabled="disabled" title="%s" />', esc_attr__( 'The default role cannot be selected for bulk actions.', 'members' ) );
+		} elseif ( in_array( $role, $this->current_user->roles ) ) {
+			$out = sprintf( '<input type="checkbox" disabled="disabled" title="%s" />', esc_attr__( 'Your own role cannot be selected for bulk actions.', 'members' ) );
+		} elseif ( ! members_is_role_editable( $role ) ) {
+			$out = sprintf( '<input type="checkbox" disabled="disabled" title="%s" />', esc_attr__( 'This role is not editable.', 'members' ) );
+		} else {
 			$out = sprintf( '<input type="checkbox" name="roles[%1$s]" value="%1$s" />', esc_attr( $role ) );
+		}
 
 		return apply_filters( 'members_manage_roles_column_cb', $out, $role );
 	}
@@ -278,7 +282,21 @@ class Role_List_Table extends \WP_List_Table {
 	 * @return string
 	 */
 	protected function column_users( $role ) {
-		return apply_filters( 'members_manage_roles_column_users', members_get_role_user_count( $role ), $role );
+
+		$user_count = members_get_role_user_count( $role );
+
+		$output = number_format_i18n( $user_count );
+
+		if ( 0 < absint( $user_count ) && current_user_can( 'list_users' ) ) {
+
+			$output = sprintf(
+				'<a href="%s">%s</a>',
+				esc_url( add_query_arg( 'role', $role, admin_url( 'users.php' ) ) ),
+				$output
+			);
+		}
+
+		return apply_filters( 'members_manage_roles_column_users', $output, $role );
 	}
 
 	/**
@@ -492,6 +510,9 @@ class Role_List_Table extends \WP_List_Table {
 
 		if ( current_user_can( 'delete_roles' ) )
 			$actions['delete'] = esc_html__( 'Delete', 'members' );
+
+		if ( current_user_can( 'list_roles' ) )
+			$actions['export'] = esc_html__( 'Export', 'members' );
 
 		return apply_filters( 'members_manage_roles_bulk_actions', $actions );
 	}

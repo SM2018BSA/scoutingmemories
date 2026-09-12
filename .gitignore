@@ -131,8 +131,8 @@ wp-content/themes/Scouting-Memories/temp.html
 
 wp-content/themes/twentytwenty*
 
-# Git Visualizer Studio (Ignored)
+# Git Visualizer Studio & Local Docker (Ignored)
 git-visualizer/
 launch-git-studio.bat
 php-custom.ini
-wp-content/themes/scoutingmemories/
+docker-compose.yml

@@ -4,14 +4,14 @@
  *
  * @package    Members
  * @subpackage Admin
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
-
 namespace Members\Admin;
 
+defined('ABSPATH') || exit;
 /**
  * Class that displays the new role screen and handles the form submissions for that page.
  *
@@ -93,8 +93,10 @@ final class Role_New {
 	public function __construct() {
 
 		// If the role manager is active.
-		if ( members_role_manager_enabled() )
-			add_action( 'admin_menu', array( $this, 'add_admin_page' ) );
+		if ( function_exists('members_role_manager_enabled') && members_role_manager_enabled() ) {
+			add_action( 'admin_menu', array( $this, 'add_submenu_admin_page' ), 20 );
+		}
+		add_action( 'admin_menu', array( $this, 'add_admin_page' ) );
 	}
 
 	/**
@@ -106,7 +108,11 @@ final class Role_New {
 	 */
 	public function add_admin_page() {
 
-		$this->page = add_submenu_page( 'users.php', esc_html__( 'Add New Role', 'members' ), esc_html__( 'Add New Role', 'members' ), 'create_roles', 'role-new', array( $this, 'page' ) );
+		$this->page = add_menu_page( 'Members', 'Members', 'create_roles', 'members', array( $this, 'page' ), 'data:image/svg+xml;base64,' . base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" aria-hidden="true" focusable="false"><g opacity="0.55" fill="currentColor"><circle cx="48" cy="46" r="18"/><path d="M16 118 C16 88 30 76 48 76 C66 76 80 88 80 118 Z"/></g><g opacity="0.55" fill="currentColor"><circle cx="152" cy="46" r="18"/><path d="M120 118 C120 88 134 76 152 76 C170 76 184 88 184 118 Z"/></g><circle cx="100" cy="36" r="24" fill="currentColor"/><path d="M58 124 C58 88 76 76 100 76 C124 76 142 88 142 124 Z" fill="currentColor"/></svg>' ) );
+
+		// We don't need to have a "Members" link in the submenu, so this removes it
+		add_submenu_page( 'members', '', '', 'create_roles', 'members', array( $this, 'page' ) );
+		remove_submenu_page( 'members', 'members' );
 
 		// Let's roll if we have a page.
 		if ( $this->page ) {
@@ -114,6 +120,17 @@ final class Role_New {
 			add_action( "load-{$this->page}", array( $this, 'load'          ) );
 			add_action( "load-{$this->page}", array( $this, 'add_help_tabs' ) );
 		}
+	}
+
+	/**
+	 * Adds the "Add New Role" submenu page to the admin.
+	 *
+	 * @since  3.0.0
+	 * @access public
+	 * @return void
+	 */
+	public function add_submenu_admin_page() {
+		add_submenu_page( 'members', esc_html_x( 'Add New Role', 'admin screen', 'members' ), esc_html_x( 'Add New Role', 'admin screen', 'members' ), 'create_roles', 'members', array( $this, 'page' ) );
 	}
 
 	/**
@@ -213,6 +230,9 @@ final class Role_New {
 
 				add_role( $this->role, $this->role_name, $new_caps );
 
+				// Track as created by Members UI (for reset-roles to only remove these).
+				members_track_created_role( $this->role );
+
 				// Action hook for when a role is added.
 				do_action( 'members_role_added', $this->role );
 
@@ -251,8 +271,7 @@ final class Role_New {
 		do_action( 'members_load_role_new' );
 
 		// Hook for adding in meta boxes.
-		do_action( 'add_meta_boxes_' . get_current_screen()->id, '' );
-		do_action( 'add_meta_boxes',   get_current_screen()->id, '' );
+		do_action( 'members_add_role_meta_boxes', get_current_screen()->id );
 
 		// Add layout screen option.
 		add_screen_option( 'layout_columns', array( 'max' => 2, 'default' => 2 ) );

@@ -1,3 +1,8 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <p class="frm-has-modal default-value-section-<?php echo esc_attr( $field['id'] . ( isset( $default_value_types['get_values_field']['current'] ) ? '' : ' frm_hidden' ) ); ?> frm-lookup-box-label frm-lookup-box-<?php echo esc_attr( $field['id'] ); ?>" style="padding-bottom:0;">
 	<label for="frm_default_value_<?php echo esc_attr( $field['id'] ); ?>">
 		<?php esc_html_e( 'Default Value', 'formidable' ); ?>

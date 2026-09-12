@@ -5,7 +5,7 @@ Plugin URI: https://formidableforms.com/knowledgebase/user-registration/
 Description: Register users through a Formidable form
 Author: Strategy11
 Author URI: https://formidableforms.com/
-Version: 2.02.01
+Version: 2.12
 Text Domain: frmreg
 */
 

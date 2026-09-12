@@ -1,4 +1,7 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
 
 if ( empty( $field['get_values_field'] ) ) {
 	?>
@@ -50,14 +53,14 @@ if ( 'select' == $field['data_type'] ) {
 		<ul id="frm_field_<?php echo esc_attr( $field['id'] ); ?>_opts"
 			class="frm_sortable_field_opts frm_clear<?php echo ( count( $field['options'] ) > 10 ) ? ' frm_field_opts_list' : ''; ?>"><?php
 		foreach ( $field['options'] as $opt_key => $opt_value ) {
-			$checked = ( in_array( $opt_value, $saved_value_array ) ) ? ' checked="checked"' : '';
+				$checked = ( in_array( $opt_value, $saved_value_array ) ) ? ' checked="checked"' : '';
 
-			?>
+				?>
 			<li class="frm_single_option">
-			<input type="<?php echo esc_attr( $field['data_type'] ); ?>" name="<?php echo esc_attr( $field_name ) ?>"
-				   value="<?php echo esc_attr( $opt_value ) ?>"<?php echo $checked ?>/>
-			<label class="frm_ipe_field_option field_<?php echo esc_attr( $field['id'] ) ?>_option"
-				   id="<?php echo esc_attr( $html_id . '-' . $opt_key ) ?>"><?php echo esc_attr( $opt_value ) ?></label>
+			<input type="<?php echo esc_attr( $field['data_type'] ); ?>" name="<?php echo esc_attr( $field_name ); ?>"
+				   value="<?php echo esc_attr( $opt_value ); ?>"<?php echo $checked; ?>/>
+			<label class="frm_ipe_field_option field_<?php echo esc_attr( $field['id'] ); ?>_option"
+				   id="<?php echo esc_attr( $html_id . '-' . $opt_key ); ?>"><?php echo FrmAppHelper::kses( $opt_value, 'all' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></label>
 			</li><?php
 		}
 		unset( $opt_key, $checked, $opt_value );
@@ -67,7 +70,7 @@ if ( 'select' == $field['data_type'] ) {
 } else if ( 'text' == $field['data_type'] ) {
 	// Text Lookup Field
 
-	?><input type="text" id="<?php echo esc_attr( $html_id ) ?>" name="<?php echo esc_attr( $field_name ) ?>" value="<?php echo esc_attr( $field['default_value'] ) ?>"<?php echo $width_string ?> class="dyn_default_value" /><?php
+	?><input type="text" id="<?php echo esc_attr( $html_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>" value="<?php echo esc_attr( $field['default_value'] ); ?>"<?php echo $width_string; ?> class="dyn_default_value" /><?php
 } elseif ( 'data' === $field['data_type'] ) {
 	?>
 	<span id="setup-message-<?php echo esc_attr( $field['id'] ); ?>">

@@ -4,11 +4,14 @@
  *
  * @package    Members
  * @subpackage Includes
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
+if (!defined('ABSPATH')) {
+    die('You are not allowed to call this page directly.');
+}
 
 /**
  * Conditional tag to check if a user can view a specific post.  A user cannot view a post if their
@@ -29,8 +32,12 @@
 function members_can_user_view_post( $user_id, $post_id = '' ) {
 
 	// If no post ID is given, assume we're in The Loop and get the current post's ID.
-	if ( ! $post_id )
+	if ( ! $post_id ) {
 		$post_id = get_the_ID();
+	}
+
+	// Get post object.
+	$post = get_post( $post_id );
 
 	// Assume the user can view the post at this point. */
 	$can_view = true;
@@ -38,7 +45,7 @@ function members_can_user_view_post( $user_id, $post_id = '' ) {
 	// The plugin is only going to handle permissions if the 'content permissions' feature
 	// is active.  If not active, the user can always view the post.  However, developers
 	// can roll their own handling of this and filter `members_can_user_view_post`.
-	if ( members_content_permissions_enabled() ) {
+	if ( $post instanceof \WP_Post && members_content_permissions_enabled() ) {
 
 		// Get the roles selected by the user.
 		$roles = members_get_post_roles( $post_id );
@@ -54,9 +61,6 @@ function members_can_user_view_post( $user_id, $post_id = '' ) {
 			// the post at this point.  The rest of this functionality should try
 			// to disprove this.
 			$can_view = false;
-
-			// Get the post object.
-			$post = get_post( $post_id );
 
 			// Get the post type object.
 			$post_type = get_post_type_object( $post->post_type );
@@ -92,11 +96,15 @@ function members_can_user_view_post( $user_id, $post_id = '' ) {
 	// Set to `FALSE` to avoid hierarchical checking.
 	if ( apply_filters( 'members_check_parent_post_permission', $check_parent, $post_id, $user_id ) ) {
 
-		$parent_id = get_post( $post_id )->post_parent;
+		if ( $post instanceof \WP_Post ) {
 
-		// If the post has a parent, check if the user has permission to view it.
-		if ( 0 < $parent_id )
-			$can_view = members_can_user_view_post( $user_id, $parent_id );
+			$parent_id = $post->post_parent;
+
+			// If the post has a parent, check if the user has permission to view it.
+			if ( 0 < $parent_id ) {
+				$can_view = members_can_user_view_post( $user_id, $parent_id );
+			}
+		}
 	}
 
 	// Allow developers to overwrite the final return value.

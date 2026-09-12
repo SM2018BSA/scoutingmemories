@@ -1,5 +1,10 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <div id="frm_logic_<?php echo esc_attr( $field['id'] . '_' . $meta_name ); ?>" class="frm_logic_row">
-<select name="field_options[hide_field_<?php echo esc_attr( $field['id'] ) ?>][]" class="frm_logic_field_opts" data-type="<?php echo esc_attr( $field['type'] ) ?>">
+<select name="field_options[hide_field_<?php echo esc_attr( $field['id'] ); ?>][]" class="frm_logic_field_opts" data-type="<?php echo esc_attr( $field['type'] ); ?>">
 	<option value=""><?php esc_html_e( '&mdash; Select &mdash;' ); ?></option>
     <?php
     $sel = false;
@@ -12,7 +17,7 @@
             $sel = true;
 		}
     ?>
-	<option value="<?php echo esc_attr( $ff->id ) ?>" <?php selected( $ff->id, $hide_field ) ?>>
+	<option value="<?php echo esc_attr( $ff->id ); ?>" <?php selected( $ff->id, $hide_field ); ?>>
 		<?php echo esc_html( $ff->name ); ?>
 	</option>
     <?php } ?>
@@ -21,36 +26,42 @@
 if ( $hide_field && ! $sel ) {
 //remove conditional logic if the field doesn't exist
 ?>
-<script type="text/javascript">jQuery(document).ready(function(){frmAdminBuild.triggerRemoveLogic(<?php echo (int) $field['id'] ?>, '<?php echo esc_attr( $meta_name ) ?>');});</script>
+<script type="text/javascript">jQuery(document).ready(function(){frmAdminBuild.triggerRemoveLogic(<?php echo (int) $field['id']; ?>, '<?php echo esc_attr( $meta_name ); ?>');});</script>
 <?php
 }
 $field['hide_field_cond'][ $meta_name ] = isset( $field['hide_field_cond'][ $meta_name ] ) ? htmlspecialchars_decode( $field['hide_field_cond'][ $meta_name ] ) : '';
 ?>
 
-<select name="field_options[hide_field_cond_<?php echo esc_attr( $field['id'] ) ?>][]" class="auto_width">
+<select name="field_options[hide_field_cond_<?php echo esc_attr( $field['id'] ); ?>][]" class="auto_width">
 	<option value="==" <?php selected( $field['hide_field_cond'][ $meta_name ], '==' ); ?>>
 		<?php esc_html_e( 'equals', 'formidable-pro' ); ?>
 	</option>
 	<option value="!=" <?php selected( $field['hide_field_cond'][ $meta_name ], '!=' ); ?>>
-		<?php esc_html_e( 'not equals', 'formidable-pro' ); ?> &nbsp;
+		<?php esc_html_e( 'does not equal', 'formidable-pro' ); ?> &nbsp;
 	</option>
 	<option value=">" <?php selected( $field['hide_field_cond'][ $meta_name ], '>' ); ?>>
-		<?php esc_html_e( 'greater than', 'formidable-pro' ); ?>
+		<?php esc_html_e( 'is greater than', 'formidable-pro' ); ?>
 	</option>
 	<option value=">=" <?php selected( $field['hide_field_cond'][ $meta_name ], '>=' ); ?>>
-		<?php esc_html_e( 'greater or equal', 'formidable-pro' ); ?>
+		<?php esc_html_e( 'is greater than or equal to', 'formidable-pro' ); ?>
 	</option>
 	<option value="<" <?php selected( $field['hide_field_cond'][ $meta_name ], '<' ); ?>>
-		<?php esc_html_e( 'less than', 'formidable-pro' ); ?>
+		<?php esc_html_e( 'is less than', 'formidable-pro' ); ?>
 	</option>
 	<option value="<=" <?php selected( $field['hide_field_cond'][ $meta_name ], '<=' ); ?>>
-		<?php esc_html_e( 'less or equal', 'formidable-pro' ); ?>
+		<?php esc_html_e( 'is less than or equal to', 'formidable-pro' ); ?>
 	</option>
 	<option value="LIKE" <?php selected( $field['hide_field_cond'][ $meta_name ], 'LIKE' ); ?>>
-		<?php esc_html_e( 'is like', 'formidable-pro' ); ?>
+		<?php esc_html_e( 'contains', 'formidable-pro' ); ?>
 	</option>
 	<option value="not LIKE" <?php selected( $field['hide_field_cond'][ $meta_name ], 'not LIKE' ); ?>>
-		<?php esc_html_e( 'not like', 'formidable-pro' ); ?> &nbsp;
+		<?php esc_html_e( 'does not contain', 'formidable-pro' ); ?> &nbsp;
+	</option>
+	<option value="LIKE%" <?php selected( $field['hide_field_cond'][ $meta_name ], 'LIKE%' ); ?>>
+		<?php esc_html_e( 'starts with', 'formidable-pro' ); ?> &nbsp;
+	</option>
+	<option value="%LIKE" <?php selected( $field['hide_field_cond'][ $meta_name ], '%LIKE' ); ?>>
+		<?php esc_html_e( 'ends with', 'formidable-pro' ); ?> &nbsp;
 	</option>
 </select>
 

@@ -137,7 +137,6 @@ class FrmRegDb {
 		$forms = FrmForm::getAll();
 
 		foreach ( $forms as $form ) {
-			FrmRegActionController::migrate_settings_to_action( $form );
 			FrmRegActionController::migrate_registration_actions_to_2( $form );
 		}
 	}

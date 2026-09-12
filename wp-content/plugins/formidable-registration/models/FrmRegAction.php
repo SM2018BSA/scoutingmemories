@@ -7,6 +7,7 @@ class FrmRegAction extends FrmFormAction {
 	function __construct() {
 		$action_ops = array(
 			'classes'  => 'frm_register_icon frm_icon_font',
+			'color'    => 'rgb(226,42,110)',
 			'limit'    => 1,
 			'active'   => true,
 			'priority' => 9,
@@ -23,9 +24,7 @@ class FrmRegAction extends FrmFormAction {
 			return;
 		}
 
-		global $wpdb;
-
-		$fields = FrmField::getAll( $wpdb->prepare( 'fi.form_id=%d', $form->id ) . " and fi.type not in ('end_divider', 'divider', 'html', 'break', 'captcha', 'rte')", ' ORDER BY field_order' );
+		$fields = FrmRegActionController::get_user_meta_fields( $form->id );
 
 		$show_auto_login = FrmRegActionHelper::is_auto_login_visible( $form_action );
 

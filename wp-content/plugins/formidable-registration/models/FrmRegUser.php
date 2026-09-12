@@ -16,6 +16,15 @@ class FrmRegUser {
 	private $form = null;
 
 	/**
+	 * User object.
+	 *
+	 * @since 2.06
+	 *
+	 * @var WP_User
+	 */
+	private $user = null;
+
+	/**
 	 * FrmRegUser constructor
 	 *
 	 * @param array $settings
@@ -128,6 +137,8 @@ class FrmRegUser {
 		if ( FrmRegAppHelper::username_exists( $this->username ) ) {
 			$this->username = $this->generate_unique_username( $this->username );
 		}
+
+		$this->username = sanitize_user( $this->username, true );
 	}
 
 	/**
@@ -243,9 +254,20 @@ class FrmRegUser {
 	 * @param string $property
 	 */
 	private function init_property( $settings, $property ) {
-		$opt = $settings['reg_' . $property ];
+		$opt = $settings[ 'reg_' . $property ];
 		if ( FrmRegEntryHelper::is_field_selected_and_value_saved( $this->entry, $opt ) ) {
-			$this->$property = html_entity_decode( $this->entry->metas[ $opt ] );
+			$value = $this->entry->metas[ $opt ];
+			if ( is_array( $value ) ) {
+				if ( 'first_name' === $property ) {
+					$value = isset( $value['first'] ) ? $value['first'] : '';
+				} elseif ( 'last_name' === $property ) {
+					$value = isset( $value['last'] ) ? $value['last'] : '';
+				} else {
+					$value = implode( ' ', $value );
+				}
+			}
+
+			$this->$property = html_entity_decode( $value );
 		}
 	}
 
@@ -314,10 +336,13 @@ class FrmRegUser {
 		}
 
 		$user_data = $this->package_user_data( 'create' );
+		$user_id   = wp_insert_user( $user_data );
 
-		$user_id = wp_insert_user( $user_data );
-
-		$this->user_id = is_wp_error( $user_id ) ? 0 : (int) $user_id;
+		if ( is_wp_error( $user_id ) || $user_id instanceof WP_Error ) {
+			$this->user_id = 0;
+		} else {
+			$this->user_id = (int) $user_id;
+		}
 
 		if ( $this->user_id ) {
 			$this->update_user_meta();
@@ -398,6 +423,20 @@ class FrmRegUser {
 	 */
 	public function get_user_id() {
 		return $this->user_id;
+	}
+
+	/**
+	 * Gets user object.
+	 *
+	 * @since 2.06
+	 *
+	 * @return WP_User|false|null
+	 */
+	public function get_user() {
+		if ( $this->user ) {
+			return $this->user;
+		}
+		return get_user_by( 'ID', $this->user_id );
 	}
 
 	/**

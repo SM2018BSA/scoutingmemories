@@ -4,14 +4,14 @@
  *
  * @package    Members
  * @subpackage Includes
- * @author     Justin Tadlock <justintadlock@gmail.com>
- * @copyright  Copyright (c) 2009 - 2018, Justin Tadlock
- * @link       https://themehybrid.com/plugins/members
+ * @author     The MemberPress Team 
+ * @copyright  Copyright (c) 2009 - 2018, The MemberPress Team
+ * @link       https://members-plugin.com/
  * @license    http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
-
 namespace Members;
 
+defined('ABSPATH') || exit;
 /**
  * Login form widget class.
  *
@@ -85,8 +85,6 @@ class Widget_Login extends \WP_Widget {
 	 * @return void
 	 */
 	function widget( $sidebar, $instance ) {
-		global $user_identity, $user_ID;
-
 		$instance = wp_parse_args( $instance, $this->defaults );
 
 		// Set up the arguments for wp_login_form().
@@ -122,12 +120,12 @@ class Widget_Login extends \WP_Widget {
 		if ( $instance['title'] )
 			echo $sidebar['before_title'] . apply_filters( 'widget_title',  $instance['title'], $instance, $this->id_base ) . $sidebar['after_title'];
 
+		// Show avatar if enabled.
+		if ( ! empty( $instance['show_avatar'] ) )
+			echo get_avatar( get_current_user_id() );
+
 		// If the current user is logged in.
 		if ( is_user_logged_in() ) {
-
-			// Show avatar if enabled.
-			if ( ! empty( $instance['show_avatar'] ) )
-				echo get_avatar( $user_ID );
 
 			// Show logged in text if any is written.
 			if ( $logged_in_text )
@@ -136,10 +134,6 @@ class Widget_Login extends \WP_Widget {
 
 		// If the current user is not logged in.
 		else {
-
-			// Show avatar if enabled.
-			if ( ! empty( $instance['show_avatar'] ) )
-				echo get_avatar( $user_ID );
 
 			// Show logged out text if any is written.
 			if ( $logged_out_text )

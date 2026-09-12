@@ -11,6 +11,7 @@ class FrmRegLoginForm extends FrmRegForm {
 	private $slide = false;
 	private $layout = 'v';
 	private $redirect = '';
+	private $logout_redirect = '';
 	private $labels = array();
 	private $html_ids = array();
 	private $show_elements = array();
@@ -27,6 +28,7 @@ class FrmRegLoginForm extends FrmRegForm {
 		$this->init_slide( $atts );
 		$this->init_layout( $atts );
 		$this->init_redirect( $atts );
+		$this->init_logout_redirect( $atts );
 		$this->init_labels( $atts );
 		$this->init_html_ids( $atts );
 		$this->init_show_elements( $atts );
@@ -145,14 +147,27 @@ class FrmRegLoginForm extends FrmRegForm {
 	 * @param array $atts
 	 */
 	private function init_redirect( $atts ) {
-		$this->redirect = $_SERVER['REQUEST_URI'];
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		$this->redirect = FrmAppHelper::get_server_value( 'REQUEST_URI' );
 
-		$current_redirect_to = $this->get_redirect_to_from_url( $_SERVER['REQUEST_URI'] );
+		$current_redirect_to = $this->get_redirect_to_from_url( $this->redirect );
 		if ( $current_redirect_to !== '' ) {
 			$this->redirect = $current_redirect_to;
 		} else {
 			$this->apply_string_attribute( $atts, 'redirect' );
+			$this->set_wpml_url( $this->redirect );
 		}
+	}
+
+	/**
+	 * Set the logout_redirect property
+	 *
+	 * @since 2.03
+	 *
+	 * @param array $atts Login form shortcode attributes.
+	 */
+	private function init_logout_redirect( $atts ) {
+		$this->logout_redirect = ! empty( $atts['logout_redirect'] ) ? $atts['logout_redirect'] : get_permalink();
 	}
 
 	/**
@@ -285,16 +300,16 @@ class FrmRegLoginForm extends FrmRegForm {
 	 * @since 2.0
 	 *
 	 * @param array $atts
+	 * @return void
 	 */
 	private function init_element_classes( $atts ) {
 		$this->element_classes = array(
-			'username' => 'frm_form_field form-field login-username',
-			'password' => 'frm_form_field form-field login-password',
-			'remember' => 'frm_form_field form-field frm_none_container login-remember',
+			'username'      => 'frm_form_field form-field login-username',
+			'password'      => 'frm_form_field form-field login-password',
+			'remember'      => 'frm_form_field form-field frm_none_container login-remember',
 			'lost_password' => 'frm_form_field frm_html_container form-field login_lost_pw',
-			'submit' => 'frm_submit',
+			'submit'        => 'frm_submit',
 		);
-
 
 		if ( $this->show_elements['labels'] === true ) {
 			$this->element_classes['username'] .= ' frm_top_container';
@@ -304,28 +319,29 @@ class FrmRegLoginForm extends FrmRegForm {
 			$this->element_classes['password'] .= ' frm_none_container';
 		}
 
-		if ( $this->layout == 'h' ) {
+		$use_grid_classes = 'h' === $this->layout;
+
+		if ( $use_grid_classes ) {
 			$this->element_classes['username'] .= ' frm_first frm_third';
 			$this->element_classes['password'] .= ' frm_third';
-			$this->element_classes['submit'] .= ' frm_third';
+			$this->element_classes['submit']   .= ' frm_third';
 
 			if ( $this->show_elements['labels'] === true ) {
 				$this->element_classes['submit'] .= ' frm_inline_submit';
 			}
 		}
 
-		if ( $this->show_elements['remember'] && $this->show_elements['lost_password'] ) {
-			if ( isset( $atts['class_remember' ] ) ) {
-				$this->element_classes['remember'] .= ' '. $atts['class_remember'];
-			} else {
-				$this->element_classes['remember'] .= ' frm_first frm_half';
-			}
+		if ( $this->show_elements['remember'] && isset( $atts['class_remember' ] ) ) {
+			$this->element_classes['remember'] .= ' '. $atts['class_remember'];
+		}
 
-			if ( isset( $atts['class_lost_password' ] ) ) {
-				$this->element_classes['lost_password'] .= ' '. $atts['class_lost_password'];
-			} else {
-				$this->element_classes['lost_password'] .= ' frm_half';
-			}
+		if ( $this->show_elements['lost_password'] && isset( $atts['class_lost_password' ] ) ) {
+			$this->element_classes['lost_password'] .= ' '. $atts['class_lost_password'];
+		}
+
+		if ( $use_grid_classes && $this->show_elements['remember'] && $this->show_elements['lost_password'] && ! isset( $atts['class_remember' ] ) && ! isset( $atts['class_lost_password'] ) ) {
+			$this->element_classes['remember']      .= ' frm_first frm_half';
+			$this->element_classes['lost_password'] .= ' frm_half';
 		}
 	}
 
@@ -382,6 +398,17 @@ class FrmRegLoginForm extends FrmRegForm {
 	 */
 	public function get_redirect() {
 		return $this->redirect;
+	}
+
+	/**
+	 * Get the logout_redirect property
+	 *
+	 * @since 2.03
+	 *
+	 * @return string The logout redirect URL.
+	 */
+	public function get_logout_redirect() {
+		return $this->logout_redirect;
 	}
 
 	/**
@@ -627,20 +654,16 @@ class FrmRegLoginForm extends FrmRegForm {
 	}
 
 	/**
-	 * Load the login form CSS
-	 *
-	 * @since 2.0
+	 * @since 2.02.02
 	 */
-	public function load_login_form_css() {
-		// Exit if running Formidable 2.03+
-		$frm_version = is_callable( 'FrmAppHelper::plugin_version' ) ? FrmAppHelper::plugin_version() : 0;
-		if ( version_compare( '2.03', $frm_version ) < 1 ) {
-			return;
+	public function reset_password_link() {
+		$url = FrmRegResetPasswordController::reset_password_page_url( 'none' );
+
+		if ( empty( $url ) ) {
+			$url = wp_lostpassword_url();
 		}
 
-		$handle = 'frmreg_login_form';
-		$source = FrmRegAppHelper::plugin_url() . '/css/login_form.css';
-		wp_enqueue_style( $handle, $source );
+		return $url;
 	}
 
 	/**
@@ -653,9 +676,10 @@ class FrmRegLoginForm extends FrmRegForm {
 			return;
 		}
 
-		$handle = 'frmreg_login_form_js';
-		$source = FrmRegAppHelper::plugin_url() . '/js/login_form.js';
-		wp_enqueue_script( $handle, $source );
+		$handle  = 'frmreg_login_form_js';
+		$source  = FrmRegAppHelper::plugin_url() . '/js/login_form.js';
+		$version = FrmRegAppHelper::plugin_version();
+		wp_enqueue_script( $handle, $source, array( 'jquery' ), $version );
 	}
 
 	/**
@@ -735,8 +759,11 @@ class FrmRegLoginForm extends FrmRegForm {
 			$message = FrmRegMessagesHelper::resend_activation_message( $user_id );
 
 		} elseif ( isset( $_GET[ 'frm_message_text' ] ) && $_GET[ 'frm_message_text' ] !== '' ) {
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$message = urldecode( $_GET[ 'frm_message_text' ] );
-
+			$message = FrmAppHelper::kses( $message, 'all' );
+		} elseif ( FrmRegSessionErrorController::get_error_from_session( $error_code ) ) {
+			$message = FrmRegSessionErrorController::get_error_from_session( $error_code );
 		} else {
 			$message = __( 'An error occurred. Please try again.', 'frmreg' );
 		}
@@ -824,6 +851,20 @@ class FrmRegLoginForm extends FrmRegForm {
 	}
 
 	/**
+	 * Add the language parameter to the redirect url after login.
+	 * Note: As of Feb 2019, WPML does not switch relative urls.
+	 *
+	 * @since 2.03
+	 */
+	private function set_wpml_url( &$url ) {
+		$lang = apply_filters( 'wpml_current_language', null );
+
+		if ( ! empty( $lang ) ) {
+			$url = apply_filters( 'wpml_permalink', $url, $lang, true );
+		}
+	}
+
+	/**
 	 * Get the default label values
 	 *
 	 * @since 2.0
@@ -871,5 +912,17 @@ class FrmRegLoginForm extends FrmRegForm {
 		}
 
 		return $defaults;
+	}
+
+	/**
+	 * Load the login form CSS.
+	 *
+	 * @since 2.0
+	 * @deprecated 2.10
+	 *
+	 * @return void
+	 */
+	public function load_login_form_css() {
+		_deprecated_function( __FUNCTION__, '2.10' );
 	}
 }

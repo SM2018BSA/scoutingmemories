@@ -38,14 +38,18 @@ class FrmRegShortcodesController {
 
 		if ( is_user_logged_in() ) {
 			// Show Logout link if user is logged-in
-			$logout_url = wp_logout_url( get_permalink() );
-			$content = '<a href="' . esc_url( $logout_url ) . '" class="frm_logout_link" >'. $login_form->get_log_out_label() . '</a>';
+			$logout_url = wp_logout_url( $login_form->get_logout_redirect() );
+			$content    = '<a href="' . esc_url( $logout_url ) . '" class="frm_logout_link" >'. $login_form->get_log_out_label() . '</a>';
 		} else {
-			$login_form->load_login_form_css();
+			/**
+			 * @since 2.09 Added do_action( 'login_enqueue_scripts' ) so that All in One Security can enqueue reCaptcha scripts.
+			 */
+			do_action( 'login_enqueue_scripts' );
+
 			$login_form->load_login_form_js();
 
 			ob_start();
-			include( FrmRegAppHelper::path() . '/views/login_form.php' );
+			include FrmRegAppHelper::path() . '/views/login_form.php';
 			$content = ob_get_contents();
 			ob_end_clean();
 		}
@@ -246,10 +250,14 @@ class FrmRegShortcodesController {
 		// Check user
 		$user_data = get_userdata( $atts['user_id'] );
 
+		if ( false === $user_data ) {
+			return '';
+		}
+
 		// Set password reset key
 		$key = get_password_reset_key( $user_data );
 
-		if ( is_wp_error( $key ) ) {
+		if ( is_wp_error( $key ) || ! is_object( $user_data ) ) {
 			return '';
 		}
 
@@ -285,5 +293,41 @@ class FrmRegShortcodesController {
 		}
 
 		return $url;
+	}
+
+	/**
+	 * Make sure that only privileged users (who can edit other users) are allowed to use frm-set-password-link shortcodes.
+	 * As of 2.12, these shortcodes are only allowed in email actions by default.
+	 *
+	 * @since 2.12
+	 *
+	 * @param mixed $post_content
+	 * @return mixed
+	 */
+	public static function before_save_email_action( $post_content ) {
+		if ( ! is_array( $post_content ) ) {
+			return $post_content;
+		}
+
+		if ( current_user_can( 'edit_users' ) ) {
+			// Only allow trusted users to use this shortcode.
+			// On multi-site, only super admins have the edit_users capability.
+			return $post_content;
+		}
+
+		$pattern = get_shortcode_regex( array( 'frm-set-password-link' ) );
+		foreach ( $post_content as $key => $value ) {
+			if ( ! is_string( $value ) ) {
+				continue;
+			}
+
+			if ( false === strpos( $value, '[' ) || false === strpos( $value, 'frm-set-password-link' ) ) {
+				continue;
+			}
+
+			$post_content[ $key ] = preg_replace_callback( "/$pattern/", '__return_empty_string', $value );
+		}
+
+		return $post_content;
 	}
 }

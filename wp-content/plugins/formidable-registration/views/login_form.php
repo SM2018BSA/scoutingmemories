@@ -9,7 +9,7 @@
 
 	<?php if ( $login_form->get_slide() ) { ?>
 		<span class="frm-open-login">
-		<a href="#"><?php echo $login_form->get_submit_label() ?> &rarr;</a>
+		    <a href="#"><?php echo esc_html( $login_form->get_submit_label() ); ?> &rarr;</a>
 		</span>
 	<?php } ?>
 	<form method="post" action="<?php echo esc_url( site_url( 'wp-login.php', 'login_post' ) ); ?>" >
@@ -18,7 +18,7 @@
 			<!-- Errors -->
 			<div class="frm_error_style">
 				<?php foreach ( $login_form->get_errors() as $error ) : ?>
-					<?php echo $error; ?>
+					<?php echo FrmAppHelper::kses( $error, 'all' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endforeach; ?>
 			</div>
 			<?php
@@ -28,12 +28,13 @@
 			<!-- Success Messages -->
 			<div class="frm_message">
 				<?php foreach ( $login_form->get_messages() as $message ) : ?>
-					<?php echo $message; ?>
+					<?php echo FrmAppHelper::kses( $message, 'all' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				<?php endforeach; ?>
 			</div>
 		<?php } ?>
 		<div class="frm_form_fields">
 			<fieldset>
+				<div class="frm_fields_container">
 
 				<div class="<?php echo esc_attr( $login_form->get_username_class() ) ?>">
 					<label for="<?php echo esc_attr( $login_form->get_username_id() ) ?>" class="frm_primary_label"><?php
@@ -67,12 +68,12 @@
 				?>
 
 				<?php if ( $login_form->get_show_remember() ) { ?>
-					<div class="<?php echo esc_attr( $login_form->get_remember_class() ) ?>">
+				<div class="<?php echo esc_attr( $login_form->get_remember_class() ) ?>">
 					<div class="frm_opt_container">
 						<div class="frm_checkbox">
 							<label for="<?php echo esc_attr( $login_form->get_remember_id() ) ?>">
-							<input name="rememberme" id="<?php echo esc_attr( $login_form->get_remember_id() ) ?>" value="forever"<?php echo ( $login_form->get_remember_value() ? ' checked="checked"' : '' )?> type="checkbox"><?php
-							echo esc_html( $login_form->get_remember_label() )?>
+								<input name="rememberme" id="<?php echo esc_attr( $login_form->get_remember_id() ); ?>" value="forever"<?php echo $login_form->get_remember_value() ? ' checked="checked"' : ''; ?> type="checkbox" /><?php
+								echo esc_html( $login_form->get_remember_label() ); ?>
 							</label>
 						</div>
 					</div>
@@ -81,7 +82,7 @@
 
 				<?php if ( $login_form->get_show_lost_password_link() ) { ?>
 				<div class="<?php echo esc_attr( $login_form->get_lost_password_class() ) ?>">
-					<a class="forgot-password" href="<?php echo esc_url( wp_lostpassword_url() ) ?>">
+					<a class="forgot-password" href="<?php echo esc_url( $login_form->reset_password_link() ); ?>">
 						<?php echo esc_html( $login_form->get_lost_password_label() ) ?>
 					</a>
 				</div>
@@ -89,6 +90,7 @@
 
 				<div style="clear:both;"></div>
 
+				</div><!-- End .frm_fields_container -->
 			</fieldset>
 		</div>
 	</form>

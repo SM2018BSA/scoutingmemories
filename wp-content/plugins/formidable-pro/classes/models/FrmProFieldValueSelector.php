@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 2.03.05
  */
@@ -92,26 +96,28 @@ class FrmProFieldValueSelector extends FrmFieldValueSelector {
 	}
 
 	/**
-	 * Display a post category value selector
+	 * Display a post category value selector.
 	 *
 	 * @since 2.03.05
+	 *
+	 * @return void
 	 */
 	private function display_post_category_value_selector() {
-		$is_settings_page = ( FrmAppHelper::simple_get( 'frm_action' ) == 'settings' );
-		$first_option = ( $this->blank_option_label === '' ) ? ' ' : $this->blank_option_label;
+		$is_settings_page = FrmAppHelper::simple_get( 'frm_action' ) === 'settings';
+		$first_option     = $this->blank_option_label === '' ? ' ' : $this->blank_option_label;
 
-		$temp_field = FrmField::getOne( $this->field_id );
-		$temp_field = FrmProFieldsHelper::convert_field_object_to_flat_array( $temp_field );
+		$temp_field          = FrmField::getOne( $this->field_id );
+		$temp_field          = FrmProFieldsHelper::convert_field_object_to_flat_array( $temp_field );
 		$temp_field['value'] = $this->value;
 
 		$pass_args = array(
-			'name' => $this->html_name,
-			'id' => 'placeholder_id',
+			'name'            => $this->html_name,
+			'id'              => 'placeholder_id',
 			'show_option_all' => $first_option,
-			'location' => $is_settings_page ? 'form_actions' : 'field_logic',
+			'location'        => $is_settings_page ? 'form_actions' : 'field_logic',
 		);
 
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		echo FrmProPost::get_category_dropdown( $temp_field, $pass_args );
 	}
-
 }

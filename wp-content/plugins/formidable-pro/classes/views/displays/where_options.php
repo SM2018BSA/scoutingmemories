@@ -1,4 +1,10 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
+_deprecated_file( basename( __FILE__ ), '4.09', null, 'This file can be found in formidable-views/classes/views/displays/where_options.php' );
+
 if ( isset($field->field_options) && isset($field->field_options['post_field']) && $field->field_options['post_field'] == 'post_status' ) {
 	$options = FrmProFieldsHelper::get_status_options( $field, $field->options ); ?>
 	<select name="options[where_val][<?php echo esc_attr( $where_key ); ?>]">

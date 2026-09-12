@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+
 /**
  * @since 3.0
  */
@@ -11,6 +15,11 @@ class FrmProFieldToggle extends FrmFieldType {
 	 */
 	protected $type = 'toggle';
 
+	/**
+	 * @var bool
+	 */
+	protected $array_allowed = false;
+
 	protected function field_settings_for_type() {
 		$settings = array();
 
@@ -21,8 +30,8 @@ class FrmProFieldToggle extends FrmFieldType {
 	protected function extra_field_opts() {
 		return array(
 			'show_label' => false,
-			'toggle_on'  => 1,
-			'toggle_off' => 0,
+			'toggle_on'  => __( 'Yes', 'formidable-pro' ),
+			'toggle_off' => __( 'No', 'formidable-pro' ),
 		);
 	}
 
@@ -32,7 +41,7 @@ class FrmProFieldToggle extends FrmFieldType {
 	 */
 	public function show_primary_options( $args ) {
 		$field = $args['field'];
-		include( FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/toggle-labels.php' );
+		include FrmProAppHelper::plugin_path() . '/classes/views/frmpro-fields/back-end/toggle-labels.php';
 
 		parent::show_primary_options( $args );
 	}
@@ -48,7 +57,7 @@ class FrmProFieldToggle extends FrmFieldType {
 	}
 
 	protected function builder_text_field( $name = '' ) {
-		$this->set_field_column( 'value', $this->get_field_column('default_value') );
+		$this->set_field_column( 'value', $this->get_field_column( 'default_value' ) );
 		$args = array(
 			'html_id'    => $this->html_id(),
 			'field_name' => $this->html_name( $name ),
@@ -65,34 +74,15 @@ class FrmProFieldToggle extends FrmFieldType {
 			$this->add_aria_description( $args, $input_html );
 		}
 
-		$checked_values = $this->get_field_column('value');
+		$checked_values = $this->get_field_column( 'value' );
 
 		$show_labels = FrmField::get_option( $this->field, 'show_label' );
-		$off_label = FrmField::get_option( $this->field, 'toggle_off' );
-		$on_label = FrmField::get_option( $this->field, 'toggle_on' );
+		$off_label   = FrmField::get_option( $this->field, 'toggle_off' );
+		$on_label    = FrmField::get_option( $this->field, 'toggle_on' );
+		$checked     = FrmAppHelper::check_selected( $checked_values, $on_label ) ? ' checked="checked" ' : '';
+		$toggle_args = compact( 'show_labels', 'off_label', 'on_label', 'checked', 'input_html' );
 
-		$checked = FrmAppHelper::check_selected( $checked_values, $on_label ) ? ' checked="checked" ' : '';
-		$input = '<div>';
-
-		$data = '';
-		if ( $show_labels && ! empty( $off_label ) ) {
-			$data = ' data-off="' . esc_attr( $off_label ) . '"';
-			$input .= '<span class="frm_off_label frm_switch_opt">' . $off_label . '</span>';
-		}
-
-		$input .= '<label class="frm_switch">' . "\r\n";
-		$input .= '<input type="checkbox" name="' . esc_attr( $args['field_name'] ) . '[]" id="' . esc_attr( $args['html_id'] ) . '" value="' . esc_attr( $on_label ) . '" ' . $checked . $data . $input_html . '/>' . "\r\n";
-
-		$input .= '<span class="frm_slider"></span>' . "\r\n";
-		$input .= '</label>';
-
-		if ( $show_labels && $on_label != 1 ) {
-			$input .= '<span class="frm_on_label frm_switch_opt">' . $on_label . '</span>' . "\r\n";
-		}
-
-		$input .= '</div>';
-
-		return $input;
+		return FrmProHtmlHelper::toggle( $args['html_id'], $args['field_name'], $toggle_args );
 	}
 
 	/**

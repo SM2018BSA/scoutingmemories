@@ -1,3 +1,16 @@
+<?php
+/**
+ * HTML field form builder view.
+ *
+ * @package Formidable
+ *
+ * @var array $field Field data including 'description'.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	die( 'You are not allowed to call this page directly.' );
+}
+?>
 <div class="frm-embed-field-placeholder">
 	<div class="frm-embed-message">
 		<?php esc_html_e( 'Custom HTML:', 'formidable' ); ?>

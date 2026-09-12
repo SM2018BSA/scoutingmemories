@@ -4,7 +4,8 @@ class FrmBtspUpdate extends FrmAddon {
 	public $plugin_file;
 	public $plugin_name = 'Bootstrap';
 	public $download_id = 168463;
-	public $version = '1.02.02';
+
+	public $version = '2.0';
 
 	public function __construct() {
 		$this->plugin_file = dirname( dirname( __FILE__ ) ) . '/formidable-bootstrap.php';
