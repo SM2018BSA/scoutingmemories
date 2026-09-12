@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '1.0.1');
+define('SCOUTING_PDF_VERSION', '1.0.2');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -46,6 +46,7 @@ class Scouting_PDF_Embedder {
 
         // Enqueue scripts & styles
         add_action('wp_enqueue_scripts', array($this, 'register_assets'));
+        add_action('wp_enqueue_scripts', array($this, 'dequeue_legacy_scripts'), 999);
 
         // REST API stream endpoint (preferred on WP Engine over admin-ajax.php)
         add_action('rest_api_init', array($this, 'register_rest_routes'));
@@ -53,6 +54,15 @@ class Scouting_PDF_Embedder {
         // Ajax proxy fallback for environments with cross-origin CORS constraints (e.g. localhost)
         add_action('wp_ajax_scouting_pdf_proxy', array($this, 'proxy_pdf_stream'));
         add_action('wp_ajax_nopriv_scouting_pdf_proxy', array($this, 'proxy_pdf_stream'));
+    }
+
+    /**
+     * Dequeue conflicting legacy PDF Embedder scripts to prevent "domainerror" / "content blocked" messages
+     */
+    public function dequeue_legacy_scripts() {
+        wp_dequeue_script('pdfemb_embed_pdf-js');
+        wp_dequeue_script('pdfemb_pdfjs-js');
+        wp_dequeue_style('pdfemb-pdf-viewer-css');
     }
 
     /**
@@ -100,34 +110,55 @@ class Scouting_PDF_Embedder {
      * Register scripts and styles
      */
     public function register_assets() {
+        $is_ssl = is_ssl() 
+            || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') 
+            || (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off');
+
+        $plugin_url = SCOUTING_PDF_PLUGIN_URL;
+        $rest_url = rest_url('scouting-pdf/v1/stream');
+        $ajax_url = admin_url('admin-ajax.php');
+        if ($is_ssl) {
+            $plugin_url = set_url_scheme($plugin_url, 'https');
+            $rest_url = set_url_scheme($rest_url, 'https');
+            $ajax_url = set_url_scheme($ajax_url, 'https');
+        }
+
         wp_register_style(
             'scouting-pdf-viewer-css',
-            SCOUTING_PDF_PLUGIN_URL . 'assets/css/scouting-pdf-viewer.css',
+            $plugin_url . 'assets/css/scouting-pdf-viewer.css',
             array(),
             SCOUTING_PDF_VERSION
         );
 
         wp_register_script(
             'scouting-pdfjs-lib',
-            SCOUTING_PDF_PLUGIN_URL . 'assets/vendor/pdf.min.js',
+            $plugin_url . 'assets/vendor/pdf.min.js',
             array(),
             '2.16.105',
             true
         );
 
         wp_register_script(
-            'scouting-pdf-viewer-js',
-            SCOUTING_PDF_PLUGIN_URL . 'assets/js/scouting-pdf-viewer.js',
+            'scouting-pdfjs-worker',
+            $plugin_url . 'assets/vendor/pdf.worker.min.js',
             array('scouting-pdfjs-lib'),
+            '2.16.105',
+            true
+        );
+
+        wp_register_script(
+            'scouting-pdf-viewer-js',
+            $plugin_url . 'assets/js/scouting-pdf-viewer.js',
+            array('scouting-pdfjs-lib', 'scouting-pdfjs-worker'),
             SCOUTING_PDF_VERSION,
             true
         );
 
         wp_localize_script('scouting-pdf-viewer-js', 'ScoutingPdfConfig', array(
-            'workerUrl' => SCOUTING_PDF_PLUGIN_URL . 'assets/vendor/pdf.worker.min.js',
-            'cMapUrl'   => SCOUTING_PDF_PLUGIN_URL . 'assets/vendor/cmaps/',
-            'restUrl'   => rest_url('scouting-pdf/v1/stream'),
-            'ajaxUrl'   => admin_url('admin-ajax.php')
+            'workerUrl' => $plugin_url . 'assets/vendor/pdf.worker.min.js',
+            'cMapUrl'   => $plugin_url . 'assets/vendor/cmaps/',
+            'restUrl'   => $rest_url,
+            'ajaxUrl'   => $ajax_url
         ));
     }
 
@@ -254,6 +285,7 @@ class Scouting_PDF_Embedder {
         if (!$this->scripts_enqueued) {
             wp_enqueue_style('scouting-pdf-viewer-css');
             wp_enqueue_script('scouting-pdfjs-lib');
+            wp_enqueue_script('scouting-pdfjs-worker');
             wp_enqueue_script('scouting-pdf-viewer-js');
             $this->scripts_enqueued = true;
         }

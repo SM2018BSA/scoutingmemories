@@ -1,13 +1,59 @@
 (function() {
     'use strict';
 
-    if (typeof window.pdfjsLib === 'undefined') {
-        console.warn('Scouting PDF: pdfjsLib is not loaded');
+    // Resolve PDF.js across different vendor build export patterns
+    var pdfLib = window.pdfjsLib || window.pdfjsDistBuildPdf || window.PDFJS || (typeof window['pdfjs-dist/build/pdf'] !== 'undefined' ? window['pdfjs-dist/build/pdf'] : null);
+    if (!pdfLib && typeof PDFJS !== 'undefined') {
+        pdfLib = PDFJS;
+    }
+
+    if (!pdfLib) {
+        console.warn('Scouting PDF: PDF.js library is not loaded');
         return;
     }
 
+    // Alias window.pdfjsLib so standard references resolve
+    window.pdfjsLib = pdfLib;
+
+    var isHttps = (window.location.protocol === 'https:');
+    if (isHttps && window.ScoutingPdfConfig) {
+        if (window.ScoutingPdfConfig.workerUrl) window.ScoutingPdfConfig.workerUrl = window.ScoutingPdfConfig.workerUrl.replace(/^http:/i, 'https:');
+        if (window.ScoutingPdfConfig.cMapUrl) window.ScoutingPdfConfig.cMapUrl = window.ScoutingPdfConfig.cMapUrl.replace(/^http:/i, 'https:');
+        if (window.ScoutingPdfConfig.restUrl) window.ScoutingPdfConfig.restUrl = window.ScoutingPdfConfig.restUrl.replace(/^http:/i, 'https:');
+        if (window.ScoutingPdfConfig.ajaxUrl) window.ScoutingPdfConfig.ajaxUrl = window.ScoutingPdfConfig.ajaxUrl.replace(/^http:/i, 'https:');
+    }
+
+    // Configure worker options - disable external worker to eliminate CSP, mixed content, and worker blocking
+    if (pdfLib.PDFJS) {
+        pdfLib.PDFJS.disableWorker = true;
+    }
+    if (window.PDFJS) {
+        window.PDFJS.disableWorker = true;
+    }
+
     if (window.ScoutingPdfConfig && window.ScoutingPdfConfig.workerUrl) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = window.ScoutingPdfConfig.workerUrl;
+        if (pdfLib.GlobalWorkerOptions) {
+            pdfLib.GlobalWorkerOptions.workerSrc = window.ScoutingPdfConfig.workerUrl;
+        }
+        if (pdfLib.PDFJS) {
+            pdfLib.PDFJS.workerSrc = window.ScoutingPdfConfig.workerUrl;
+        }
+        if (window.PDFJS) {
+            window.PDFJS.workerSrc = window.ScoutingPdfConfig.workerUrl;
+        }
+    }
+
+    // Safe getViewport helper compatible with both PDF.js v2.0 (numeric) and v2.1+ (options object)
+    function getPageViewport(page, scaleVal) {
+        try {
+            var vp = page.getViewport(scaleVal);
+            if (vp && !isNaN(vp.width) && vp.width > 0) return vp;
+        } catch (e) {}
+        try {
+            var vp2 = page.getViewport({ scale: scaleVal });
+            if (vp2 && !isNaN(vp2.width) && vp2.width > 0) return vp2;
+        } catch (e) {}
+        return page.getViewport(scaleVal);
     }
 
     function initViewer(container) {
@@ -16,6 +62,10 @@
 
         var pdfUrl = container.getAttribute('data-pdf-url');
         if (!pdfUrl) return;
+
+        if (isHttps && pdfUrl.indexOf('http://') === 0) {
+            pdfUrl = pdfUrl.replace(/^http:/i, 'https:');
+        }
 
         var canvas = container.querySelector('.scouting-pdf-canvas');
         var canvasWrapper = container.querySelector('.scouting-pdf-canvas-wrapper');
@@ -32,7 +82,7 @@
         var zoomFitBtn = container.querySelector('.scouting-pdf-zoom-fit');
         var fullscreenBtn = container.querySelector('.scouting-pdf-fullscreen');
 
-        // Ensure canvas wrapper is hidden until first render completes to eliminate empty white box
+        // Ensure canvas wrapper is hidden until first render completes
         if (canvasWrapper) {
             canvasWrapper.style.display = 'none';
         }
@@ -56,18 +106,18 @@
             pageRendering = true;
             pdfDoc.getPage(num).then(function(page) {
                 var dpr = window.devicePixelRatio || 1;
-                var baseViewport = page.getViewport({ scale: 1 });
+                var baseViewport = getPageViewport(page, 1.0);
 
                 if (autoFit && viewportEl) {
                     var availableWidth = viewportEl.clientWidth - 48;
-                    if (availableWidth > 200) {
+                    if (availableWidth > 200 && baseViewport && baseViewport.width > 0) {
                         scale = availableWidth / baseViewport.width;
                         if (scale > 2.5) scale = 2.5;
                         if (scale < 0.5) scale = 0.5;
                     }
                 }
 
-                var viewport = page.getViewport({ scale: scale });
+                var viewport = getPageViewport(page, scale);
                 canvas.height = Math.floor(viewport.height * dpr);
                 canvas.width = Math.floor(viewport.width * dpr);
                 canvas.style.width = Math.floor(viewport.width) + 'px';
@@ -81,7 +131,8 @@
                 };
 
                 var renderTask = page.render(renderContext);
-                renderTask.promise.then(function() {
+                var renderPromise = renderTask.promise ? renderTask.promise : renderTask;
+                renderPromise.then(function() {
                     pageRendering = false;
                     if (loadingEl) loadingEl.style.display = 'none';
                     if (canvasWrapper) {
@@ -96,6 +147,9 @@
                     console.error('Render error:', err);
                     pageRendering = false;
                 });
+            }).catch(function(pageErr) {
+                console.error('GetPage error:', pageErr);
+                pageRendering = false;
             });
 
             updateUI();
@@ -231,42 +285,48 @@
                 disableRange: isRetry
             };
 
-            pdfjsLib.getDocument(docInit).promise.then(function(loadedDoc) {
-                pdfDoc = loadedDoc;
-                updateUI();
-                renderPage(pageNum);
-            }).catch(function(error) {
-                console.warn('Scouting PDF: Failed to load ' + urlToLoad + ':', error);
-                if (!isRetry && proxyUrl && urlToLoad !== proxyUrl) {
-                    console.info('Scouting PDF: Retrying through stream proxy...');
-                    loadDoc(proxyUrl, true);
-                    return;
-                }
-                if (!isRetry && urlToLoad === proxyUrl) {
-                    console.info('Scouting PDF: Retrying with disableRange: true...');
-                    loadDoc(proxyUrl, true);
-                    return;
-                }
+            try {
+                var loadingTask = pdfLib.getDocument(docInit);
+                var docPromise = loadingTask.promise ? loadingTask.promise : loadingTask;
 
-                if (loadingEl) {
-                    loadingEl.innerHTML = '<div class="scouting-pdf-error">' +
-                        '<div class="scouting-pdf-error-title">Unable to preview document</div>' +
-                        '<p class="scouting-pdf-error-desc">This document can still be downloaded and viewed directly on your device.</p>' +
-                        '<div class="scouting-pdf-error-actions">' +
-                        '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn scouting-pdf-download-btn" download target="_blank">' +
-                        '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>' +
-                        'Download PDF</a>' +
-                        '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" target="_blank">Open in New Tab</a>' +
-                        '</div></div>';
-                }
-            });
+                docPromise.then(function(loadedDoc) {
+                    pdfDoc = loadedDoc;
+                    updateUI();
+                    renderPage(pageNum);
+                }).catch(function(error) {
+                    console.warn('Scouting PDF: Failed to load ' + urlToLoad + ':', error);
+                    if (!isRetry && proxyUrl && urlToLoad !== proxyUrl) {
+                        console.info('Scouting PDF: Retrying through stream proxy...');
+                        loadDoc(proxyUrl, true);
+                        return;
+                    }
+                    if (!isRetry && urlToLoad === proxyUrl) {
+                        console.info('Scouting PDF: Retrying with disableRange: true...');
+                        loadDoc(proxyUrl, true);
+                        return;
+                    }
+
+                    if (loadingEl) {
+                        loadingEl.innerHTML = '<div class="scouting-pdf-error">' +
+                            '<div class="scouting-pdf-error-title">Unable to preview document</div>' +
+                            '<p class="scouting-pdf-error-desc">This document can still be downloaded and viewed directly on your device.</p>' +
+                            '<div class="scouting-pdf-error-actions">' +
+                            '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn scouting-pdf-download-btn" download target="_blank">' +
+                            '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>' +
+                            'Download PDF</a>' +
+                            '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" target="_blank">Open in New Tab</a>' +
+                            '</div></div>';
+                    }
+                });
+            } catch (err) {
+                console.error('Scouting PDF: Exception calling getDocument:', err);
+            }
         }
 
         loadDoc(initialUrl, false);
     }
 
     function initAllViewers() {
-        // Find custom viewers
         var viewers = document.querySelectorAll('.scouting-pdf-container');
         for (var i = 0; i < viewers.length; i++) {
             initViewer(viewers[i]);
