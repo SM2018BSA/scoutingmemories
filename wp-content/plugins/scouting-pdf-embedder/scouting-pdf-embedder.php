@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '1.0.4');
+define('SCOUTING_PDF_VERSION', '1.0.5');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -377,71 +377,7 @@ class Scouting_PDF_Embedder {
             return $this->build_viewer_html($url, $title);
         }, $content);
 
-        // Pattern 3: Auto-detect associated PDF for posts without explicit shortcode (e.g. multi-step form submissions)
-        if (is_singular() && in_the_loop() && is_main_query() && strpos($content, 'data-pdf-viewer') === false && strpos($content, 'scouting-pdf-container') === false && strpos($content, 'pdf-embedder') === false) {
-            $post_id = get_the_ID();
-            if ($post_id) {
-                $associated = $this->find_associated_pdf($post_id);
-                if ($associated && !empty($associated['url'])) {
-                    $content .= "\n\n" . $this->build_viewer_html($associated['url'], $associated['title']);
-                }
-            }
-        }
-
         return $content;
-    }
-
-    /**
-     * Find associated PDF for posts where shortcode was not embedded in content
-     * Handles: direct media attachments, duplicate pending submissions from form glitches, and author uploads
-     */
-    public function find_associated_pdf($post_id) {
-        $post = get_post($post_id);
-        if (!$post) {
-            return null;
-        }
-
-        // 1. Direct attached media
-        $attachments = get_attached_media('application/pdf', $post_id);
-        if (!empty($attachments)) {
-            $att = reset($attachments);
-            return array(
-                'url'   => wp_get_attachment_url($att->ID),
-                'title' => $att->post_title
-            );
-        }
-
-        // 2. Check for related/duplicate submission with same title containing a PDF shortcode
-        global $wpdb;
-        $related = $wpdb->get_results($wpdb->prepare(
-            "SELECT ID, post_content FROM {$wpdb->posts} WHERE post_title = %s AND ID != %d AND (post_content LIKE '%pdf-embedder%' OR post_content LIKE '%.pdf%') ORDER BY ID DESC LIMIT 1",
-            $post->post_title,
-            $post_id
-        ));
-        if (!empty($related)) {
-            $related_content = html_entity_decode($related[0]->post_content, ENT_QUOTES);
-            if (preg_match('/url=["\']([^"\']+\.pdf[^"\']*)["\']/i', $related_content, $m)) {
-                $title = '';
-                if (preg_match('/title=["\']([^"\']*)["\']/i', $related_content, $tm)) {
-                    $title = $tm[1];
-                }
-                return array('url' => $m[1], 'title' => $title);
-            }
-        }
-
-        // 3. Check for PDF attachment uploaded by same author around the same time (+/- 60 mins)
-        if (!empty($post->post_author)) {
-            $recent_pdfs = $wpdb->get_results($wpdb->prepare(
-                "SELECT ID, post_title, guid FROM {$wpdb->posts} WHERE post_type = 'attachment' AND post_mime_type = 'application/pdf' AND post_author = %d AND ABS(TIMESTAMPDIFF(MINUTE, post_date, %s)) <= 60 ORDER BY ID DESC LIMIT 1",
-                $post->post_author,
-                $post->post_date
-            ));
-            if (!empty($recent_pdfs)) {
-                return array('url' => $recent_pdfs[0]->guid, 'title' => $recent_pdfs[0]->post_title);
-            }
-        }
-
-        return null;
     }
 
     /**
