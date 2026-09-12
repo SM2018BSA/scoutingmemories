@@ -13,6 +13,7 @@ define('EDIT_USERS_VIEWID',               1323);
 
 //Search Memorires 1 on home page
 define('SM1_COUNCIL_FID',                  108);
+define('SM1_STATES_FID',                   107);
 define('SM2_COUNCIL_FID',                  157);
 define('SM3_COUNCIL_FID',                  430);
 
