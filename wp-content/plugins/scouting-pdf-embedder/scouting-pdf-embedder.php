@@ -50,12 +50,24 @@ class Scouting_PDF_Embedder {
         add_action('wp_print_scripts', array($this, 'dequeue_legacy_scripts'), 1);
         add_action('wp_print_footer_scripts', array($this, 'dequeue_legacy_scripts'), 1);
 
+        add_action('init', array($this, 'takeover_shortcodes'), 99999);
+
         // REST API stream endpoint (preferred on WP Engine over admin-ajax.php)
         add_action('rest_api_init', array($this, 'register_rest_routes'));
 
         // Ajax proxy fallback for environments with cross-origin CORS constraints (e.g. localhost)
         add_action('wp_ajax_scouting_pdf_proxy', array($this, 'proxy_pdf_stream'));
         add_action('wp_ajax_nopriv_scouting_pdf_proxy', array($this, 'proxy_pdf_stream'));
+    }
+
+    /**
+     * Re-register shortcodes on late init to guarantee precedence over any legacy plugins
+     */
+    public function takeover_shortcodes() {
+        remove_shortcode('pdf-embedder');
+        remove_shortcode('pdf_embedder');
+        add_shortcode('pdf-embedder', array($this, 'render_shortcode'));
+        add_shortcode('pdf_embedder', array($this, 'render_shortcode'));
     }
 
     /**
