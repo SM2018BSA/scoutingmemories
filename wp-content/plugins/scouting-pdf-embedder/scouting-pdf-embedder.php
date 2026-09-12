@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '1.0.2');
+define('SCOUTING_PDF_VERSION', '1.0.3');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -424,52 +424,52 @@ class Scouting_PDF_Embedder {
 
         ob_start();
         ?>
-        <div class="scouting-pdf-container" data-pdf-url="<?php echo $esc_url; ?>" tabindex="0">
-            <div class="scouting-pdf-toolbar">
-                <div class="scouting-pdf-group">
-                    <button type="button" class="scouting-pdf-btn scouting-pdf-prev" title="Previous Page" aria-label="Previous Page">
-                        <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        <div class="relative w-full max-w-full my-6 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-slate-800 font-sans focus-within:border-slate-300 focus-within:shadow-md transition-all scouting-pdf-container" data-pdf-viewer data-pdf-url="<?php echo $esc_url; ?>" tabindex="0">
+            <div class="flex flex-wrap items-center justify-between bg-slate-50 px-3.5 py-2.5 border-b border-slate-200 select-none gap-2" data-pdf-role="toolbar">
+                <div class="flex items-center gap-1.5" data-pdf-role="group">
+                    <button type="button" class="inline-flex items-center justify-center bg-white text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:text-slate-900 active:bg-slate-200 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed transition-all" data-pdf-control="prev" title="Previous Page" aria-label="Previous Page">
+                        <svg class="w-4 h-4 fill-current block" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
                     </button>
-                    <span class="scouting-pdf-page-display">
-                        <input type="number" class="scouting-pdf-page-input" value="1" min="1" aria-label="Current Page">
-                        <span>/</span>
-                        <span class="scouting-pdf-total-pages">--</span>
+                    <span class="inline-flex items-center gap-1.5 text-xs text-slate-500 px-1" data-pdf-role="page-display">
+                        <input type="number" class="w-11 py-1 px-1.5 bg-white border border-slate-300 rounded-md text-slate-900 text-xs font-semibold text-center focus:outline-none focus:border-[#025600] focus:ring-2 transition-all" data-pdf-control="page-input" value="1" min="1" aria-label="Current Page">
+                        <span class="text-slate-400">/</span>
+                        <span class="font-medium text-slate-600" data-pdf-control="total-pages">--</span>
                     </span>
-                    <button type="button" class="scouting-pdf-btn scouting-pdf-next" title="Next Page" aria-label="Next Page">
-                        <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                    <button type="button" class="inline-flex items-center justify-center bg-white text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:text-slate-900 active:bg-slate-200 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed transition-all" data-pdf-control="next" title="Next Page" aria-label="Next Page">
+                        <svg class="w-4 h-4 fill-current block" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
                     </button>
                 </div>
 
-                <div class="scouting-pdf-group">
-                    <button type="button" class="scouting-pdf-btn scouting-pdf-zoom-out" title="Zoom Out" aria-label="Zoom Out">
-                        <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+                <div class="flex items-center gap-1.5" data-pdf-role="group">
+                    <button type="button" class="inline-flex items-center justify-center bg-white text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:text-slate-900 active:bg-slate-200 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed transition-all" data-pdf-control="zoom-out" title="Zoom Out" aria-label="Zoom Out">
+                        <svg class="w-4 h-4 fill-current block" viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
                     </button>
-                    <span class="scouting-pdf-zoom-level">100%</span>
-                    <button type="button" class="scouting-pdf-btn scouting-pdf-zoom-in" title="Zoom In" aria-label="Zoom In">
-                        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    <span class="text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-md px-2 py-1 min-w-[3.25rem] text-center" data-pdf-control="zoom-level">100%</span>
+                    <button type="button" class="inline-flex items-center justify-center bg-white text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:text-slate-900 active:bg-slate-200 active:translate-y-px disabled:opacity-40 disabled:cursor-not-allowed transition-all" data-pdf-control="zoom-in" title="Zoom In" aria-label="Zoom In">
+                        <svg class="w-4 h-4 fill-current block" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                     </button>
-                    <button type="button" class="scouting-pdf-btn scouting-pdf-zoom-fit" title="Fit to Width">
+                    <button type="button" class="inline-flex items-center justify-center bg-white text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:text-slate-900 active:bg-slate-200 active:translate-y-px transition-all" data-pdf-control="zoom-fit" title="Fit to Width">
                         Fit
                     </button>
                 </div>
 
-                <div class="scouting-pdf-group">
-                    <a href="<?php echo $esc_url; ?>" download="<?php echo esc_attr($clean_title); ?>" class="scouting-pdf-btn scouting-pdf-download" title="Download PDF" target="_blank">
-                        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                <div class="flex items-center gap-1.5" data-pdf-role="group">
+                    <a href="<?php echo $esc_url; ?>" download="<?php echo esc_attr($clean_title); ?>" class="inline-flex items-center justify-center bg-[#025600] text-white border border-[#025600] rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow-sm hover:bg-[#013e00] hover:text-white active:translate-y-px transition-all" data-pdf-control="download" title="Download PDF" target="_blank">
+                        <svg class="w-4 h-4 fill-white block" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                     </a>
-                    <button type="button" class="scouting-pdf-btn scouting-pdf-fullscreen" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
-                        <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                    <button type="button" class="inline-flex items-center justify-center bg-white text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm hover:bg-slate-100 hover:border-slate-400 hover:text-slate-900 active:bg-slate-200 active:translate-y-px transition-all" data-pdf-control="fullscreen" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+                        <svg class="w-4 h-4 fill-current block" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
                     </button>
                 </div>
             </div>
 
-            <div class="scouting-pdf-viewport">
-                <div class="scouting-pdf-loading">
-                    <div class="scouting-pdf-spinner"></div>
-                    <div class="scouting-pdf-loading-text">Loading document...</div>
+            <div class="relative w-full min-h-[480px] max-h-[80vh] overflow-auto flex justify-center items-start bg-slate-100 p-6 box-border" data-pdf-role="viewport">
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-3 text-slate-500 text-sm font-medium z-10" data-pdf-role="loading">
+                    <div class="w-9 h-9 border-[3px] border-slate-200 border-t-[#025600] rounded-full animate-spin"></div>
+                    <div class="text-slate-500 text-sm font-medium">Loading document...</div>
                 </div>
-                <div class="scouting-pdf-canvas-wrapper">
-                    <canvas class="scouting-pdf-canvas"></canvas>
+                <div class="relative hidden bg-white rounded shadow-xl ring-1 ring-black/5 leading-none transition-opacity duration-200" data-pdf-role="canvas-wrapper">
+                    <canvas class="block max-w-full h-auto rounded" data-pdf-role="canvas"></canvas>
                 </div>
             </div>
         </div>

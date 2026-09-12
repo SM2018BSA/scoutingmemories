@@ -67,20 +67,20 @@
             pdfUrl = pdfUrl.replace(/^http:/i, 'https:');
         }
 
-        var canvas = container.querySelector('.scouting-pdf-canvas');
-        var canvasWrapper = container.querySelector('.scouting-pdf-canvas-wrapper');
+        var canvas = container.querySelector('[data-pdf-role="canvas"], .scouting-pdf-canvas');
+        var canvasWrapper = container.querySelector('[data-pdf-role="canvas-wrapper"], .scouting-pdf-canvas-wrapper');
         var ctx = canvas ? canvas.getContext('2d') : null;
-        var loadingEl = container.querySelector('.scouting-pdf-loading');
-        var viewportEl = container.querySelector('.scouting-pdf-viewport');
-        var pageNumEl = container.querySelector('.scouting-pdf-page-input');
-        var totalPagesEl = container.querySelector('.scouting-pdf-total-pages');
-        var zoomLevelEl = container.querySelector('.scouting-pdf-zoom-level');
-        var prevBtn = container.querySelector('.scouting-pdf-prev');
-        var nextBtn = container.querySelector('.scouting-pdf-next');
-        var zoomInBtn = container.querySelector('.scouting-pdf-zoom-in');
-        var zoomOutBtn = container.querySelector('.scouting-pdf-zoom-out');
-        var zoomFitBtn = container.querySelector('.scouting-pdf-zoom-fit');
-        var fullscreenBtn = container.querySelector('.scouting-pdf-fullscreen');
+        var loadingEl = container.querySelector('[data-pdf-role="loading"], .scouting-pdf-loading');
+        var viewportEl = container.querySelector('[data-pdf-role="viewport"], .scouting-pdf-viewport');
+        var pageNumEl = container.querySelector('[data-pdf-control="page-input"], .scouting-pdf-page-input');
+        var totalPagesEl = container.querySelector('[data-pdf-control="total-pages"], .scouting-pdf-total-pages');
+        var zoomLevelEl = container.querySelector('[data-pdf-control="zoom-level"], .scouting-pdf-zoom-level');
+        var prevBtn = container.querySelector('[data-pdf-control="prev"], .scouting-pdf-prev');
+        var nextBtn = container.querySelector('[data-pdf-control="next"], .scouting-pdf-next');
+        var zoomInBtn = container.querySelector('[data-pdf-control="zoom-in"], .scouting-pdf-zoom-in');
+        var zoomOutBtn = container.querySelector('[data-pdf-control="zoom-out"], .scouting-pdf-zoom-out');
+        var zoomFitBtn = container.querySelector('[data-pdf-control="zoom-fit"], .scouting-pdf-zoom-fit');
+        var fullscreenBtn = container.querySelector('[data-pdf-control="fullscreen"], .scouting-pdf-fullscreen');
 
         // Ensure canvas wrapper is hidden until first render completes
         if (canvasWrapper) {
@@ -134,10 +134,14 @@
                 var renderPromise = renderTask.promise ? renderTask.promise : renderTask;
                 renderPromise.then(function() {
                     pageRendering = false;
-                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (loadingEl) {
+                        loadingEl.style.display = 'none';
+                        loadingEl.classList.add('hidden');
+                    }
                     if (canvasWrapper) {
                         canvasWrapper.style.display = 'inline-block';
-                        canvasWrapper.classList.add('scouting-pdf-loaded');
+                        canvasWrapper.classList.remove('hidden');
+                        canvasWrapper.classList.add('inline-block', 'opacity-100');
                     }
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
@@ -272,10 +276,12 @@
         function loadDoc(urlToLoad, isRetry) {
             if (loadingEl) {
                 loadingEl.style.display = 'flex';
-                loadingEl.innerHTML = '<div class="scouting-pdf-spinner"></div><div class="scouting-pdf-loading-text">Loading document...</div>';
+                loadingEl.classList.remove('hidden');
+                loadingEl.innerHTML = '<div class="w-9 h-9 border-[3px] border-slate-200 border-t-[#025600] rounded-full animate-spin"></div><div class="text-slate-500 text-sm font-medium">Loading document...</div>';
             }
             if (canvasWrapper) {
                 canvasWrapper.style.display = 'none';
+                canvasWrapper.classList.add('hidden');
             }
 
             var docInit = {
@@ -307,14 +313,14 @@
                     }
 
                     if (loadingEl) {
-                        loadingEl.innerHTML = '<div class="scouting-pdf-error">' +
-                            '<div class="scouting-pdf-error-title">Unable to preview document</div>' +
-                            '<p class="scouting-pdf-error-desc">This document can still be downloaded and viewed directly on your device.</p>' +
-                            '<div class="scouting-pdf-error-actions">' +
-                            '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn scouting-pdf-download-btn" download target="_blank">' +
-                            '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>' +
+                        loadingEl.innerHTML = '<div class="bg-white border border-slate-200 rounded-xl p-6 max-w-md text-center shadow-md mx-auto" data-pdf-role="error">' +
+                            '<div class="text-slate-900 text-base font-semibold mb-1.5">Unable to preview document</div>' +
+                            '<p class="text-slate-500 text-sm mb-5 leading-relaxed">This document can still be downloaded and viewed directly on your device.</p>' +
+                            '<div class="flex gap-2 justify-center flex-wrap">' +
+                            '<a href="' + encodeURI(pdfUrl) + '" class="inline-flex items-center justify-center bg-[#025600] text-white border border-[#025600] rounded-lg px-3 py-2 text-xs font-semibold shadow-sm hover:bg-[#013e00] hover:text-white transition-all" download target="_blank">' +
+                            '<svg class="w-4 h-4 fill-white mr-1.5 block" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>' +
                             'Download PDF</a>' +
-                            '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" target="_blank">Open in New Tab</a>' +
+                            '<a href="' + encodeURI(pdfUrl) + '" class="inline-flex items-center justify-center bg-white text-slate-700 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium shadow-sm hover:bg-slate-100 hover:text-slate-900 transition-all" target="_blank">Open in New Tab</a>' +
                             '</div></div>';
                     }
                 });
@@ -327,7 +333,7 @@
     }
 
     function initAllViewers() {
-        var viewers = document.querySelectorAll('.scouting-pdf-container');
+        var viewers = document.querySelectorAll('[data-pdf-viewer], .scouting-pdf-container');
         for (var i = 0; i < viewers.length; i++) {
             initViewer(viewers[i]);
         }
