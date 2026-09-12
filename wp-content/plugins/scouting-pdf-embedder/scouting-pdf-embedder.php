@@ -46,7 +46,9 @@ class Scouting_PDF_Embedder {
 
         // Enqueue scripts & styles
         add_action('wp_enqueue_scripts', array($this, 'register_assets'));
-        add_action('wp_enqueue_scripts', array($this, 'dequeue_legacy_scripts'), 999);
+        add_action('wp_enqueue_scripts', array($this, 'dequeue_legacy_scripts'), 9999);
+        add_action('wp_print_scripts', array($this, 'dequeue_legacy_scripts'), 1);
+        add_action('wp_print_footer_scripts', array($this, 'dequeue_legacy_scripts'), 1);
 
         // REST API stream endpoint (preferred on WP Engine over admin-ajax.php)
         add_action('rest_api_init', array($this, 'register_rest_routes'));
@@ -60,9 +62,12 @@ class Scouting_PDF_Embedder {
      * Dequeue conflicting legacy PDF Embedder scripts to prevent "domainerror" / "content blocked" messages
      */
     public function dequeue_legacy_scripts() {
-        wp_dequeue_script('pdfemb_embed_pdf-js');
-        wp_dequeue_script('pdfemb_pdfjs-js');
-        wp_dequeue_style('pdfemb-pdf-viewer-css');
+        wp_dequeue_script('pdfemb_embed_pdf');
+        wp_dequeue_script('pdfemb_pdfjs');
+        wp_dequeue_style('pdfemb_embed_pdf_css');
+        wp_deregister_script('pdfemb_embed_pdf');
+        wp_deregister_script('pdfemb_pdfjs');
+        wp_deregister_style('pdfemb_embed_pdf_css');
     }
 
     /**
