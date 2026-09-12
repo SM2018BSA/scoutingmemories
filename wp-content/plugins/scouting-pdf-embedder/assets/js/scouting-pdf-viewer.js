@@ -18,6 +18,7 @@
         if (!pdfUrl) return;
 
         var canvas = container.querySelector('.scouting-pdf-canvas');
+        var canvasWrapper = container.querySelector('.scouting-pdf-canvas-wrapper');
         var ctx = canvas ? canvas.getContext('2d') : null;
         var loadingEl = container.querySelector('.scouting-pdf-loading');
         var viewportEl = container.querySelector('.scouting-pdf-viewport');
@@ -30,6 +31,11 @@
         var zoomOutBtn = container.querySelector('.scouting-pdf-zoom-out');
         var zoomFitBtn = container.querySelector('.scouting-pdf-zoom-fit');
         var fullscreenBtn = container.querySelector('.scouting-pdf-fullscreen');
+
+        // Ensure canvas wrapper is hidden until first render completes to eliminate empty white box
+        if (canvasWrapper) {
+            canvasWrapper.style.display = 'none';
+        }
 
         var pdfDoc = null;
         var pageNum = 1;
@@ -53,19 +59,19 @@
                 var baseViewport = page.getViewport({ scale: 1 });
 
                 if (autoFit && viewportEl) {
-                    var availableWidth = viewportEl.clientWidth - 40;
+                    var availableWidth = viewportEl.clientWidth - 48;
                     if (availableWidth > 200) {
                         scale = availableWidth / baseViewport.width;
-                        if (scale > 2.0) scale = 2.0;
-                        if (scale < 0.6) scale = 0.6;
+                        if (scale > 2.5) scale = 2.5;
+                        if (scale < 0.5) scale = 0.5;
                     }
                 }
 
                 var viewport = page.getViewport({ scale: scale });
-                canvas.height = viewport.height * dpr;
-                canvas.width = viewport.width * dpr;
-                canvas.style.width = viewport.width + 'px';
-                canvas.style.height = viewport.height + 'px';
+                canvas.height = Math.floor(viewport.height * dpr);
+                canvas.width = Math.floor(viewport.width * dpr);
+                canvas.style.width = Math.floor(viewport.width) + 'px';
+                canvas.style.height = Math.floor(viewport.height) + 'px';
 
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -78,6 +84,10 @@
                 renderTask.promise.then(function() {
                     pageRendering = false;
                     if (loadingEl) loadingEl.style.display = 'none';
+                    if (canvasWrapper) {
+                        canvasWrapper.style.display = 'inline-block';
+                        canvasWrapper.classList.add('scouting-pdf-loaded');
+                    }
                     if (pageNumPending !== null) {
                         renderPage(pageNumPending);
                         pageNumPending = null;
@@ -167,7 +177,7 @@
             });
         }
 
-        // Keyboard navigation when hovering
+        // Keyboard navigation when focused or hovering
         container.addEventListener('keydown', function(e) {
             if (e.key === 'ArrowRight' || e.key === 'PageDown') {
                 onNextPage();
@@ -185,46 +195,74 @@
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(function() {
                     queueRenderPage(pageNum);
-                }, 200);
+                }, 150);
             }
         });
 
+        // Compute proxy URL
+        var proxyUrl = '';
+        if (window.ScoutingPdfConfig) {
+            if (window.ScoutingPdfConfig.restUrl) {
+                proxyUrl = window.ScoutingPdfConfig.restUrl + (window.ScoutingPdfConfig.restUrl.indexOf('?') === -1 ? '?' : '&') + 'pdf_url=' + encodeURIComponent(pdfUrl);
+            } else if (window.ScoutingPdfConfig.ajaxUrl) {
+                proxyUrl = window.ScoutingPdfConfig.ajaxUrl + '?action=scouting_pdf_proxy&pdf_url=' + encodeURIComponent(pdfUrl);
+            }
+        }
+
+        // Detect localhost where Google Cloud Storage rejects direct CORS
+        var isLocal = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        var isStorageUrl = (pdfUrl.indexOf('storage.scoutingmemories.org') !== -1);
+        var initialUrl = (isLocal && isStorageUrl && proxyUrl) ? proxyUrl : pdfUrl;
+
         // Load document with transparent proxy retry fallback
         function loadDoc(urlToLoad, isRetry) {
-            pdfjsLib.getDocument({
+            if (loadingEl) {
+                loadingEl.style.display = 'flex';
+                loadingEl.innerHTML = '<div class="scouting-pdf-spinner"></div><div class="scouting-pdf-loading-text">Loading document...</div>';
+            }
+            if (canvasWrapper) {
+                canvasWrapper.style.display = 'none';
+            }
+
+            var docInit = {
                 url: urlToLoad,
                 cMapUrl: (window.ScoutingPdfConfig && window.ScoutingPdfConfig.cMapUrl) || undefined,
-                cMapPacked: true
-            }).promise.then(function(loadedDoc) {
+                cMapPacked: true,
+                disableRange: isRetry
+            };
+
+            pdfjsLib.getDocument(docInit).promise.then(function(loadedDoc) {
                 pdfDoc = loadedDoc;
                 updateUI();
                 renderPage(pageNum);
             }).catch(function(error) {
-                console.warn('Scouting PDF: Direct load failed for ' + urlToLoad + ':', error);
-                if (!isRetry && window.ScoutingPdfConfig) {
-                    var proxyUrl = '';
-                    if (window.ScoutingPdfConfig.restUrl) {
-                        proxyUrl = window.ScoutingPdfConfig.restUrl + (window.ScoutingPdfConfig.restUrl.indexOf('?') === -1 ? '?' : '&') + 'pdf_url=' + encodeURIComponent(pdfUrl);
-                    } else if (window.ScoutingPdfConfig.ajaxUrl) {
-                        proxyUrl = window.ScoutingPdfConfig.ajaxUrl + '?action=scouting_pdf_proxy&pdf_url=' + encodeURIComponent(pdfUrl);
-                    }
-
-                    if (proxyUrl) {
-                        console.info('Scouting PDF: Attempting fallback through stream proxy...');
-                        loadDoc(proxyUrl, true);
-                        return;
-                    }
+                console.warn('Scouting PDF: Failed to load ' + urlToLoad + ':', error);
+                if (!isRetry && proxyUrl && urlToLoad !== proxyUrl) {
+                    console.info('Scouting PDF: Retrying through stream proxy...');
+                    loadDoc(proxyUrl, true);
+                    return;
                 }
+                if (!isRetry && urlToLoad === proxyUrl) {
+                    console.info('Scouting PDF: Retrying with disableRange: true...');
+                    loadDoc(proxyUrl, true);
+                    return;
+                }
+
                 if (loadingEl) {
                     loadingEl.innerHTML = '<div class="scouting-pdf-error">' +
-                        '<p>Unable to display PDF directly.</p>' +
-                        '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" download target="_blank">' +
-                        'Download PDF to view</a></div>';
+                        '<div class="scouting-pdf-error-title">Unable to preview document</div>' +
+                        '<p class="scouting-pdf-error-desc">This document can still be downloaded and viewed directly on your device.</p>' +
+                        '<div class="scouting-pdf-error-actions">' +
+                        '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn scouting-pdf-download-btn" download target="_blank">' +
+                        '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>' +
+                        'Download PDF</a>' +
+                        '<a href="' + encodeURI(pdfUrl) + '" class="scouting-pdf-btn" target="_blank">Open in New Tab</a>' +
+                        '</div></div>';
                 }
             });
         }
 
-        loadDoc(pdfUrl, false);
+        loadDoc(initialUrl, false);
     }
 
     function initAllViewers() {

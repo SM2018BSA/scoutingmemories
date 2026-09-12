@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '1.0.0');
+define('SCOUTING_PDF_VERSION', '1.0.1');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -184,25 +184,37 @@ class Scouting_PDF_Embedder {
             wp_die('Host not allowed', 403);
         }
 
+        // Clear any active output buffers to allow streaming
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // CORS headers - crucial for PDF.js to inspect Content-Range, Content-Length, and Accept-Ranges
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, HEAD, OPTIONS');
+        header('Access-Control-Allow-Headers: Range, Content-Type, Authorization, X-Requested-With, Origin, Accept');
+        header('Access-Control-Expose-Headers: Accept-Ranges, Content-Range, Content-Length, Content-Type, ETag, Last-Modified');
+
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            status_header(200);
+            exit;
+        }
+
         // Validate PDF extension
         if (!preg_match('/\.pdf(\?.*)?$/i', $url)) {
             wp_die('Only PDF files are supported', 400);
         }
 
-        // On WP Engine production, conserve PHP-FPM workers by redirecting to Google Cloud Storage CDN directly
-        $is_wpe_production = (!empty($_SERVER['IS_WPE']) || (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'scoutingmemories.org') !== false || strpos($_SERVER['HTTP_HOST'], 'wpengine.com') !== false)));
-        if ($is_wpe_production && stripos($url, 'storage.scoutingmemories.org') !== false) {
-            $https_url = preg_replace('/^http:\/\//i', 'https://', $url);
-            wp_redirect($https_url, 302);
-            exit;
-        }
-
-        // For local development or non-production cross-origin testing, stream via cURL safely
+        // For streaming via cURL safely
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+
+        if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'HEAD') {
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+        }
 
         if (isset($_SERVER['HTTP_RANGE'])) {
             curl_setopt($ch, CURLOPT_HTTPHEADER, array('Range: ' . $_SERVER['HTTP_RANGE']));
@@ -214,17 +226,22 @@ class Scouting_PDF_Embedder {
             if (count($parts) === 2) {
                 $name = strtolower(trim($parts[0]));
                 if (in_array($name, array('content-type', 'content-length', 'accept-ranges', 'content-range', 'last-modified', 'etag'), true)) {
-                    header(trim($parts[0]) . ': ' . trim($parts[1]));
+                    header(trim($parts[0]) . ': ' . trim($parts[1]), true);
                 }
             } elseif (preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d+)/', $header, $matches)) {
-                http_response_code(intval($matches[1]));
+                $status_code = intval($matches[1]);
+                if ($status_code !== 301 && $status_code !== 302) {
+                    http_response_code($status_code);
+                }
             }
             return $len;
         });
 
-        // Set caching and CORS headers for EverCache and client caching
+        // Set caching and CORS headers for client caching
         header('Cache-Control: public, max-age=86400, s-maxage=604800');
         header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Expose-Headers: Accept-Ranges, Content-Range, Content-Length, Content-Type, ETag, Last-Modified');
+
         curl_exec($ch);
         curl_close($ch);
         exit;
@@ -400,7 +417,7 @@ class Scouting_PDF_Embedder {
             <div class="scouting-pdf-viewport">
                 <div class="scouting-pdf-loading">
                     <div class="scouting-pdf-spinner"></div>
-                    <div>Loading document...</div>
+                    <div class="scouting-pdf-loading-text">Loading document...</div>
                 </div>
                 <div class="scouting-pdf-canvas-wrapper">
                     <canvas class="scouting-pdf-canvas"></canvas>
