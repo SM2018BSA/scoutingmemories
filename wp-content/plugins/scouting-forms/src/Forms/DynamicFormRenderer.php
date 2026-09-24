@@ -1,0 +1,363 @@
+<?php
+
+namespace ScoutingMemories\Forms\Forms;
+
+use ScoutingMemories\Forms\Ui\ThemeClasses;
+
+/**
+ * DynamicFormRenderer
+ *
+ * Dynamically renders and processes any Formidable/Scouting form from database tables.
+ * Fully encapsulated with Tailwind CSS v4 via ThemeClasses.
+ * Compliant with WP Engine hosting (media_handle_upload, object cache invalidation, no sessions).
+ */
+class DynamicFormRenderer extends FormHandler {
+
+    public static function registerHooks(): void {
+        add_shortcode('sm_form', [__CLASS__, 'renderShortcode']);
+
+        // Fallback shortcode for existing content if Formidable plugin is deactivated
+        if (!shortcode_exists('formidable')) {
+            add_shortcode('formidable', [__CLASS__, 'renderFormidableFallback']);
+        }
+    }
+
+    /**
+     * Fallback for [formidable id=X] or [formidable key=X]
+     */
+    public static function renderFormidableFallback(array $atts = []): string {
+        return self::renderShortcode($atts);
+    }
+
+    /**
+     * [sm_form id="X" title="true" description="true"]
+     */
+    public static function renderShortcode(array $atts = []): string {
+        $atts = shortcode_atts([
+            'id'          => 0,
+            'key'         => '',
+            'title'       => 'false',
+            'description' => 'false',
+            'minimize'    => 'false',
+        ], $atts, 'sm_form');
+
+        global $wpdb;
+        $formId = (int) $atts['id'];
+        $formKey = sanitize_title($atts['key']);
+
+        $form = null;
+        if ($formId > 0) {
+            $form = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM wp_frm_forms WHERE id = %d",
+                $formId
+            ));
+        } elseif (!empty($formKey)) {
+            $form = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM wp_frm_forms WHERE form_key = %s",
+                $formKey
+            ));
+        }
+
+        if (!$form) {
+            return "<!-- Scouting Forms: Form not found (ID: {$atts['id']}, Key: {$atts['key']}) -->";
+        }
+
+        $formId = (int) $form->id;
+
+        // Process POST submission if submitted for this form
+        $submitNotice = '';
+        if (
+            (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') &&
+            isset($_POST['sm_form_id']) &&
+            (int)$_POST['sm_form_id'] === $formId
+        ) {
+            $submitNotice = self::handleFormSubmission($form);
+        }
+
+        // Fetch fields
+        $fields = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM wp_frm_fields WHERE form_id = %d ORDER BY field_order ASC, id ASC",
+            $formId
+        ));
+
+        return self::renderFormHtml($form, $fields, $atts, $submitNotice);
+    }
+
+    /**
+     * Render the complete form HTML
+     */
+    private static function renderFormHtml(object $form, array $fields, array $atts, string $submitNotice = ''): string {
+        $showTitle = in_array(strtolower($atts['title']), ['1', 'true', 'yes'], true);
+        $showDesc = in_array(strtolower($atts['description']), ['1', 'true', 'yes'], true);
+
+        $html = '<div class="sm-form-container ' . ThemeClasses::card() . '">';
+
+        if ($showTitle && !empty($form->name)) {
+            $html .= '<div class="' . ThemeClasses::cardHeader() . '">';
+            $html .= '<h3 class="' . ThemeClasses::cardTitle() . '">' . esc_html($form->name) . '</h3>';
+            $html .= '</div>';
+        }
+
+        if ($showDesc && !empty($form->description)) {
+            $html .= '<p class="text-sm text-slate-600 mb-6">' . esc_html($form->description) . '</p>';
+        }
+
+        if (!empty($submitNotice)) {
+            $html .= $submitNotice;
+        }
+
+        $html .= '<form method="POST" action="" enctype="multipart/form-data" class="space-y-5">';
+        $html .= wp_nonce_field('sm_submit_form_' . $form->id, '_sm_form_nonce', true, false);
+        $html .= '<input type="hidden" name="sm_form_id" value="' . esc_attr($form->id) . '" />';
+
+        foreach ($fields as $field) {
+            $html .= self::renderFieldHtml($field);
+        }
+
+        // Check if there is already a submit button in fields, otherwise add default submit
+        $hasSubmit = false;
+        foreach ($fields as $f) {
+            if ($f->type === 'submit') {
+                $hasSubmit = true;
+                break;
+            }
+        }
+
+        if (!$hasSubmit) {
+            $html .= '<div class="' . ThemeClasses::cardFooter() . '">';
+            $html .= '<button type="submit" class="' . ThemeClasses::button('scout', 'md') . '">';
+            $html .= esc_html__('Submit', 'scouting-forms');
+            $html .= '</button>';
+            $html .= '</div>';
+        }
+
+        $html .= '</form>';
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    /**
+     * Render an individual field based on type
+     */
+    private static function renderFieldHtml(object $field): string {
+        $options = maybe_unserialize($field->field_options);
+        if (!is_array($options)) {
+            $options = [];
+        }
+
+        $fieldId = (int) $field->id;
+        $fieldName = "item_meta[{$fieldId}]";
+        $isRequired = !empty($field->required);
+        $defaultValue = $field->default_value ?? '';
+
+        // Hidden or User ID
+        if ($field->type === 'hidden') {
+            return '<input type="hidden" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" />';
+        }
+
+        if ($field->type === 'user_id') {
+            $userId = get_current_user_id();
+            return '<input type="hidden" name="' . esc_attr($fieldName) . '" value="' . esc_attr($userId) . '" />';
+        }
+
+        // Section Dividers
+        if ($field->type === 'divider') {
+            return '<div class="pt-4 pb-2 border-b border-slate-200"><h4 class="text-base font-bold text-slate-800">' . esc_html($field->name) . '</h4></div>';
+        }
+
+        if ($field->type === 'end_divider' || $field->type === 'break') {
+            return '<div class="my-4"></div>';
+        }
+
+        if ($field->type === 'html') {
+            return '<div class="text-sm text-slate-600">' . wp_kses_post($field->description ?: $defaultValue) . '</div>';
+        }
+
+        if ($field->type === 'submit') {
+            $btnText = !empty($field->name) ? $field->name : __('Submit', 'scouting-forms');
+            return '<div class="' . ThemeClasses::cardFooter() . '"><button type="submit" class="' . ThemeClasses::button('scout', 'md') . '">' . esc_html($btnText) . '</button></div>';
+        }
+
+        // Standard Field Wrapper
+        $html = '<div class="form-group mb-4">';
+        $html .= '<label class="' . ThemeClasses::label($isRequired) . '" for="field_' . esc_attr($fieldId) . '">';
+        $html .= esc_html($field->name);
+        $html .= '</label>';
+
+        switch ($field->type) {
+            case 'textarea':
+            case 'rte':
+                $html .= '<textarea id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" rows="4" class="' . ThemeClasses::textarea() . '"' . ($isRequired ? ' required' : '') . '>' . esc_textarea($defaultValue) . '</textarea>';
+                break;
+
+            case 'select':
+            case 'data':
+                $choices = maybe_unserialize($field->options);
+                $html .= '<select id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" class="' . ThemeClasses::select() . '"' . ($isRequired ? ' required' : '') . '>';
+                $html .= '<option value="">' . esc_html__('— Select —', 'scouting-forms') . '</option>';
+                if (is_array($choices)) {
+                    foreach ($choices as $choiceVal => $choiceLabel) {
+                        if (is_array($choiceLabel)) {
+                            $cVal = (string)($choiceLabel['value'] ?? ($choiceLabel['label'] ?? ''));
+                            $cText = (string)($choiceLabel['label'] ?? $cVal);
+                        } else {
+                            $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
+                            $cText = (string)$choiceLabel;
+                        }
+                        $selected = ($cVal === (string)$defaultValue) ? ' selected' : '';
+                        $html .= '<option value="' . esc_attr($cVal) . '"' . $selected . '>' . esc_html($cText) . '</option>';
+                    }
+                }
+                $html .= '</select>';
+                break;
+
+            case 'checkbox':
+                $choices = maybe_unserialize($field->options);
+                $html .= '<div class="space-y-2 mt-1">';
+                if (is_array($choices)) {
+                    foreach ($choices as $choiceVal => $choiceLabel) {
+                        if (is_array($choiceLabel)) {
+                            $cVal = (string)($choiceLabel['value'] ?? ($choiceLabel['label'] ?? ''));
+                            $cText = (string)($choiceLabel['label'] ?? $cVal);
+                        } else {
+                            $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
+                            $cText = (string)$choiceLabel;
+                        }
+                        $html .= '<label class="inline-flex items-center gap-2 mr-4 cursor-pointer">';
+                        $html .= '<input type="checkbox" name="' . esc_attr($fieldName) . '[]" value="' . esc_attr($cVal) . '" class="' . ThemeClasses::checkbox() . '" />';
+                        $html .= '<span class="text-sm text-slate-700">' . esc_html($cText) . '</span>';
+                        $html .= '</label>';
+                    }
+                }
+                $html .= '</div>';
+                break;
+
+            case 'radio':
+                $choices = maybe_unserialize($field->options);
+                $html .= '<div class="space-y-2 mt-1">';
+                if (is_array($choices)) {
+                    foreach ($choices as $choiceVal => $choiceLabel) {
+                        if (is_array($choiceLabel)) {
+                            $cVal = (string)($choiceLabel['value'] ?? ($choiceLabel['label'] ?? ''));
+                            $cText = (string)($choiceLabel['label'] ?? $cVal);
+                        } else {
+                            $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
+                            $cText = (string)$choiceLabel;
+                        }
+                        $html .= '<label class="inline-flex items-center gap-2 mr-4 cursor-pointer">';
+                        $html .= '<input type="radio" name="' . esc_attr($fieldName) . '" value="' . esc_attr($cVal) . '" class="' . ThemeClasses::radio() . '"' . ($isRequired ? ' required' : '') . ' />';
+                        $html .= '<span class="text-sm text-slate-700">' . esc_html($cText) . '</span>';
+                        $html .= '</label>';
+                    }
+                }
+                $html .= '</div>';
+                break;
+
+            case 'file':
+                $html .= '<input type="file" id="field_' . esc_attr($fieldId) . '" name="file_' . esc_attr($fieldId) . '" class="' . ThemeClasses::input('file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200') . '"' . ($isRequired ? ' required' : '') . ' />';
+                break;
+
+            case 'email':
+                $html .= '<input type="email" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
+                break;
+
+            case 'number':
+                $html .= '<input type="number" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
+                break;
+
+            case 'date':
+                $html .= '<input type="date" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
+                break;
+
+            default:
+                $html .= '<input type="text" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
+                break;
+        }
+
+        if (!empty($field->description)) {
+            $html .= '<p class="' . ThemeClasses::helperText() . '">' . esc_html($field->description) . '</p>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * Process form submission and save to wp_frm_items & wp_frm_item_metas
+     */
+    private static function handleFormSubmission(object $form): string {
+        if (!isset($_POST['_sm_form_nonce']) || !wp_verify_nonce($_POST['_sm_form_nonce'], 'sm_submit_form_' . $form->id)) {
+            return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Security check failed. Please refresh and try again.', 'scouting-forms') . '</div>';
+        }
+
+        global $wpdb;
+        $userId = get_current_user_id();
+        $itemMetas = isset($_POST['item_meta']) && is_array($_POST['item_meta']) ? $_POST['item_meta'] : [];
+
+        // Handle file uploads using media_handle_upload() (WP Engine / WP Stateless compliant)
+        if (!empty($_FILES)) {
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+
+            foreach ($_FILES as $inputKey => $fileData) {
+                if (strpos($inputKey, 'file_') === 0 && !empty($fileData['name'])) {
+                    $targetFieldId = (int) str_replace('file_', '', $inputKey);
+                    $attachId = media_handle_upload($inputKey, 0);
+                    if (!is_wp_error($attachId)) {
+                        $itemMetas[$targetFieldId] = $attachId;
+                    }
+                }
+            }
+        }
+
+        // Generate unique entry key
+        $itemKey = sanitize_title($form->form_key . '-' . wp_generate_password(8, false, false));
+        $now = current_time('mysql');
+
+        // Insert into wp_frm_items
+        $inserted = $wpdb->insert('wp_frm_items', [
+            'item_key'       => $itemKey,
+            'name'           => $form->name . ' Entry',
+            'description'    => '',
+            'ip'             => sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? ''),
+            'form_id'        => $form->id,
+            'post_id'        => 0,
+            'user_id'        => $userId,
+            'parent_item_id' => 0,
+            'is_draft'       => 0,
+            'updated_by'     => $userId,
+            'created_at'     => $now,
+            'updated_at'     => $now
+        ], ['%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%s']);
+
+        if (!$inserted) {
+            return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Failed to save entry. Please try again.', 'scouting-forms') . '</div>';
+        }
+
+        $itemId = (int) $wpdb->insert_id;
+
+        // Insert metas
+        foreach ($itemMetas as $fieldId => $fieldValue) {
+            $val = is_array($fieldValue) ? maybe_serialize($fieldValue) : sanitize_textarea_field((string)$fieldValue);
+            $wpdb->insert('wp_frm_item_metas', [
+                'meta_value' => $val,
+                'field_id'   => (int) $fieldId,
+                'item_id'    => $itemId,
+                'created_at' => $now
+            ], ['%s', '%d', '%d', '%s']);
+        }
+
+        // Invalidate WP Engine cache
+        wp_cache_delete('sm_entries_form_' . $form->id);
+        if (class_exists('WpeCommon')) {
+            \WpeCommon::purge_memcached();
+        }
+
+        return '<div class="p-4 mb-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">' .
+               '<svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' .
+               esc_html__('Your entry was saved successfully!', 'scouting-forms') .
+               '</div>';
+    }
+}

@@ -1,0 +1,20 @@
+{
+    "name": "scoutingmemories/scouting-forms",
+    "description": "Roots.io-inspired form and index management for Scouting Memories.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Roger Ellis Jr / Scouting Memories Team",
+            "email": "sm2018bsa@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "ScoutingMemories\\Forms\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=7.4"
+    }
+}

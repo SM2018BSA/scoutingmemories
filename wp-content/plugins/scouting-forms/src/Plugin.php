@@ -1,0 +1,83 @@
+<?php
+
+namespace ScoutingMemories\Forms;
+
+use ScoutingMemories\Forms\Admin\AdminMenu;
+use ScoutingMemories\Forms\Ajax\CascadingSearch;
+use ScoutingMemories\Forms\Forms\AccountProfileForm;
+use ScoutingMemories\Forms\Forms\DynamicFormRenderer;
+use ScoutingMemories\Forms\Forms\DynamicViewRenderer;
+use ScoutingMemories\Forms\Forms\IndexEntityForms;
+use ScoutingMemories\Forms\Forms\IndexingBrowser;
+use ScoutingMemories\Forms\Forms\MemoryForm;
+use ScoutingMemories\Forms\Forms\UserDefaultsForm;
+use ScoutingMemories\Forms\Forms\UserPostsView;
+use ScoutingMemories\Forms\Rest\ApiController;
+
+/**
+ * Plugin
+ *
+ * Central orchestrator and service registry for Scouting Forms & Archives.
+ */
+class Plugin {
+
+    private static ?Plugin $instance = null;
+
+    /**
+     * Singleton instance
+     */
+    public static function getInstance(): Plugin {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    private function __construct() {}
+
+    /**
+     * Boot the plugin and register components
+     */
+    public function boot(): void {
+        // 1. Unified Tailwind CSS v4 Registration
+        add_action('wp_enqueue_scripts', [__CLASS__, 'registerUnifiedStyles'], 1);
+        add_action('admin_enqueue_scripts', [__CLASS__, 'registerUnifiedStyles'], 1);
+
+        // 2. REST API Services
+        ApiController::registerHooks();
+
+        // 3. AJAX Services
+        CascadingSearch::registerHooks();
+
+        // 4. Frontend Forms & Shortcodes
+        DynamicFormRenderer::registerHooks();
+        DynamicViewRenderer::registerHooks();
+        AccountProfileForm::registerHooks();
+        UserDefaultsForm::registerHooks();
+        UserPostsView::registerHooks();
+        IndexingBrowser::registerHooks();
+        MemoryForm::registerHooks();
+        IndexEntityForms::registerHooks();
+
+        // 5. WP Admin Management
+        if (is_admin()) {
+            AdminMenu::registerHooks();
+        }
+    }
+
+    /**
+     * Register single, authoritative Tailwind CSS v4 bundle
+     * Accessible by theme, pdf-embedder, forms, and builder
+     */
+    public static function registerUnifiedStyles(): void {
+        $css_file = SM_FORMS_PLUGIN_DIR . 'assets/css/tailwindcss.css';
+        $ver = file_exists($css_file) ? (string) filemtime($css_file) : SM_FORMS_VERSION;
+
+        wp_register_style(
+            'tailwindcss-v4',
+            SM_FORMS_PLUGIN_URL . 'assets/css/tailwindcss.css',
+            [],
+            $ver
+        );
+    }
+}
