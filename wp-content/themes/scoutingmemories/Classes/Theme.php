@@ -64,6 +64,10 @@ class Theme {
 
 	    $this->addStyle('scouting-memories','/css/styles.css');
 	    $this->addStyle('select2', 'https://cdn.jsdelivr.net/npm/select2@' . self::SELECT2_VERSION . '/dist/css/select2.min.css', 'outside' );
+	    // Needed by every select2 dropdown on the search form, not just the bootstrap4 theme:
+	    // it makes .select2-container display:block (full width) and styles the search box.
+	    // Without it the council/lodge/camp dropdowns collapse to a tiny box.
+	    $this->addStyle('select2-bootstrap', '/css/select2-bootstrap4.min.css' );
 	    $this->addStyle('roboto', '//fonts.googleapis.com/css?family=Roboto+Slab&#038;ver=5.6', 'outside');
 
 
