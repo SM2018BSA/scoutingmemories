@@ -1,0 +1,42 @@
+# Scouting Memories: track ONLY our own code.
+#
+# Everything else in the WordPress install (core, third-party plugins and themes, uploads,
+# caches, WP Engine files) lives on the server and is managed there, not in Git. WP Engine
+# only removes files from the live site that were removed from this repository, so files
+# that were never tracked here are left alone on the server.
+#
+# To start tracking a new plugin or theme of our own, add a "!" line for it below.
+
+# Ignore everything at the top level...
+/*
+!/.gitignore
+
+# ...except wp-content, where only our folders are allowed
+!/wp-content/
+/wp-content/*
+
+!/wp-content/plugins/
+/wp-content/plugins/*
+!/wp-content/plugins/scouting-pdf-embedder/
+!/wp-content/plugins/scouting-forms/
+
+!/wp-content/mu-plugins/
+/wp-content/mu-plugins/*
+!/wp-content/mu-plugins/scouting-pdf-loader.php
+
+!/wp-content/themes/
+/wp-content/themes/*
+!/wp-content/themes/scoutingmemories/
+!/wp-content/themes/Scouting-Memories-2026/
+
+# Never commit, even inside our folders
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# Starter-theme documents we never deploy
+/wp-content/themes/*/README.md
+/wp-content/themes/*/LICENSE
