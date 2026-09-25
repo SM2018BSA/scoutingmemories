@@ -273,15 +273,82 @@
 
     // ---- Deep links -------------------------------------------------------------
     // #page=12 opens the first document on the page at PDF page 12; #pdf2-page=12 the second.
+    // When sharing all settings: #page=12&zoom=width&rot=90&b=120&c=110&inv=1&spread=1
+
+    function buildPageHash(index, num, settings) {
+        var prefix = (index > 1 ? 'pdf' + index + '-' : '');
+        var parts = [prefix + 'page=' + num];
+        if (settings) {
+            if (settings.zoom) {
+                if (settings.zoom === 'width' || settings.zoom === 'page') {
+                    parts.push('zoom=' + settings.zoom);
+                } else if (typeof settings.zoom === 'number') {
+                    parts.push('zoom=' + settings.zoom.toFixed(2));
+                } else if (typeof settings.zoom === 'string') {
+                    parts.push('zoom=' + settings.zoom);
+                }
+            }
+            if (settings.rot && (settings.rot % 360 !== 0)) {
+                parts.push('rot=' + settings.rot);
+            }
+            if (settings.brightness !== undefined && settings.brightness !== '100' && settings.brightness !== 100) {
+                parts.push('b=' + settings.brightness);
+            }
+            if (settings.contrast !== undefined && settings.contrast !== '100' && settings.contrast !== 100) {
+                parts.push('c=' + settings.contrast);
+            }
+            if (settings.grayscale) parts.push('g=1');
+            if (settings.invert) parts.push('inv=1');
+            if (settings.spread) parts.push('spread=1');
+        }
+        return parts.join('&');
+    }
 
     function pageHash(index, num) {
-        return (index > 1 ? 'pdf' + index + '-' : '') + 'page=' + num;
+        return buildPageHash(index, num, null);
     }
 
     function parseHash(hash) {
-        var m = /^#(?:pdf(\d+)-)?page=(\d+)$/.exec(hash || '');
-        if (!m) return null;
-        return { index: m[1] ? parseInt(m[1], 10) : 1, page: parseInt(m[2], 10) };
+        if (!hash || hash.length < 2) return null;
+        var str = hash.replace(/^#/, '');
+        var params = {};
+        str.split('&').forEach(function(part) {
+            var kv = part.split('=');
+            if (kv[0]) {
+                params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+            }
+        });
+
+        var index = 1;
+        var page = null;
+        for (var k in params) {
+            var m = /^(?:pdf(\d+)-)?page$/i.exec(k);
+            if (m) {
+                if (m[1]) index = parseInt(m[1], 10);
+                page = parseInt(params[k], 10);
+                break;
+            }
+        }
+        if (!page || isNaN(page)) {
+            var m2 = /^(?:pdf(\d+)-)?page-(\d+)$/i.exec(str) || /^(?:pdf(\d+)-)?p(\d+)$/i.exec(str);
+            if (m2) {
+                if (m2[1]) index = parseInt(m2[1], 10);
+                page = parseInt(m2[2], 10);
+            } else {
+                return null;
+            }
+        }
+
+        var settings = {};
+        if (params.zoom) settings.zoom = params.zoom;
+        if (params.rot) settings.rot = parseInt(params.rot, 10);
+        if (params.b) settings.brightness = params.b;
+        if (params.c) settings.contrast = params.c;
+        if (params.g !== undefined) settings.grayscale = (params.g === '1' || params.g === 'true');
+        if (params.inv !== undefined) settings.invert = (params.inv === '1' || params.inv === 'true');
+        if (params.spread !== undefined) settings.spread = (params.spread === '1' || params.spread === 'true');
+
+        return { index: index, page: page, settings: Object.keys(settings).length ? settings : null };
     }
 
     // Bootstrap tooltips (from the theme's bootstrap.bundle) explain what each control does.
@@ -310,7 +377,7 @@
         }
     }
 
-    function initViewer(container, initialPage) {
+    function initViewer(container, initialPage, initialSettings) {
         if (container.dataset.initialized === 'true') return container.scoutingPdf;
         container.dataset.initialized = 'true';
 
@@ -327,6 +394,8 @@
         var cite = {};
         try { cite = JSON.parse(container.getAttribute('data-pdf-cite') || '{}') || {}; } catch (e) {}
         var startPage = initialPage || parseInt(container.getAttribute('data-pdf-start-page'), 10) || 1;
+        var currentHashTarget = parseHash(window.location.hash);
+        var urlSettings = initialSettings || (currentHashTarget && currentHashTarget.index === viewerIndex ? currentHashTarget.settings : null);
 
         function q(selector) {
             return container.querySelector(selector);
@@ -404,7 +473,21 @@
             goToPage: function(num) { whenReady(function() { goToPage(num, true); }); },
             goToLabel: function(label) { whenReady(function() { goToPage(pageForLabel(label), true); }); },
             labelFor: function(num) { return labelFor(num); },
-            currentPage: function() { return currentPage; }
+            currentPage: function() { return currentPage; },
+            applySettings: function(s) {
+                whenReady(function() {
+                    applyUrlSettings(s);
+                    pages.forEach(releasePage);
+                    measureBase();
+                    layout();
+                    if (fitMode) applyFit();
+                    else if (s && s.zoom && !fitMode && scale) setScale(scale);
+                    else applyFit();
+                    goToPage(currentPage, true);
+                    resetThumbs();
+                });
+            },
+            currentSettings: function() { return currentViewSettings(); }
         };
         container.scoutingPdf = api;
 
@@ -446,55 +529,76 @@
             return 'p. ' + labelFor(num) + (hasDistinctLabel(num) ? ' (PDF page ' + num + ')' : '');
         }
 
-        function pageLink(num) {
+        function currentViewSettings() {
+            var b = control('brightness');
+            var c = control('contrast');
+            var g = control('grayscale');
+            var inv = control('invert');
+            var s = {};
+            if (fitMode) {
+                s.zoom = fitMode;
+            } else if (scale && Math.abs(scale - 1.0) > 0.01) {
+                s.zoom = Math.round(scale * 100) / 100;
+            }
+            if (rotation && (rotation % 360 !== 0)) {
+                s.rot = (rotation % 360 + 360) % 360;
+            }
+            if (b && b.value && b.value !== '100' && b.value !== 100) {
+                s.brightness = b.value;
+            }
+            if (c && c.value && c.value !== '100' && c.value !== 100) {
+                s.contrast = c.value;
+            }
+            if (g && g.checked) s.grayscale = true;
+            if (inv && inv.checked) s.invert = true;
+            if (spread) s.spread = true;
+            return s;
+        }
+
+        function pageLink(num, includeSettings) {
             var base = cite.permalink || window.location.href.split('#')[0];
-            return base.split('#')[0] + '#' + pageHash(viewerIndex, num);
+            var settings = includeSettings ? currentViewSettings() : null;
+            return base.split('#')[0] + '#' + buildPageHash(viewerIndex, num, settings);
         }
 
-        var resumeKey = 'scouting-pdf:last-state:' + pdfUrl;
-        var legacyResumeKey = 'scouting-pdf:last-page:' + pdfUrl;
-        var resumeTimer = null;
-
-        function getSavedState() {
-            var raw = storageGet(resumeKey) || storageGet(legacyResumeKey);
-            if (!raw) return null;
-            try {
-                var data = JSON.parse(raw);
-                if (data && (Date.now() - (data.t || 0) <= RESUME_DAYS * 86400000)) {
-                    return data;
-                }
-            } catch (e) {}
-            return null;
-        }
-
-        function rememberState() {
-            if (!pdfDoc || !api.ready) return;
-            clearTimeout(resumeTimer);
-            resumeTimer = setTimeout(function() {
+        function applyUrlSettings(s) {
+            if (!s) return;
+            if (s.brightness !== undefined || s.contrast !== undefined || s.grayscale !== undefined || s.invert !== undefined) {
                 var b = control('brightness');
                 var c = control('contrast');
                 var g = control('grayscale');
                 var inv = control('invert');
-                var adj = {
-                    brightness: b ? b.value : '100',
-                    contrast: c ? c.value : '100',
-                    grayscale: g ? g.checked : false,
-                    invert: inv ? inv.checked : false,
-                    adjustOpen: adjustbar ? !adjustbar.hidden : false
-                };
-                var state = {
-                    page: currentPage,
-                    rotation: rotation,
-                    scale: scale,
-                    fitMode: fitMode,
-                    spread: spread,
-                    adjustments: adj,
-                    sidebarOpen: sidebar ? !sidebar.hidden : true,
-                    sidebarTab: sidebarTab || 'thumbs',
-                    t: Date.now()
-                };
-                storageSet(resumeKey, JSON.stringify(state));
-            }, 600);
+                if (b && s.brightness !== undefined) b.value = s.brightness;
+                if (c && s.contrast !== undefined) c.value = s.contrast;
+                if (g && s.grayscale !== undefined) g.checked = !!s.grayscale;
+                if (inv && s.invert !== undefined) inv.checked = !!s.invert;
+                applyAdjustments();
+                if (adjustbar && adjustbar.hidden && (s.brightness !== undefined || s.contrast !== undefined || s.grayscale || s.invert)) {
+                    toggleAdjust(true);
+                }
+            }
+            if (s.rot !== undefined && !isNaN(s.rot)) {
+                rotation = (s.rot % 360 + 360) % 360;
+            }
+            if (s.spread !== undefined && s.spread !== spread) {
+                spread = !!s.spread;
+                var item = control('spread');
+                if (item) {
+                    item.setAttribute('aria-checked', spread ? 'true' : 'false');
+                    item.classList.toggle('active', spread);
+                }
+            }
+            if (s.zoom) {
+                if (s.zoom === 'width' || s.zoom === 'page') {
+                    fitMode = s.zoom;
+                } else {
+                    var z = parseFloat(s.zoom);
+                    if (!isNaN(z) && z >= MIN_SCALE && z <= MAX_SCALE) {
+                        fitMode = null;
+                        scale = z;
+                    }
+                }
+            }
         }
 
         function updateUI() {
@@ -516,9 +620,6 @@
             setPressed(zoomFitBtn, fitMode === 'width');
             setPressed(zoomPageBtn, fitMode === 'page');
             updateThumbSelection();
-            // Only once the reader is moving around, so opening a document doesn't
-            // overwrite where they were last time
-            if (total && api.ready) rememberState();
         }
 
         // Bootstrap's .active shows the selected state in the site green
@@ -816,7 +917,6 @@
                     viewportEl.scrollLeft = 0;
                     lastViewportWidth = viewportEl.clientWidth;
                     if (startPage > 1) goToPage(startPage, true);
-                    else offerResume();
                     api.ready = true;
                     readyCallbacks.splice(0).forEach(function(fn) { fn(); });
                     document.dispatchEvent(new CustomEvent('scouting-pdf:ready', { detail: { index: viewerIndex } }));
@@ -1133,7 +1233,6 @@
                 onViewerResized();
             }
             showTab(tab || sidebarTab);
-            rememberState();
         }
 
         function closeSidebar() {
@@ -1141,7 +1240,6 @@
             sidebar.hidden = true;
             setPressed(sidebarBtn, false);
             onViewerResized();
-            rememberState();
         }
 
         function showTab(tab) {
@@ -1160,7 +1258,6 @@
             if (tab === 'thumbs') buildThumbs();
             if (tab === 'info') buildInfo();
             if (tab === 'results') updateResultSelection();
-            rememberState();
         }
 
         function panel(name) {
@@ -1603,7 +1700,7 @@
 
         // ---- Cite, link, download, print ------------------------------------------
 
-        function citationInfo(num, includePage) {
+        function citationInfo(num, includePage, includeSettings) {
             var docTitle = cite.title || cite.postTitle || container.getAttribute('data-pdf-title') || fileNameFromUrl(pdfUrl);
             return {
                 title: docTitle,
@@ -1613,7 +1710,7 @@
                 publisher: cite.publisher || '',
                 location: cite.location || '',
                 site: cite.site || config.siteName || window.location.hostname,
-                url: includePage ? pageLink(num) : (cite.permalink || window.location.href.split('#')[0]),
+                url: includePage ? pageLink(num, includeSettings) : (cite.permalink || window.location.href.split('#')[0]),
                 page: includePage ? labelFor(num) : null
             };
         }
@@ -1629,7 +1726,7 @@
             intro.appendChild(document.createTextNode('. Check the details against your style guide before you publish.'));
             body.appendChild(intro);
 
-            var pageSwitch = el('div', 'form-check mb-3');
+            var pageSwitch = el('div', 'form-check mb-2');
             var cb = el('input', 'form-check-input');
             cb.type = 'checkbox';
             cb.checked = true;
@@ -1639,6 +1736,17 @@
             pageSwitch.appendChild(cb);
             pageSwitch.appendChild(lab);
             body.appendChild(pageSwitch);
+
+            var settingsSwitch = el('div', 'form-check mb-3');
+            var cbSettings = el('input', 'form-check-input');
+            cbSettings.type = 'checkbox';
+            cbSettings.checked = false;
+            cbSettings.id = container.id + '-cite-settings';
+            var labSettings = el('label', 'form-check-label', 'Include current view settings in link (zoom, rotation, adjustments)');
+            labSettings.htmlFor = cbSettings.id;
+            settingsSwitch.appendChild(cbSettings);
+            settingsSwitch.appendChild(labSettings);
+            body.appendChild(settingsSwitch);
 
             var styleWrap = el('div', 'mb-3');
             var selectLabel = el('label', 'form-label small fw-bold text-muted mb-1', 'Citation style');
@@ -1667,7 +1775,8 @@
             body.appendChild(list);
 
             var draw = function() {
-                var info = citationInfo(num, cb.checked);
+                var withSettings = cb.checked && cbSettings.checked;
+                var info = citationInfo(num, cb.checked, withSettings);
                 var cites = buildCitations(info, new Date());
                 list.textContent = '';
                 styles.forEach(function(s) {
@@ -1704,7 +1813,7 @@
                 });
                 var link = el('button', 'btn btn-sm btn-outline-secondary', 'Copy link to this page');
                 link.type = 'button';
-                link.addEventListener('click', function() { copyWithFeedback(pageLink(num), null, 'Link'); });
+                link.addEventListener('click', function() { copyWithFeedback(pageLink(num, withSettings), null, 'Link'); });
 
                 var areaBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
                 areaBtn.type = 'button';
@@ -1731,13 +1840,18 @@
                 });
             });
 
-            cb.addEventListener('change', draw);
+            cb.addEventListener('change', function() {
+                cbSettings.disabled = !cb.checked;
+                if (!cb.checked) cbSettings.checked = false;
+                draw();
+            });
+            cbSettings.addEventListener('change', draw);
             draw();
             openDialog('Cite this document', body);
         }
 
         function copyPageLink() {
-            copyWithFeedback(pageLink(currentPage), null, 'Link to ' + describePage(currentPage));
+            copyWithFeedback(pageLink(currentPage, false), null, 'Link');
         }
 
         function downloadPdf() {
@@ -1915,11 +2029,9 @@
                 if (input) {
                     input.addEventListener('input', function() {
                         applyAdjustments();
-                        rememberState();
                     });
                     input.addEventListener('change', function() {
                         applyAdjustments();
-                        rememberState();
                     });
                 }
             });
@@ -1930,7 +2042,6 @@
                 control('grayscale').checked = false;
                 control('invert').checked = false;
                 applyAdjustments();
-                rememberState();
             });
             var adjustClose = control('adjust-close');
             if (adjustClose) adjustClose.addEventListener('click', function() { toggleAdjust(false); });
@@ -1945,7 +2056,6 @@
                 if (first) first.focus();
             }
             onViewerResized();
-            rememberState();
         }
 
         // ---- Save an area as a picture ------------------------------------------------
@@ -2123,6 +2233,21 @@
             note.innerHTML = 'Image captured from <strong>' + escHtml(describePage(num)) + '</strong> with the citation and link embedded directly on the image.';
             body.appendChild(note);
 
+            var settingsSwitch = el('div', 'form-check mb-3');
+            var cbSettings = el('input', 'form-check-input');
+            cbSettings.type = 'checkbox';
+            cbSettings.checked = false;
+            cbSettings.id = container.id + '-snap-settings';
+            var labSettings = el('label', 'form-check-label', 'Include current view settings in link (zoom, rotation, adjustments)');
+            labSettings.htmlFor = cbSettings.id;
+            settingsSwitch.appendChild(cbSettings);
+            settingsSwitch.appendChild(labSettings);
+            body.appendChild(settingsSwitch);
+
+            function getShareUrl() {
+                return pageLink(num, cbSettings.checked);
+            }
+
             var actionsRow = el('div', 'd-flex flex-wrap gap-2 mb-3');
 
             if (navigator.share) {
@@ -2130,11 +2255,12 @@
                 shareBtn.type = 'button';
                 shareBtn.innerHTML = '<i class="bi bi-share" aria-hidden="true"></i> Share image…';
                 shareBtn.addEventListener('click', function() {
+                    var currentUrl = getShareUrl();
                     var file = new File([blob], name, { type: 'image/jpeg' });
                     var shareData = {
                         title: info.title + ' (' + describePage(num) + ')',
-                        text: info.title + ', ' + describePage(num) + ' — Scouting Memories: ' + info.url,
-                        url: info.url
+                        text: info.title + ', ' + describePage(num) + ' — Scouting Memories: ' + currentUrl,
+                        url: currentUrl
                     };
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         shareData.files = [file];
@@ -2148,16 +2274,17 @@
             copyImgBtn.type = 'button';
             copyImgBtn.innerHTML = '<i class="bi bi-clipboard" aria-hidden="true"></i> Copy image';
             copyImgBtn.addEventListener('click', function() {
+                var currentUrl = getShareUrl();
                 if (navigator.clipboard && window.ClipboardItem) {
                     var item = {};
                     item[blob.type || 'image/jpeg'] = blob;
                     navigator.clipboard.write([new ClipboardItem(item)]).then(function() {
-                        toast('Image copied to clipboard! (Link: ' + info.url + ')');
+                        toast('Image copied to clipboard! (Link: ' + currentUrl + ')');
                     }).catch(function() {
                         canvasToBlob(canvas, 'image/png').then(function(pngBlob) {
                             return navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
                         }).then(function() {
-                            toast('Image copied to clipboard! (Link: ' + info.url + ')');
+                            toast('Image copied to clipboard! (Link: ' + currentUrl + ')');
                         }).catch(function() {
                             toast('Direct clipboard image copying not permitted by browser. Use Download instead.');
                         });
@@ -2172,7 +2299,7 @@
             copyLinkBtn.type = 'button';
             copyLinkBtn.innerHTML = '<i class="bi bi-link-45deg" aria-hidden="true"></i> Copy link';
             copyLinkBtn.addEventListener('click', function() {
-                copyWithFeedback(info.url, null, 'Link');
+                copyWithFeedback(getShareUrl(), null, 'Link');
             });
             actionsRow.appendChild(copyLinkBtn);
 
@@ -2195,13 +2322,11 @@
         function zoomBy(factor, anchorX, anchorY) {
             fitMode = null;
             setScale(scale * factor, anchorX, anchorY);
-            rememberState();
         }
 
         function setFitMode(mode) {
             fitMode = mode;
             applyFit();
-            rememberState();
         }
 
         function rotate() {
@@ -2213,7 +2338,6 @@
             applyFit();
             goToPage(currentPage, true);
             resetThumbs();
-            rememberState();
         }
 
         function toggleSpread() {
@@ -2228,7 +2352,6 @@
             layout();
             applyFit();
             goToPage(keep, true);
-            rememberState();
         }
 
         // CSS-only "expanded" mode for browsers without the Fullscreen API on elements (iPhone)
@@ -2289,13 +2412,6 @@
             commentBox.scrollIntoView({ block: 'center' });
             commentBox.focus();
             commentBox.setSelectionRange(commentBox.value.length, commentBox.value.length);
-        }
-
-        function offerResume(saved) {
-            if (!saved) saved = getSavedState();
-            if (!saved || !saved.page || saved.page <= 1 || saved.page > pages.length || pages.length < 3) return;
-            var page = saved.page;
-            toast('You were reading ' + describePage(page) + '.', 'Continue there', function() { goToPage(page, true); }, 12000);
         }
 
         var handlers = {
@@ -2549,50 +2665,14 @@
                     pageEl.setAttribute('aria-label', 'Page ' + num + ' of ' + doc.numPages + (hasDistinctLabel(num) ? ', printed page ' + labelFor(num) : ''));
                     return { num: num, page: pageProxy, el: pageEl, canvas: null, baseW: 0, baseH: 0, renderedKey: null };
                 });
-                var saved = getSavedState();
-                if (saved) {
-                    if (saved.adjustments) {
-                        var b = control('brightness');
-                        var c = control('contrast');
-                        var g = control('grayscale');
-                        var inv = control('invert');
-                        if (b && saved.adjustments.brightness !== undefined) b.value = saved.adjustments.brightness;
-                        if (c && saved.adjustments.contrast !== undefined) c.value = saved.adjustments.contrast;
-                        if (g && saved.adjustments.grayscale !== undefined) g.checked = !!saved.adjustments.grayscale;
-                        if (inv && saved.adjustments.invert !== undefined) inv.checked = !!saved.adjustments.invert;
-                        applyAdjustments();
-                        if (saved.adjustments.adjustOpen && adjustbar && adjustbar.hidden) toggleAdjust(true);
-                    }
-                    if (saved.rotation !== undefined && saved.rotation !== 0) {
-                        rotation = (saved.rotation % 360 + 360) % 360;
-                    }
-                    if (saved.spread !== undefined && saved.spread !== spread) {
-                        spread = !!saved.spread;
-                        var item = control('spread');
-                        if (item) {
-                            item.setAttribute('aria-checked', spread ? 'true' : 'false');
-                            item.classList.toggle('active', spread);
-                        }
-                    }
-                    if (saved.fitMode !== undefined) {
-                        fitMode = saved.fitMode;
-                    }
-                    if (saved.fitMode === null && saved.scale) {
-                        scale = saved.scale;
-                    }
-                    if (saved.sidebarOpen !== undefined) {
-                        if (saved.sidebarOpen && sidebar && sidebar.hidden) openSidebar();
-                        else if (!saved.sidebarOpen && sidebar && !sidebar.hidden) closeSidebar();
-                    }
-                    if (saved.sidebarTab && sidebarTab !== saved.sidebarTab) {
-                        sidebarTab = saved.sidebarTab;
-                    }
+                if (urlSettings) {
+                    applyUrlSettings(urlSettings);
                 }
                 arrangePages();
                 measureBase();
                 layout();
                 if (fitMode) applyFit();
-                else if (saved && saved.fitMode === null && saved.scale) setScale(saved.scale);
+                else if (urlSettings && urlSettings.zoom && !fitMode && scale) setScale(scale);
                 else applyFit();
                 viewportEl.scrollTop = 0;
                 updateUI();
@@ -2680,8 +2760,11 @@
         if (!target) return false;
         var container = viewerByIndex(target.index);
         if (!container) return false;
-        var api = container.scoutingPdf || initViewer(container, target.page);
-        if (api) api.goToPage(target.page);
+        var api = container.scoutingPdf || initViewer(container, target.page, target.settings);
+        if (api) {
+            if (target.settings && api.applySettings) api.applySettings(target.settings);
+            api.goToPage(target.page);
+        }
         container.scrollIntoView({ block: 'start' });
         return true;
     }
@@ -2744,7 +2827,7 @@
         if (target) {
             var direct = viewerByIndex(target.index);
             if (direct) {
-                initViewer(direct, target.page);
+                initViewer(direct, target.page, target.settings);
                 direct.scrollIntoView({ block: 'start' });
             }
         }
