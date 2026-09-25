@@ -382,8 +382,10 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       Nothing left in uploads after cleanup (14/14).
 
 ### Phase 9: Handoff (the owner decides; Claude does not publish)
-- [ ] 9.1 Release notes + a go-live checklist (must include: submit Contact Us on live once to confirm the reCAPTCHA server check, which cannot run on localhost) (what to verify on live, how to roll back:
-      reactivate Formidable).
+- [x] 9.1 (2026-09-25) Release notes + go-live checklist: `GO-LIVE.md` (what changes, backup, publish with
+      Formidable still active, check the plugin is active, deactivate the 8 Formidable plugins, checks
+      incl. Contact Us for the reCAPTCHA server check, roll back = reactivate Formidable). No form uses
+      Zapier or Logs actions, so turning those add-ons off loses nothing.
 - [ ] 9.2 Owner reviews, moves the plugin to `master` when ready and publishes with the dashboard.
 
 ---
