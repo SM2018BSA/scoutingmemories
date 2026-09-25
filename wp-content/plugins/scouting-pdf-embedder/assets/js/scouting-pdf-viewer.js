@@ -367,19 +367,6 @@
         var dialog = q('[data-pdf-role="dialog"]');
         var toasts = q('[data-pdf-role="toasts"]');
 
-        var bottomPageNumEl = control('bottom-page-input');
-        var bottomTotalPagesEl = control('bottom-total-pages');
-        var bottomPageLabelEl = control('bottom-page-label');
-        var bottomZoomLevelEl = control('bottom-zoom-level');
-        var bottomPrevBtn = control('bottom-prev');
-        var bottomNextBtn = control('bottom-next');
-        var bottomZoomInBtn = control('bottom-zoom-in');
-        var bottomZoomOutBtn = control('bottom-zoom-out');
-        var bottomZoomFitBtn = control('bottom-zoom-fit');
-        var bottomZoomPageBtn = control('bottom-zoom-page');
-        var bottomScrollTopBtn = control('bottom-scroll-top');
-        var bottomCiteBtn = control('bottom-cite');
-
         if (!viewportEl) return null;
 
         initTooltips(container);
@@ -479,34 +466,18 @@
                 if (document.activeElement !== pageNumEl) pageNumEl.value = currentPage;
                 if (total) pageNumEl.max = total;
             }
-            if (bottomPageNumEl) {
-                if (document.activeElement !== bottomPageNumEl) bottomPageNumEl.value = currentPage;
-                if (total) bottomPageNumEl.max = total;
-            }
             if (totalPagesEl && total) totalPagesEl.textContent = total;
-            if (bottomTotalPagesEl && total) bottomTotalPagesEl.textContent = total;
             if (pageLabelEl) {
                 pageLabelEl.hidden = !hasDistinctLabel(currentPage);
                 pageLabelEl.textContent = 'p. ' + labelFor(currentPage);
             }
-            if (bottomPageLabelEl) {
-                bottomPageLabelEl.hidden = !hasDistinctLabel(currentPage);
-                bottomPageLabelEl.textContent = 'p. ' + labelFor(currentPage);
-            }
             if (zoomLevelEl) zoomLevelEl.textContent = Math.round(scale * 100) + '%';
-            if (bottomZoomLevelEl) bottomZoomLevelEl.textContent = Math.round(scale * 100) + '%';
             if (prevBtn) prevBtn.disabled = (currentPage <= 1);
-            if (bottomPrevBtn) bottomPrevBtn.disabled = (currentPage <= 1);
             if (nextBtn) nextBtn.disabled = (!total || currentPage >= total);
-            if (bottomNextBtn) bottomNextBtn.disabled = (!total || currentPage >= total);
             if (zoomInBtn) zoomInBtn.disabled = (scale >= MAX_SCALE - 0.001);
-            if (bottomZoomInBtn) bottomZoomInBtn.disabled = (scale >= MAX_SCALE - 0.001);
             if (zoomOutBtn) zoomOutBtn.disabled = (scale <= MIN_SCALE + 0.001);
-            if (bottomZoomOutBtn) bottomZoomOutBtn.disabled = (scale <= MIN_SCALE + 0.001);
             setPressed(zoomFitBtn, fitMode === 'width');
-            setPressed(bottomZoomFitBtn, fitMode === 'width');
             setPressed(zoomPageBtn, fitMode === 'page');
-            setPressed(bottomZoomPageBtn, fitMode === 'page');
             updateThumbSelection();
             // Only once the reader is moving around, so opening a document doesn't
             // overwrite where they were last time
@@ -1390,6 +1361,15 @@
                     btn.addEventListener('click', function() { showTab(btn.getAttribute('data-pdf-tab')); });
                 })(tabButtons[t]);
             }
+            var sidebarCloseBtn = control('sidebar-close');
+            if (sidebarCloseBtn) {
+                sidebarCloseBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeSidebar();
+                    if (sidebarBtn) sidebarBtn.focus();
+                });
+            }
         }
 
         // ---- Menu, dialogs and messages -------------------------------------------
@@ -1397,7 +1377,16 @@
         function openMenu() {
             if (!menuEl) return;
             menuEl.hidden = false;
-            if (moreBtn) moreBtn.setAttribute('aria-expanded', 'true');
+            if (moreBtn) {
+                moreBtn.setAttribute('aria-expanded', 'true');
+                var moreIcon = moreBtn.querySelector('i');
+                if (moreIcon) {
+                    moreIcon.classList.remove('bi-three-dots');
+                    moreIcon.classList.add('bi-x-lg');
+                }
+                var moreText = moreBtn.querySelector('.scouting-pdf-btn-label');
+                if (moreText) moreText.textContent = 'Close';
+            }
             var first = menuEl.querySelector('[role^="menuitem"]:not([hidden])');
             if (first) first.focus();
         }
@@ -1405,7 +1394,16 @@
         function closeMenu() {
             if (!menuEl || menuEl.hidden) return false;
             menuEl.hidden = true;
-            if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+            if (moreBtn) {
+                moreBtn.setAttribute('aria-expanded', 'false');
+                var moreIcon = moreBtn.querySelector('i');
+                if (moreIcon) {
+                    moreIcon.classList.remove('bi-x-lg');
+                    moreIcon.classList.add('bi-three-dots');
+                }
+                var moreText = moreBtn.querySelector('.scouting-pdf-btn-label');
+                if (moreText) moreText.textContent = 'More';
+            }
             return true;
         }
 
@@ -1428,10 +1426,14 @@
                 }
             });
             menuEl.addEventListener('click', function(e) {
-                if (e.target.closest('[role^="menuitem"]')) closeMenu();
+                if (e.target.closest('[role^="menuitem"]') || e.target.closest('[data-pdf-control="menu-close"]')) {
+                    var wasClose = !!e.target.closest('[data-pdf-control="menu-close"]');
+                    closeMenu();
+                    if (wasClose && moreBtn) moreBtn.focus();
+                }
             });
             document.addEventListener('click', function(e) {
-                if (!menuEl.hidden && !menuEl.contains(e.target) && e.target !== moreBtn) closeMenu();
+                if (!menuEl.hidden && !menuEl.contains(e.target) && !moreBtn.contains(e.target)) closeMenu();
             });
         }
 
@@ -1566,7 +1568,7 @@
             styleSelect.setAttribute('data-pdf-control', 'cite-style-select');
 
             var styles = [
-                ['chicago', 'Chicago (Notes & Bibliography) — Most Popular'],
+                ['chicago', 'Chicago (Notes & Bibliography)'],
                 ['mla', 'MLA (Modern Language Association)'],
                 ['apa', 'APA (American Psychological Association)']
             ];
@@ -2223,28 +2225,22 @@
         var handlers = {
             prev: function() { stepPage(-1); },
             next: function() { stepPage(1); },
-            'bottom-prev': function() { stepPage(-1); },
-            'bottom-next': function() { stepPage(1); },
             'zoom-in': function() { zoomBy(ZOOM_STEP); },
             'zoom-out': function() { zoomBy(1 / ZOOM_STEP); },
-            'bottom-zoom-in': function() { zoomBy(ZOOM_STEP); },
-            'bottom-zoom-out': function() { zoomBy(1 / ZOOM_STEP); },
             'zoom-fit': function() { setFitMode('width'); },
             'zoom-page': function() { setFitMode('page'); },
-            'bottom-zoom-fit': function() { setFitMode('width'); },
-            'bottom-zoom-page': function() { setFitMode('page'); },
             rotate: rotate,
             fullscreen: toggleFullscreen,
             sidebar: function() { if (sidebar && sidebar.hidden) openSidebar(); else closeSidebar(); },
+            'sidebar-close': function() { closeSidebar(); if (sidebarBtn) sidebarBtn.focus(); },
             search: function() { if (findbar && !findbar.hidden) closeFindbar(); else openFindbar(); },
             adjust: function() { toggleAdjust(adjustbar && adjustbar.hidden); },
             'text-select': function() { setTextSelect(!textSelect); },
             cite: openCite,
-            'bottom-cite': openCite,
-            'bottom-scroll-top': function() { viewportEl.scrollTo({ top: 0, behavior: 'smooth' }); },
             download: downloadPdf,
             'copy-link': copyPageLink,
             'comment-page': commentOnPage,
+            'menu-close': function() { closeMenu(); if (moreBtn) moreBtn.focus(); },
             print: openPrint,
             snapshot: startSnapshot,
             spread: toggleSpread,
@@ -2254,7 +2250,7 @@
             var btn = control(name, name === 'prev' || name === 'next' ? 'scouting-pdf-' + name : null);
             if (!btn) return;
             btn.addEventListener('click', function() {
-                if (!pdfDoc && name !== 'fullscreen') return;
+                if (!pdfDoc && name !== 'fullscreen' && name !== 'menu-close' && name !== 'sidebar-close') return;
                 handlers[name]();
             });
         });
@@ -2264,12 +2260,6 @@
         if (pageNumEl) {
             pageNumEl.addEventListener('change', onPageInput);
             pageNumEl.addEventListener('keyup', function(e) {
-                if (e.key === 'Enter') onPageInput(e);
-            });
-        }
-        if (bottomPageNumEl) {
-            bottomPageNumEl.addEventListener('change', onPageInput);
-            bottomPageNumEl.addEventListener('keyup', function(e) {
                 if (e.key === 'Enter') onPageInput(e);
             });
         }

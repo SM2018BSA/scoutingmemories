@@ -674,7 +674,7 @@ class Scouting_PDF_Embedder {
 
     // ---- Viewer markup ------------------------------------------------------
 
-    private function button($control, $icon, $label, $tip, $attrs = '', $label_class = 'd-none d-xl-inline ms-1') {
+    private function button($control, $icon, $label, $tip, $attrs = '', $label_class = 'scouting-pdf-btn-label') {
         return sprintf(
             '<button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="%s" data-bs-toggle="tooltip" data-bs-title="%s" aria-label="%s"%s><i class="bi %s" aria-hidden="true"></i>%s</button>',
             esc_attr($control),
@@ -738,22 +738,14 @@ class Scouting_PDF_Embedder {
             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 user-select-none" data-pdf-role="toolbar">
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
                     <?php echo $this->button('sidebar', 'bi-layout-sidebar', 'Pages', 'Show page thumbnails, contents, search results and document details', ' aria-pressed="false"'); ?>
-                    <?php echo $this->button('prev', 'bi-chevron-left', 'Previous', 'Go to the previous page (Left arrow)', '', ''); ?>
-                    <span class="d-inline-flex align-items-center gap-1 small text-muted" data-pdf-role="page-display">
-                        <input type="number" class="form-control form-control-sm text-center" data-pdf-control="page-input" value="1" min="1" aria-label="Current page" data-bs-toggle="tooltip" data-bs-title="Type a page number and press Enter to jump to it">
-                        <span>of</span>
-                        <span data-pdf-control="total-pages">--</span>
-                        <span class="badge text-bg-light border" data-pdf-control="page-label" hidden data-bs-toggle="tooltip" data-bs-title="The page number printed on this page. Use it in citations"></span>
-                    </span>
-                    <?php echo $this->button('next', 'bi-chevron-right', 'Next', 'Go to the next page (Right arrow)', '', ''); ?>
                 </div>
 
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller ( - )', '', ''); ?>
+                    <?php echo $this->button('zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller ( - )'); ?>
                     <span class="small text-muted text-center" data-pdf-control="zoom-level" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Current zoom. Hold Ctrl and scroll the mouse wheel to zoom in on a spot">100%</span>
-                    <?php echo $this->button('zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print ( + )', '', ''); ?>
-                    <?php echo $this->button('zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="true"', 'd-none d-lg-inline ms-1'); ?>
-                    <?php echo $this->button('zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="false"', 'd-none d-lg-inline ms-1'); ?>
+                    <?php echo $this->button('zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print ( + )'); ?>
+                    <?php echo $this->button('zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="true"'); ?>
+                    <?php echo $this->button('zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="false"'); ?>
                 </div>
 
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
@@ -763,8 +755,12 @@ class Scouting_PDF_Embedder {
                     <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Get a citation for this page (Chicago, MLA, APA, or for Zotero)'); ?>
                     <?php echo $this->button('download', 'bi-download', 'Download', 'Save the original PDF file', $hidden_if_no_download); ?>
                     <div class="position-relative" data-pdf-role="menu-wrap">
-                        <?php echo $this->button('more', 'bi-three-dots', 'More', 'Link to this page, print, save an area as a picture, two-page view, rotate and more', ' aria-haspopup="menu" aria-expanded="false"', ''); ?>
+                        <?php echo $this->button('more', 'bi-three-dots', 'More', 'Link to this page, print, save an area as a picture, two-page view, rotate and more', ' aria-haspopup="menu" aria-expanded="false"'); ?>
                         <div class="scouting-pdf-menu shadow" role="menu" data-pdf-role="menu" hidden>
+                            <div class="d-flex align-items-center justify-content-between px-3 py-1 border-bottom mb-1 text-muted small">
+                                <span class="fw-semibold">Menu</span>
+                                <button type="button" class="btn btn-sm btn-link text-muted p-0 border-0" data-pdf-control="menu-close" aria-label="Close menu" title="Close menu"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                            </div>
                             <?php echo $this->menu_item('copy-link', 'bi-link-45deg', 'Copy link to this page'); ?>
                             <?php echo $this->menu_item('comment-page', 'bi-chat-left-text', 'Comment on this page', ' hidden'); ?>
                             <?php echo $this->menu_item('print', 'bi-printer', 'Print…', $hidden_if_no_download); ?>
@@ -774,7 +770,7 @@ class Scouting_PDF_Embedder {
                             <?php echo $this->menu_item('info', 'bi-info-circle', 'Document details'); ?>
                         </div>
                     </div>
-                    <?php echo $this->button('fullscreen', 'bi-arrows-fullscreen', 'Fullscreen', 'Fill the whole screen with the document (Esc to exit)', '', ''); ?>
+                    <?php echo $this->button('fullscreen', 'bi-arrows-fullscreen', 'Fullscreen', 'Fill the whole screen with the document (Esc to exit)'); ?>
                 </div>
             </div>
 
@@ -803,6 +799,7 @@ class Scouting_PDF_Embedder {
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="outline" hidden>Contents</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="results">Matches</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="info">Details</button>
+                        <button type="button" class="btn btn-sm btn-link text-muted p-1 px-2 border-0 align-self-center ms-auto" data-pdf-control="sidebar-close" aria-label="Close sidebar" title="Close sidebar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                     </div>
                     <div data-pdf-panel="thumbs" role="tabpanel"></div>
                     <div data-pdf-panel="outline" role="tabpanel" hidden></div>
@@ -829,29 +826,17 @@ class Scouting_PDF_Embedder {
                 <div class="toast-container position-absolute bottom-0 end-0 p-3" data-pdf-role="toasts" aria-live="polite"></div>
             </div>
 
-            <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 user-select-none bg-body" data-pdf-role="bottom-toolbar">
-                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('bottom-prev', 'bi-chevron-left', 'Previous', 'Go to the previous page (Left arrow)', '', ''); ?>
-                    <span class="d-inline-flex align-items-center gap-1 small text-muted" data-pdf-role="bottom-page-display">
-                        <input type="number" class="form-control form-control-sm text-center" data-pdf-control="bottom-page-input" value="1" min="1" aria-label="Current page" data-bs-toggle="tooltip" data-bs-title="Type a page number and press Enter to jump to it">
+            <div class="card-footer d-flex align-items-center justify-content-center py-2 user-select-none bg-body" data-pdf-role="bottom-toolbar">
+                <div class="d-flex align-items-center gap-2" data-pdf-role="group">
+                    <?php echo $this->button('prev', 'bi-chevron-left', 'Previous', 'Go to the previous page (Left arrow)'); ?>
+                    <span class="d-inline-flex align-items-center gap-1 small text-muted px-1" data-pdf-role="page-display">
+                        <span class="fw-medium text-body-secondary me-1">Page:</span>
+                        <input type="number" class="form-control form-control-sm text-center" data-pdf-control="page-input" value="1" min="1" aria-label="Current page" data-bs-toggle="tooltip" data-bs-title="Type a page number and press Enter to jump to it">
                         <span>of</span>
-                        <span data-pdf-control="bottom-total-pages">--</span>
-                        <span class="badge text-bg-light border" data-pdf-control="bottom-page-label" hidden data-bs-toggle="tooltip" data-bs-title="The page number printed on this page. Use it in citations"></span>
+                        <span data-pdf-control="total-pages">--</span>
+                        <span class="badge text-bg-light border" data-pdf-control="page-label" hidden data-bs-toggle="tooltip" data-bs-title="The page number printed on this page. Use it in citations"></span>
                     </span>
-                    <?php echo $this->button('bottom-next', 'bi-chevron-right', 'Next', 'Go to the next page (Right arrow)', '', ''); ?>
-                </div>
-
-                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('bottom-zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller ( - )', '', ''); ?>
-                    <span class="small text-muted text-center" data-pdf-control="bottom-zoom-level" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Current zoom">100%</span>
-                    <?php echo $this->button('bottom-zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print ( + )', '', ''); ?>
-                    <?php echo $this->button('bottom-zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="true"', 'd-none d-md-inline ms-1'); ?>
-                    <?php echo $this->button('bottom-zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="false"', 'd-none d-md-inline ms-1'); ?>
-                </div>
-
-                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('bottom-scroll-top', 'bi-arrow-up', 'Top', 'Scroll to top of document'); ?>
-                    <?php echo $this->button('bottom-cite', 'bi-quote', 'Cite', 'Get a citation for this page'); ?>
+                    <?php echo $this->button('next', 'bi-chevron-right', 'Next', 'Go to the next page (Right arrow)'); ?>
                 </div>
             </div>
         </div>
