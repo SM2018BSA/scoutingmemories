@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms\Actions;
 
 use ScoutingMemories\Forms\Forms\Rendering\FieldRenderer;
 use ScoutingMemories\Forms\Views\TemplateTags;
+use ScoutingMemories\Forms\Support\ShortcodeTrust;
 
 /**
  * EntryShortcodes
@@ -67,7 +68,7 @@ class EntryShortcodes {
         // Shortcodes written in the settings, e.g. [frm-field-value field_id=163 user_id=current]
         // to email the person who submitted the form (the plugin's own version is used)
         if (strpos($text, '[') !== false) {
-            $text = do_shortcode(TemplateTags::ownShortcodes($text));
+            $text = ShortcodeTrust::trusted(static fn() => do_shortcode(TemplateTags::ownShortcodes($text)));
         }
         return $html ? $text : str_replace(['&#91;', '&#93;'], ['[', ']'], $text);
     }

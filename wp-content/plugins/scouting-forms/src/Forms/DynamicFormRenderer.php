@@ -7,6 +7,7 @@ use ScoutingMemories\Forms\Actions\RegisterAction;
 use ScoutingMemories\Forms\Forms\Rendering\FormTemplate;
 use ScoutingMemories\Forms\Models\EntryRepository;
 use ScoutingMemories\Forms\Models\FormRepository;
+use ScoutingMemories\Forms\Support\FormAccess;
 use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Support\Permissions;
 
@@ -61,6 +62,12 @@ class DynamicFormRenderer extends FormHandler {
         $form = FormRepository::find((int) $atts['id'], sanitize_title((string) $atts['key']));
         if (!$form) {
             return '<!-- Scouting Forms: form not found (ID: ' . (int) $atts['id'] . ', key: ' . esc_html((string) $atts['key']) . ') -->';
+        }
+
+        // Forms only some people may use show a notice instead (Support\FormAccess)
+        if (!FormAccess::allowed($form)) {
+            wp_enqueue_style('sm-forms-front');
+            return '<div class="sm-forms"><div class="alert alert-info" role="status">' . FormAccess::message($form) . '</div></div>';
         }
 
         $fields = FormRepository::fields($form['id']);

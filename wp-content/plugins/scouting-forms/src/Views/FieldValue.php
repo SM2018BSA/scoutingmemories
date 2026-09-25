@@ -3,6 +3,8 @@
 namespace ScoutingMemories\Forms\Views;
 
 use ScoutingMemories\Forms\Models\FormRepository;
+use ScoutingMemories\Forms\Support\Permissions;
+use ScoutingMemories\Forms\Support\ShortcodeTrust;
 
 /**
  * FieldValue
@@ -25,6 +27,12 @@ class FieldValue {
         $default = (string) ($atts['default'] ?? '');
         $field = FormRepository::field(absint($atts['field_id'] ?? 0));
         if (!$field) {
+            return esc_html($default);
+        }
+        // Outside administrators' settings (a post any author can write): only people who may see
+        // entries, or someone asking about their own entry (user_id=current)
+        if (!ShortcodeTrust::isTrusted() && !Permissions::can('view_entries')
+            && !(is_user_logged_in() && ($atts['user_id'] ?? '') === 'current' && empty($atts['entry']) && empty($atts['entry_id']))) {
             return esc_html($default);
         }
 

@@ -17,9 +17,10 @@ first unchecked task. Update the checkboxes and the **Progress log** as work lan
    (e.g. the Formidable compatibility layer, Phase 7) or written up here as a question.
 2. **Never update the live site.** No pushes of any kind (WP Engine or GitHub), no dashboard
    buttons, no commits to `master` or `live`. The owner publishes when they decide to.
-3. **Local only.** Test at http://localhost:8088 (Docker). Formidable stays installed and active
-   locally; the plugin is tested side by side using its own shortcodes `[sm_form]` / `[sm_view]`
-   and the Compare tool, never by replacing Formidable's shortcodes while Formidable is active.
+3. **Local only.** Test at http://localhost:8088 (Docker). Owner decision 2026-09-25: working
+   alongside Formidable is no longer a goal; the plugin must work on its own, every feature is
+   tested, and where Formidable's behaviour is insecure the secure choice wins. Formidable (and
+   its add-ons) may be deactivated on the local copy for testing; never on live.
 4. **Commits:** local commits on `develop` only, and only plugin paths:
    `git -C E:/WEB/wpengine_repo add -- wp-content/plugins/scouting-forms`
    `git -C E:/WEB/wpengine_repo commit -m "..." -- wp-content/plugins/scouting-forms`
@@ -257,6 +258,32 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       form). Fixed: Reka v2 switch binding (the old one never showed its state), a template link that
       read `window`. Also fixed in the save pipeline: an update that does not send a repeating section
       no longer deletes its rows; an edited entry keeps its uploaded file unless a new one is sent.
+- [x] 6.5 (2026-09-25) Security hardening (owner: "close security gaps").
+      `Support\FormAccess`: who may use each form, checked in `EntryService` for every save path
+      (site form, admin API, Phase 7 shims) and before a form is shown (login link / "no permission"
+      text instead of the form). Edit Users (33) and forms 10/35 (states, regions): administrators only
+      (the theme's Edit Users hook changes anyone's roles, Administrator included, with no check of its
+      own); council/camp/lodge forms 7, 8, 11 and their child forms: index_contributor or
+      edit_others_posts; Add a Post (6): people who can create posts; account forms: logged in; child
+      forms follow their parent; Formidable's own logged_in / role settings honoured; the public
+      dependent-choices endpoint checks it too.
+      `Support\ShortcodeTrust`: `[sm_field_value]`/`[frm-field-value]` and `[sm_show_entry]` reveal
+      entry data only inside administrators' settings (actions, defaults, view templates); in a post
+      they show only the viewer's own value (user_id=current) or, for people who can view entries,
+      anything. Entry values shown by views/actions have `[`/`]` encoded, so text people type can
+      never run as a shortcode (stored injection).
+      Custom roles (open question closed): a form's edit role that is a custom role (index_contributor,
+      regional, historian) must actually be held; administrators pass. Formidable let every built-in
+      role pass (29 plain subscribers could edit councils). Note for the owner: regional coordinators
+      lose the front-end Edit link on other people's councils (they keep wp-admin editing); adding
+      "regional" to forms 7/8/11's edit-role setting restores it.
+      Uploads: required, upload error, size (field limit or server's), type checked against the file's
+      content (the field's allowed types when restricted, otherwise WordPress's), resize honoured.
+      Rate limit: 30 submissions per 10 minutes per member or per visitor (keyed by a hash of the IP,
+      never stored raw).
+      Verified: security suite 26/26 (access by role for show and save, Edit Users refused through the
+      form and the admin API with no role changed, shortcodes in posts, stored injection through a view,
+      custom roles, rate limit) and every earlier suite.
 - [ ] 6.4 Builder parity for the settings the site actually uses (fields, options, conditional
       logic, actions, views); rebuild `assets/builder` with Vite.
 
@@ -273,7 +300,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       Add a Post / registration defaults come from the theme's frm_setup_new_fields_vars.
 - [ ] 7.4 Automated check: every theme call site exercised with Formidable active vs. plugin shim.
 
-### Phase 8: Local cutover rehearsal (local only, needs the owner's OK to deactivate Formidable locally)
+### Phase 8: Local cutover rehearsal (local only; owner OK'd deactivating Formidable locally, 2026-09-25)
 - [ ] 8.1 Deactivate Formidable (and its add-ons) on the local site only.
 - [ ] 8.2 Click through every page, form and view as: logged out, subscriber, historian,
       index_contributor, regional, administrator. PHP error log clean.
@@ -288,9 +315,9 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 
 ## Open questions for the owner
 - Submit button colour: Formidable shows light blue (its own style settings); the plugin uses the site green like the PDF viewer. Default: site green, unless the owner prefers matching the old look.
-- Who can edit council/camp/lodge entries (forms 7, 8, 11): their "edit other people's entries" role is `index_contributor`. Formidable (and so the plugin, which copies it exactly) also lets anyone with a built-in WordPress role pass that check. Today that is 29 plain subscribers and 4 historian+subscriber accounts, as well as the 5 regional coordinators (author+historian+regional) who probably should. Suggested fix, in each form's settings, not code: set the role list to administrator, index_contributor and regional. Nothing changes until the owner decides.
+- ~~Who can edit council/camp/lodge entries~~ Closed 2026-09-25 (owner: secure choice wins): custom roles must be held; see 6.5. To give regional coordinators front-end Edit links again, add "regional" to forms 7/8/11's edit-role setting.
 - Add a Post status: on the live site today anyone who can open Add a Post can choose "Published" in the Post Status field and skip review (Formidable shows it to everyone). The plugin limits Published/Private/Scheduled to people WordPress lets publish posts; contributors, index contributors and subscribers get Draft or Pending Review. Say if the old behaviour is wanted instead.
-- Search forms 36, 37 and 38 (Search Councils/Camps/Lodges) each have an active email action to the site admin, so every search sends the admin an email on live today. The plugin does the same (locally it only logs). The owner may want those three actions turned off.
+- Search forms 36, 37 and 38 (now rate limited, 30 per 10 minutes per visitor) (Search Councils/Camps/Lodges) each have an active email action to the site admin, so every search sends the admin an email on live today. The plugin does the same (locally it only logs). The owner may want those three actions turned off.
 
 ## Progress log
 - 2026-09-24: Plan written. Audit of Formidable usage and plugin coverage recorded above.
@@ -305,3 +332,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-25: **Phase 4 done (4.1-4.3; 4.4 waits for Phase 7).** New `Actions\PostAction`; `ActionRunner` runs wppost; `EntryRepository::updateField` writes post-mapped fields to the post; `FieldRenderer` lists category terms and limits post statuses by publish rights; `DefaultValues` resolves user_meta/date format/post_id/frm-field-value defaults. Fixed: on edit, the actions now get every submitted value (the post was not updated). Verified (22/22): historian's post published with title, body (shortcodes inert), category, custom fields, author; mapped values moved off the entry; contributor gets Draft/Pending only, a forged "publish" is refused and their post is pending; Publish button respects rights and never stores a value on the entry; the Edit link shows title/category from the post and updates the same post (cleared fields removed from it); deleting the entry trashes the post. Post meta keys match a Formidable-created post except values filled later by the theme hook (state/council) or ACF bookkeeping (_state, frm_entry_id). All earlier suites still pass; test data 0.
 - 2026-09-25: **Phase 5 done (5.1, 5.2; 5.3 except Edit Users, which needs Phase 7).** New `Actions\RegisterAction`, `Accounts\AccountPages`, `Accounts\Avatar`; `Mailer::registerHooks` (local copies log all WordPress mail); `Validator` (password sanitizing, confirmation boxes, unique ignores the edited entry); `FieldRenderer` (confirmation box, autocomplete hints); `DynamicFormRenderer` (register first, passwords kept out of entries and re-renders, account prefill on edit). Verified: registration 25/25 (account created with role/username/names/meta, password with a quote logs in, entry moved to the member, password never stored or emailed, member logged in, welcome + admin emails logged; duplicate email / mismatch / blank / backslash refused; member updates details without a password, cannot take another member's email, changes password; WordPress's "Password Changed" notice logged not sent; an administrator registers a separate account and stays themselves); login/reset pages 20/20 (forms post to wp-login.php, messages are fixed texts only, full reset cycle with WordPress's reset email logged, bad key and mismatch refused, old password stops working, failed sign-in returns to the Login page, avatar from the upload); Edit Account Info opens the member's own entry with account details and no password. All earlier suites still pass; test data 0.
 - 2026-09-25: **Phase 6: 6.1-6.3 done (6.4 next).** New `Support\Capabilities`, `Forms\EntryService` (shared save pipeline; DynamicFormRenderer now only checks the nonce and shows confirmations), rewritten `Rest\ApiController`, new Vue components `UiCombobox`, `EntryField`, rewritten `EntriesList` and `EntryEditorModal`, App.vue permissions/search/sort/CSV; builder rebuilt with Vite (dependencies unchanged; npm audit 0). Verified: REST 21/21 (historian can list/search entries but not edit forms or open views; a plain subscriber is refused on every route; create with missing fields gives field errors; valid create with a repeating row; detail with display values and dependent choices; update through the same rules; rows kept when the section is not sent; CSV with headers and formula cells neutralised; delete removes child entries; serialized input ignored; another form's field cannot be changed). Builder UI checked in a browser against real API responses captured as a historian (Views tab hidden, entries tab opens, columns, search, editor sections/fields/chips, server error under the field, State -> Council reload, save keeps the repeating row). All earlier suites still pass; test data 0.
+- 2026-09-25: Owner: working with Formidable no longer matters; test every feature; close security gaps. **6.5 done** (see Phase 6): FormAccess, ShortcodeTrust, custom-role tightening, upload checks, rate limit. Formidable snapshot for standalone comparison saved (100 view cases x 5 users, 5 field-value cases). Next: Phase 7 with Formidable deactivated locally.

@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Forms\Rendering;
 
 use ScoutingMemories\Forms\Views\TemplateTags;
+use ScoutingMemories\Forms\Support\ShortcodeTrust;
 
 /**
  * DefaultValues
@@ -81,7 +82,7 @@ class DefaultValues {
 
         // Formidable shortcodes written in the field settings, e.g. [frm-field-value ...]
         if (strpos($default, '[') !== false) {
-            $default = html_entity_decode(wp_strip_all_tags(do_shortcode(TemplateTags::ownShortcodes($default))), ENT_QUOTES);
+            $default = html_entity_decode(wp_strip_all_tags(ShortcodeTrust::trusted(static fn() => do_shortcode(TemplateTags::ownShortcodes($default)))), ENT_QUOTES);
         }
         return $default;
     }

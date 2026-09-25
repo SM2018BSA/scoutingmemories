@@ -13,12 +13,17 @@ use ScoutingMemories\Forms\Support\FormidableSettings;
  *    "basic" honeypot does the same, with the same label),
  *  - timing: a signed timestamp; submissions faster than MIN_SECONDS or older than a day fail,
  *  - reCAPTCHA: when the form has a captcha field and Formidable has keys, the token is verified
- *    with Google. Local copies skip the Google call (Google rejects localhost keys).
+ *    with Google. Local copies skip the Google call (Google rejects localhost keys),
+ *  - rate limit: at most RATE_LIMIT submissions of one form per RATE_WINDOW from one person
+ *    (their user account, or a hash of their IP address when logged out), so a public form such
+ *    as a search that emails the admins cannot be used to flood anyone.
  */
 class SpamGuard {
 
     private const MIN_SECONDS = 3;
     private const MAX_AGE = DAY_IN_SECONDS;
+    private const RATE_LIMIT = 30;
+    private const RATE_WINDOW = 10 * MINUTE_IN_SECONDS;
 
     /**
      * Hidden inputs to print inside the form.
@@ -66,7 +71,28 @@ class SpamGuard {
                 }
             }
         }
+
+        if (!self::withinRateLimit($formId)) {
+            return __('Too many submissions in a short time. Please wait a few minutes and try again.', 'scouting-forms');
+        }
         return '';
+    }
+
+    /**
+     * Count this submission; false once the person has sent RATE_LIMIT in the window. Only the
+     * connection's own address is used (forwarding headers can be forged), and only as a hash.
+     */
+    private static function withinRateLimit(int $formId): bool {
+        $who = is_user_logged_in()
+            ? 'u' . get_current_user_id()
+            : 'ip' . (isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '');
+        $key = 'sm_rl_' . substr(hash_hmac('sha256', $formId . '|' . $who, wp_salt('nonce')), 0, 32);
+        $count = (int) get_transient($key);
+        if ($count >= self::RATE_LIMIT) {
+            return false;
+        }
+        set_transient($key, $count + 1, self::RATE_WINDOW);
+        return true;
     }
 
     private static function verifyRecaptcha(array $field): string {

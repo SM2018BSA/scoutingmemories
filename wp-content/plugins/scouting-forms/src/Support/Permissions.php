@@ -14,10 +14,9 @@ use ScoutingMemories\Forms\Models\FormRepository;
  *     and open_editable_role (edit everyone's). Your own drafts are always editable.
  *   - Deleting needs frm_delete_entries, or the right to edit the entry.
  *
- * Role checks match Formidable exactly, including one quirk: a check for a custom role such as
- * "index_contributor" also admits anyone holding a built-in WordPress role, even a subscriber.
- * Forms 7, 8 and 11 rely on that today (see GAME-PLAN.md, open questions); tightening it is a
- * change to those forms' role settings, not to this code.
+ * Role checks follow Formidable's settings with one deliberate difference: Formidable lets anyone
+ * holding a built-in WordPress role (even a subscriber) pass a check for a custom role such as
+ * "index_contributor". Here a custom role must actually be held (administrators always pass).
  */
 class Permissions {
 
@@ -134,10 +133,10 @@ class Permissions {
             return true;
         }
 
-        // A built-in role admits the roles above it; a custom role is not on the ladder, so any
-        // built-in role admits it (Formidable's behaviour)
+        // A built-in role admits the roles above it. A custom role must be held (Formidable would
+        // let any built-in role, even subscriber, through); administrators always pass.
         $rank = array_search($needed, self::ROLE_LADDER, true);
-        $ladder = $rank === false ? self::ROLE_LADDER : array_slice(self::ROLE_LADDER, 0, $rank);
+        $ladder = $rank === false ? ['administrator'] : array_slice(self::ROLE_LADDER, 0, $rank);
         foreach ($ladder as $higher) {
             if (in_array($higher, (array) $user->roles, true)) {
                 return true;

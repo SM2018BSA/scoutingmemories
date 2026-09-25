@@ -5,6 +5,7 @@ namespace ScoutingMemories\Forms\Ajax;
 use ScoutingMemories\Forms\Forms\Logic\FieldLogic;
 use ScoutingMemories\Forms\Forms\Rendering\DynamicOptions;
 use ScoutingMemories\Forms\Models\FormRepository;
+use ScoutingMemories\Forms\Support\FormAccess;
 
 /**
  * DynamicFields
@@ -41,7 +42,7 @@ class DynamicFields {
         if ($form && $form['parent_form_id'] > 0) {
             $form = FormRepository::find($form['parent_form_id']);
         }
-        if (!$form || $form['status'] !== 'published' || !FieldLogic::visibleToUser($field)) {
+        if (!$form || $form['status'] !== 'published' || !FieldLogic::visibleToUser($field) || !FormAccess::allowed($form)) {
             wp_send_json_error(['message' => 'Unknown field'], 400);
         }
 

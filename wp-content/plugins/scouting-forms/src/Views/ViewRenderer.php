@@ -4,6 +4,8 @@ namespace ScoutingMemories\Forms\Views;
 
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
+use ScoutingMemories\Forms\Support\Permissions;
+use ScoutingMemories\Forms\Support\ShortcodeTrust;
 
 /**
  * ViewRenderer
@@ -65,6 +67,10 @@ class ViewRenderer {
         $entryId = absint(is_array($atts) ? ($atts['id'] ?? 0) : 0);
         $entry = $entryId ? \ScoutingMemories\Forms\Models\EntryRepository::find($entryId) : [];
         if (!$entry) {
+            return '';
+        }
+        // Outside view templates only people who may see entries (or the entry's owner) see it
+        if (!ShortcodeTrust::isTrusted() && !Permissions::can('view_entries') && (!is_user_logged_in() || (int) $entry['user_id'] !== get_current_user_id())) {
             return '';
         }
         $values = new EntryValues((int) $entry['form_id']);
@@ -154,7 +160,8 @@ class ViewRenderer {
             }
             $html = shortcode_unautop(wp_filter_content_tags($html));
         }
-        return do_shortcode($html);
+        // View templates are written by administrators: their shortcodes may show entry data
+        return ShortcodeTrust::trusted(static fn() => do_shortcode($html));
     }
 
     /**

@@ -10,6 +10,7 @@ use ScoutingMemories\Forms\Forms\Submission\Validator;
 use ScoutingMemories\Forms\Models\EntryRepository;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Models\PostFields;
+use ScoutingMemories\Forms\Support\FormAccess;
 use ScoutingMemories\Forms\Support\Permissions;
 use ScoutingMemories\Forms\Support\TestData;
 
@@ -39,6 +40,11 @@ class EntryService {
         $fail = static function (string $message, array $values = [], array $errors = []) use ($editId): array {
             return ['ok' => false, 'form_error' => $message, 'errors' => $errors, 'values' => $values, 'entry_id' => $editId];
         };
+
+        // Who may use this form at all (checked on every save: site form, admin screen or code)
+        if (!FormAccess::allowed($form)) {
+            return $fail(__('You do not have permission to use this form.', 'scouting-forms'));
+        }
 
         $entry = [];
         if ($editId) {
@@ -75,7 +81,7 @@ class EntryService {
             }
         }
 
-        $errors = $validated['errors'] + ($editId || !$opts['uploads'] ? [] : self::checkRequiredFiles($fields));
+        $errors = $validated['errors'] + ($opts['uploads'] ? self::checkFiles($fields, !$editId) : []);
         if ($errors) {
             return ['ok' => false, 'form_error' => '', 'errors' => $errors, 'values' => self::withoutPasswords($fields, $validated['values']), 'entry_id' => $editId];
         }
@@ -301,26 +307,60 @@ class EntryService {
     }
 
     /**
+     * Uploaded files are checked before anything is saved: required files present, no upload
+     * error, a type the field allows (Formidable's "restrict" list; otherwise the types WordPress
+     * allows, checked against the file's content), and not larger than the field's limit (MB) or
+     * the server's.
+     *
      * @param array<int, array<string, mixed>> $fields
      * @return array<int, string>
      */
-    private static function checkRequiredFiles(array $fields): array {
+    private static function checkFiles(array $fields, bool $requireFiles): array {
         $errors = [];
         foreach ($fields as $field) {
-            if ($field['type'] !== 'file' || !$field['required']) {
+            if ($field['type'] !== 'file') {
                 continue;
             }
-            $key = 'file_' . $field['id'];
-            if (empty($_FILES[$key]['name'])) {
-                $message = (string) ($field['field_options']['blank'] ?? '');
-                $errors[(int) $field['id']] = str_replace('[field_name]', $field['name'], $message !== '' ? $message : '[field_name] cannot be blank.');
+            $id = (int) $field['id'];
+            $opts = $field['field_options'];
+            $file = $_FILES['file_' . $id] ?? null;
+            $name = is_array($file) && isset($file['name']) && is_string($file['name']) ? $file['name'] : '';
+
+            if ($name === '') {
+                if ($requireFiles && $field['required']) {
+                    $message = (string) ($opts['blank'] ?? '');
+                    $errors[$id] = str_replace('[field_name]', $field['name'], $message !== '' ? $message : '[field_name] cannot be blank.');
+                }
+                continue;
+            }
+            if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string) $file['tmp_name'])) {
+                $errors[$id] = __('The file could not be uploaded. Please try again.', 'scouting-forms');
+                continue;
+            }
+
+            $limitMb = is_numeric($opts['size'] ?? null) && (float) $opts['size'] > 0 ? (float) $opts['size'] : 0;
+            $limit = $limitMb > 0 ? min((int) ($limitMb * MB_IN_BYTES), wp_max_upload_size()) : wp_max_upload_size();
+            if ((int) $file['size'] > $limit) {
+                /* translators: %s: size limit, e.g. 3 MB */
+                $errors[$id] = sprintf(__('This file is too large. The limit is %s.', 'scouting-forms'), size_format($limit));
+                continue;
+            }
+
+            $allowed = null;
+            if (!empty($opts['restrict']) && !empty($opts['ftypes']) && is_array($opts['ftypes'])) {
+                $allowed = $opts['ftypes'];
+            }
+            $check = wp_check_filetype_and_ext((string) $file['tmp_name'], $name, $allowed ?? get_allowed_mime_types());
+            if (empty($check['ext']) || empty($check['type'])) {
+                $errors[$id] = __('This type of file is not allowed.', 'scouting-forms');
             }
         }
         return $errors;
     }
 
     /**
-     * Upload files to the media library (WP Stateless offloads them on the live site).
+     * Upload files to the media library (WP Stateless offloads them on the live site), resized
+     * when the field asks for it (avatars: 300 pixels).
      *
      * @param array<int, array<string, mixed>> $fields
      * @return array<int, int> field_id => attachment ID
@@ -336,11 +376,27 @@ class EntryService {
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/media.php';
 
-            $attachId = media_handle_upload($key, 0);
-            if (!is_wp_error($attachId)) {
-                TestData::markPost((int) $attachId);
-                $saved[(int) $field['id']] = (int) $attachId;
+            $opts = $field['field_options'];
+            $overrides = ['test_form' => false];
+            if (!empty($opts['restrict']) && !empty($opts['ftypes']) && is_array($opts['ftypes'])) {
+                $overrides['mimes'] = $opts['ftypes'];
             }
+            $attachId = media_handle_upload($key, 0, [], $overrides);
+            if (is_wp_error($attachId)) {
+                continue;
+            }
+            TestData::markPost((int) $attachId);
+
+            $size = (int) ($opts['new_size'] ?? 0);
+            if (!empty($opts['resize']) && $size > 0 && wp_attachment_is_image((int) $attachId)) {
+                $path = get_attached_file((int) $attachId);
+                $editor = $path ? wp_get_image_editor($path) : null;
+                if ($editor && !is_wp_error($editor) && !is_wp_error($editor->resize($size, $size, false))) {
+                    $editor->save($path);
+                    wp_update_attachment_metadata((int) $attachId, wp_generate_attachment_metadata((int) $attachId, $path));
+                }
+            }
+            $saved[(int) $field['id']] = (int) $attachId;
         }
         return $saved;
     }

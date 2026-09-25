@@ -5,6 +5,7 @@ namespace ScoutingMemories\Forms\Views;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Models\PostFields;
 use ScoutingMemories\Forms\Support\FormidableSettings;
+use ScoutingMemories\Forms\Support\ShortcodeTrust;
 
 /**
  * EntryValues
@@ -116,6 +117,14 @@ class EntryValues {
      * @param array<string, string> $atts Tag options: show, sep, size, format
      */
     public function display(int $entryId, int $fieldId, array $atts = []): string {
+        // Text people typed never runs as a shortcode when a view template is processed
+        return ShortcodeTrust::inert($this->displayHtml($entryId, $fieldId, $atts));
+    }
+
+    /**
+     * @param array<string, string> $atts
+     */
+    private function displayHtml(int $entryId, int $fieldId, array $atts): string {
         $field = $this->fields[$fieldId] ?? null;
         $value = $this->raw($entryId, $fieldId);
         $sep = isset($atts['sep']) ? (string) $atts['sep'] : ', ';
