@@ -27,12 +27,26 @@ On purpose, some things now work differently (safer):
 - Uploads are checked (type, size); submissions are rate limited (30 per 10 minutes per person).
 - Text typed into forms can never run as a shortcode; entry data only shows where it should.
 
+## Important
+
+The theme calls Formidable directly. **Formidable or Scouting Forms must always be active**; with both
+switched off the site stops with an error on every page.
+
 ## Before
 
 1. Make a WP Engine backup point (so the database can be put back if needed).
-2. Publish the plugin as usual (develop > master > dashboard). With Formidable still active the plugin
-   stays in the background: its Formidable stand-ins only load when Formidable is off, so the site
-   keeps working as it does today.
+2. Publish the plugin with your dashboard. Note that the `develop` branch also holds two commits made
+   before this work: the Scouting-Memories-2026 theme in progress (4f48df4) and a 4-line fix to the live
+   theme's `Classes/Theme.php` for the search dropdowns (a43d240). Merging all of `develop` into
+   `master` publishes those too. To publish only the plugin, bring just its folder over to `master`:
+
+       git checkout master
+       git checkout develop -- wp-content/plugins/scouting-forms
+       git commit -m "Scouting Forms plugin"
+
+   With Formidable still active the plugin stays in the background: its Formidable stand-ins only load
+   when Formidable is off, so the site keeps working as it does today. Its test and compare tools only
+   work on a local copy and do nothing on live.
 3. On live, check that **Scouting Forms** is active (Plugins screen) and open any wp-admin page once
    (the plugin gives staff roles its matching rights on the first admin visit).
 
@@ -52,8 +66,9 @@ On purpose, some things now work differently (safer):
 8. Register a test member (real email address you control): welcome email arrives, member is logged in.
    Log out, log in, use "Lost password".
 9. As an index contributor: Add a Council / Camp / Lodge, then edit it (the slug and the council
-   list with numbers should look as before). As a historian: Add a Post (editor with Add Media,
-   state/council defaults); as a contributor: the post goes to Pending Review.
+   list with numbers should look as before). As a regional coordinator: the Edit links show on other
+   people's councils. As a historian: Add a Post (editor with Add Media, state/council defaults);
+   as a contributor: the post goes to Pending Review.
 10. My Account: Edit Account Info, Edit Account Defaults, avatar upload.
 11. As administrator: Edit Users on a test member (one role, then two roles).
 12. wp-admin > Scouting Forms: open a form, a view and some entries; export a CSV.
@@ -63,7 +78,8 @@ On purpose, some things now work differently (safer):
 ## If something is wrong: roll back
 
 Reactivate the Formidable plugins (step 4 in reverse). The data never moved, so entries made while
-Scouting Forms was in charge are there for Formidable too. Nothing else needs undoing.
+Scouting Forms was in charge are there for Formidable too. Nothing else needs undoing. Scouting Forms
+can stay active alongside Formidable.
 
 ## Later
 

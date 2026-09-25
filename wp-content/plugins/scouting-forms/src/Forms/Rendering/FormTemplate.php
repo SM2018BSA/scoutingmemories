@@ -158,6 +158,11 @@ class FormTemplate {
                 while ($end < $count && $fields[$end]['type'] !== 'end_divider' && $fields[$end]['type'] !== 'divider') {
                     $end++;
                 }
+                // A section only certain roles may see is left out entirely for others, as in Formidable
+                if (!FieldLogic::visibleToUser($field)) {
+                    $i = ($end < $count && $fields[$end]['type'] === 'end_divider') ? $end : $end - 1;
+                    continue;
+                }
                 $inner = !empty($field['field_options']['repeat'])
                     ? self::repeater($field, $values[$id] ?? [], $values, $errors)
                     : self::range(array_slice($fields, $i + 1, $end - $i - 1), $values, $byId, $errors);
@@ -172,6 +177,11 @@ class FormTemplate {
                 continue;
             }
 
+            // A field only certain roles may see is not in the page for others (the server ignores
+            // anything sent for it anyway)
+            if (!FieldLogic::visibleToUser($field)) {
+                continue;
+            }
             $html .= FieldRenderer::render($field, $values[$id] ?? '', (string) ($errors[$id] ?? ''), $ctx);
         }
         return $html;
@@ -217,6 +227,9 @@ class FormTemplate {
             );
             $html .= sprintf('<input type="hidden" name="item_meta[%d][row_ids][]" value="%s" />', $sectionId, esc_attr((string) $key));
             foreach ($rowFields as $child) {
+                if (!FieldLogic::visibleToUser($child)) {
+                    continue;
+                }
                 $childId = (int) $child['id'];
                 $containerId = $childId . '-' . $sectionId . '-' . $key;
                 $html .= FieldRenderer::render($child, $rowValues[$childId] ?? '', (string) ($errors[$containerId] ?? ''), [
