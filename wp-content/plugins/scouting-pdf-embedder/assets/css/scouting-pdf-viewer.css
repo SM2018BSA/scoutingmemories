@@ -33,18 +33,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.25rem;
-    min-height: 2.1rem;
-    padding: 0.25rem 0.55rem;
+    min-width: 2.4rem;
+    min-height: 2.35rem;
+    padding: 0.3rem 0.65rem;
     white-space: nowrap;
 }
 
 /* Bold, prominent icons in buttons */
 [data-pdf-viewer] [data-pdf-role="toolbar"] .btn .bi,
 [data-pdf-viewer] [data-pdf-role="bottom-toolbar"] .btn .bi {
-    font-size: 1.05rem;
+    font-size: 1.35rem;
     font-weight: 700;
-    -webkit-text-stroke: 0.45px currentColor;
+    -webkit-text-stroke: 0.5px currentColor;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -52,8 +52,8 @@
 }
 
 [data-pdf-viewer] [data-pdf-role="bottom-toolbar"] .btn .bi {
-    font-size: 1.15rem;
-    -webkit-text-stroke: 0.55px currentColor;
+    font-size: 1.45rem;
+    -webkit-text-stroke: 0.6px currentColor;
 }
 
 /* Button text labels */

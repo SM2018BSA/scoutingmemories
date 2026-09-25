@@ -750,10 +750,11 @@ class Scouting_PDF_Embedder {
 
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
                     <?php echo $this->button('adjust', 'bi-sliders', 'Adjust', 'Brighten, darken or invert faded scans', ' aria-pressed="false"'); ?>
+                    <?php echo $this->button('rotate', 'bi-arrow-clockwise', 'Rotate', 'Rotate pages clockwise ( R )'); ?>
                     <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Get a citation for this page (Chicago, MLA, APA, or for Zotero)'); ?>
                     <?php echo $this->button('download', 'bi-download', 'Download', 'Save the original PDF file', $hidden_if_no_download); ?>
                     <div class="position-relative" data-pdf-role="menu-wrap">
-                        <?php echo $this->button('more', 'bi-three-dots', 'More', 'Link to this page, print, save an area as a picture, two-page view, rotate and more', ' aria-haspopup="menu" aria-expanded="false"'); ?>
+                        <?php echo $this->button('more', 'bi-three-dots', 'More', 'Link to this page, print, save an area as a picture, two-page view and more', ' aria-haspopup="menu" aria-expanded="false"'); ?>
                         <div class="scouting-pdf-menu shadow" role="menu" data-pdf-role="menu" hidden>
                             <div class="d-flex align-items-center justify-content-between px-3 py-1 border-bottom mb-1 text-muted small">
                                 <span class="fw-semibold">Menu</span>
@@ -764,7 +765,6 @@ class Scouting_PDF_Embedder {
                             <?php echo $this->menu_item('print', 'bi-printer', 'Print…', $hidden_if_no_download); ?>
                             <?php echo $this->menu_item('snapshot', 'bi-camera', 'Save an area as a picture'); ?>
                             <?php echo $this->menu_item('spread', 'bi-book', 'Two-page view', ' aria-checked="false" role="menuitemcheckbox"'); ?>
-                            <?php echo $this->menu_item('rotate', 'bi-arrow-clockwise', 'Rotate pages ( R )'); ?>
                             <?php echo $this->menu_item('info', 'bi-info-circle', 'Document details'); ?>
                         </div>
                     </div>
