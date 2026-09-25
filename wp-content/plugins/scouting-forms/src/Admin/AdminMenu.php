@@ -3,6 +3,9 @@
 namespace ScoutingMemories\Forms\Admin;
 
 use ScoutingMemories\Forms\Models\ArchiveRepository;
+use ScoutingMemories\Forms\Support\Environment;
+use ScoutingMemories\Forms\Support\Mailer;
+use ScoutingMemories\Forms\Support\TestData;
 
 /**
  * AdminMenu
@@ -101,6 +104,18 @@ class AdminMenu {
             'scouting-archives-tools',
             [__CLASS__, 'renderToolsPage']
         );
+
+        // Local development only: test data cleanup and intercepted mail log
+        if (Environment::isLocal()) {
+            add_submenu_page(
+                'scouting-forms-builder',
+                __('Test Tools (local only)', 'scouting-forms'),
+                __('🧪 Test Tools', 'scouting-forms'),
+                'manage_options',
+                'scouting-forms-test-tools',
+                [__CLASS__, 'renderTestToolsPage']
+            );
+        }
 
         // Submenu 8: User Guide & Walkthrough
         add_submenu_page(
@@ -230,8 +245,45 @@ class AdminMenu {
         wp_send_json_success();
     }
 
+    public static function renderTestToolsPage(): void {
+        if (!current_user_can('manage_options') || !Environment::isLocal()) {
+            wp_die(__('Permission denied.', 'scouting-forms'));
+        }
+        $counts = TestData::counts();
+        $mailLog = Mailer::getLog();
+        include SM_FORMS_PLUGIN_DIR . 'views/admin/test-tools-page.php';
+    }
+
+    /**
+     * Test Tools actions (local copies only): delete marked test data, clear the mail log.
+     */
+    private static function handleTestToolsActions(string $action): void {
+        if (!Environment::isLocal() || !current_user_can('manage_options')) {
+            wp_die(__('Permission denied.', 'scouting-forms'));
+        }
+        check_admin_referer('sm_test_tools');
+
+        $args = ['page' => 'scouting-forms-test-tools'];
+        if ($action === 'cleanup_test_data') {
+            $removed = TestData::cleanup();
+            $args['removed_entries'] = $removed['entries'];
+            $args['removed_posts'] = $removed['posts'];
+            $args['removed_users'] = $removed['users'];
+        } elseif ($action === 'clear_mail_log') {
+            Mailer::clearLog();
+            $args['mail_cleared'] = 1;
+        }
+
+        wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
+        exit;
+    }
+
     public static function handleAdminActions(): void {
-        if (!isset($_POST['sm_admin_action']) || $_POST['sm_admin_action'] !== 'batch_update_dates') {
+        $action = isset($_POST['sm_admin_action']) ? sanitize_key(wp_unslash($_POST['sm_admin_action'])) : '';
+        if (in_array($action, ['cleanup_test_data', 'clear_mail_log'], true)) {
+            self::handleTestToolsActions($action);
+        }
+        if ($action !== 'batch_update_dates') {
             return;
         }
 

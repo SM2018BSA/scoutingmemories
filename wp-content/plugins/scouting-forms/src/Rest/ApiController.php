@@ -2,6 +2,8 @@
 
 namespace ScoutingMemories\Forms\Rest;
 
+use ScoutingMemories\Forms\Models\EntryRepository;
+use ScoutingMemories\Forms\Support\TestData;
 use WP_REST_Server;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -447,6 +449,7 @@ class ApiController {
         if (is_wp_error($view_id)) {
             return new WP_REST_Response(['error' => $view_id->get_error_message()], 500);
         }
+        TestData::markPost((int) $view_id);
 
         update_post_meta($view_id, 'frm_form_id', $form_id);
         update_post_meta($view_id, 'frm_show_count', 'all');
@@ -580,34 +583,22 @@ class ApiController {
     }
 
     public static function createEntry(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
-
         $data        = $request->get_json_params();
         $form_id     = (int) ($data['form_id'] ?? 0);
-        $metas       = $data['metas'] ?? [];
-        $items_table = $wpdb->prefix . 'frm_items';
-        $metas_table = $wpdb->prefix . 'frm_item_metas';
+        $metas       = is_array($data['metas'] ?? null) ? $data['metas'] : [];
 
-        $item_key = 'sm_' . uniqid();
-        $wpdb->insert($items_table, [
-            'item_key'   => $item_key,
-            'name'       => sanitize_text_field($data['name'] ?? $item_key),
-            'form_id'    => $form_id,
-            'user_id'    => get_current_user_id(),
-            'created_at' => current_time('mysql'),
-            'updated_at' => current_time('mysql')
-        ], ['%s', '%s', '%d', '%d', '%s', '%s']);
-
-        $entry_id = $wpdb->insert_id;
-
+        $clean = [];
         foreach ($metas as $field_id => $val) {
-            $val_str = is_array($val) ? maybe_serialize($val) : sanitize_text_field($val);
-            $wpdb->insert($metas_table, [
-                'item_id'    => $entry_id,
-                'field_id'   => (int) $field_id,
-                'meta_value' => $val_str,
-                'created_at' => current_time('mysql')
-            ], ['%d', '%d', '%s', '%s']);
+            $clean[(int) $field_id] = is_array($val) ? map_deep($val, 'sanitize_text_field') : sanitize_text_field((string) $val);
+        }
+
+        $item_key = 'sm-' . wp_generate_password(10, false, false);
+        $entry_id = EntryRepository::create($form_id, $clean, [
+            'key' => $item_key,
+            'name' => sanitize_text_field($data['name'] ?? $item_key),
+        ]);
+        if (!$entry_id) {
+            return new WP_REST_Response(['success' => false, 'message' => __('The entry could not be saved.', 'scouting-forms')], 500);
         }
 
         self::purgeCache();

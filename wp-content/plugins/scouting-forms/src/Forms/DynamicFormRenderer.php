@@ -2,6 +2,8 @@
 
 namespace ScoutingMemories\Forms\Forms;
 
+use ScoutingMemories\Forms\Models\EntryRepository;
+use ScoutingMemories\Forms\Support\TestData;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
@@ -51,18 +53,18 @@ class DynamicFormRenderer extends FormHandler {
         $form = null;
         if ($formId > 0) {
             $form = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM wp_frm_forms WHERE id = %d",
+                "SELECT * FROM {$wpdb->prefix}frm_forms WHERE id = %d",
                 $formId
             ));
         } elseif (!empty($formKey)) {
             $form = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM wp_frm_forms WHERE form_key = %s",
+                "SELECT * FROM {$wpdb->prefix}frm_forms WHERE form_key = %s",
                 $formKey
             ));
         }
 
         if (!$form) {
-            return "<!-- Scouting Forms: Form not found (ID: {$atts['id']}, Key: {$atts['key']}) -->";
+            return '<!-- Scouting Forms: form not found (ID: ' . (int) $formId . ', key: ' . esc_html($formKey) . ') -->';
         }
 
         $formId = (int) $form->id;
@@ -79,7 +81,7 @@ class DynamicFormRenderer extends FormHandler {
 
         // Fetch fields
         $fields = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM wp_frm_fields WHERE form_id = %d ORDER BY field_order ASC, id ASC",
+            "SELECT * FROM {$wpdb->prefix}frm_fields WHERE form_id = %d ORDER BY field_order ASC, id ASC",
             $formId
         ));
 
@@ -287,14 +289,13 @@ class DynamicFormRenderer extends FormHandler {
     }
 
     /**
-     * Process form submission and save to wp_frm_items & wp_frm_item_metas
+     * Process form submission and save it as a Formidable entry (via EntryRepository)
      */
     private static function handleFormSubmission(object $form): string {
-        if (!isset($_POST['_sm_form_nonce']) || !wp_verify_nonce($_POST['_sm_form_nonce'], 'sm_submit_form_' . $form->id)) {
+        if (!isset($_POST['_sm_form_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_sm_form_nonce'])), 'sm_submit_form_' . $form->id)) {
             return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Security check failed. Please refresh and try again.', 'scouting-forms') . '</div>';
         }
 
-        global $wpdb;
         $userId = get_current_user_id();
         $itemMetas = isset($_POST['item_meta']) && is_array($_POST['item_meta']) ? $_POST['item_meta'] : [];
 
@@ -309,53 +310,28 @@ class DynamicFormRenderer extends FormHandler {
                     $targetFieldId = (int) str_replace('file_', '', $inputKey);
                     $attachId = media_handle_upload($inputKey, 0);
                     if (!is_wp_error($attachId)) {
+                        TestData::markPost((int) $attachId);
                         $itemMetas[$targetFieldId] = $attachId;
                     }
                 }
             }
         }
 
-        // Generate unique entry key
-        $itemKey = sanitize_title($form->form_key . '-' . wp_generate_password(8, false, false));
-        $now = current_time('mysql');
-
-        // Insert into wp_frm_items
-        $inserted = $wpdb->insert('wp_frm_items', [
-            'item_key'       => $itemKey,
-            'name'           => $form->name . ' Entry',
-            'description'    => '',
-            'ip'             => sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? ''),
-            'form_id'        => $form->id,
-            'post_id'        => 0,
-            'user_id'        => $userId,
-            'parent_item_id' => 0,
-            'is_draft'       => 0,
-            'updated_by'     => $userId,
-            'created_at'     => $now,
-            'updated_at'     => $now
-        ], ['%s', '%s', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%d', '%s', '%s']);
-
-        if (!$inserted) {
-            return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Failed to save entry. Please try again.', 'scouting-forms') . '</div>';
-        }
-
-        $itemId = (int) $wpdb->insert_id;
-
-        // Insert metas
+        $cleanMetas = [];
         foreach ($itemMetas as $fieldId => $fieldValue) {
-            $val = is_array($fieldValue) ? maybe_serialize($fieldValue) : sanitize_textarea_field((string)$fieldValue);
-            $wpdb->insert('wp_frm_item_metas', [
-                'meta_value' => $val,
-                'field_id'   => (int) $fieldId,
-                'item_id'    => $itemId,
-                'created_at' => $now
-            ], ['%s', '%d', '%d', '%s']);
+            $cleanMetas[(int) $fieldId] = is_array($fieldValue)
+                ? map_deep(wp_unslash($fieldValue), 'sanitize_textarea_field')
+                : sanitize_textarea_field(wp_unslash((string) $fieldValue));
         }
 
-        // Invalidate WP Engine cache
-        wp_cache_delete('sm_entries_form_' . $form->id);
-        if (class_exists('WpeCommon')) {
-            \WpeCommon::purge_memcached();
+        $itemId = EntryRepository::create((int) $form->id, $cleanMetas, [
+            'key' => $form->form_key . '-' . wp_generate_password(8, false, false),
+            'name' => $form->name . ' Entry',
+            'user_id' => $userId,
+        ]);
+
+        if (!$itemId) {
+            return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Failed to save entry. Please try again.', 'scouting-forms') . '</div>';
         }
 
         return '<div class="p-4 mb-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">' .

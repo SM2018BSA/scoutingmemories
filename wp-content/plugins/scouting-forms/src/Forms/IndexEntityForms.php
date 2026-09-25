@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Models\ArchiveRepository;
+use ScoutingMemories\Forms\Models\EntryRepository;
 
 /**
  * IndexEntityForms
@@ -133,32 +134,10 @@ class IndexEntityForms extends FormHandler {
     }
 
     private static function saveArchiveItem(int $formId, string $name, string $itemKey, array $fieldValues): int {
-        global $wpdb;
-
-        $items_table = $wpdb->prefix . 'frm_items';
-        $metas_table = $wpdb->prefix . 'frm_item_metas';
-
-        $wpdb->insert($items_table, [
-            'item_key'   => $itemKey . '_' . wp_rand(100, 999),
-            'name'       => $name,
-            'form_id'    => $formId,
-            'user_id'    => get_current_user_id(),
-            'created_at' => current_time('mysql'),
-            'updated_at' => current_time('mysql'),
+        return EntryRepository::create($formId, $fieldValues, [
+            'key' => $itemKey . '_' . wp_rand(100, 999),
+            'name' => $name,
         ]);
-
-        $itemId = (int) $wpdb->insert_id;
-
-        foreach ($fieldValues as $fieldId => $val) {
-            $wpdb->insert($metas_table, [
-                'item_id'    => $itemId,
-                'field_id'   => $fieldId,
-                'meta_value' => is_array($val) ? maybe_serialize($val) : $val,
-                'created_at' => current_time('mysql'),
-            ]);
-        }
-
-        return $itemId;
     }
 
     public static function renderCouncilForm(): string {

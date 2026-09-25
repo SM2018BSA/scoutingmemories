@@ -2,6 +2,8 @@
 
 namespace ScoutingMemories\Forms\Models;
 
+use ScoutingMemories\Forms\Support\TestData;
+
 /**
  * MemoryPost
  *
@@ -58,6 +60,7 @@ class MemoryPost {
         if (is_wp_error($post_id)) {
             return $post_id;
         }
+        TestData::markPost((int) $post_id);
 
         // 1. Process File Uploads (Images or PDF)
         if (!empty($files['memory_file']['name'])) {
@@ -67,6 +70,7 @@ class MemoryPost {
 
             $attach_id = media_handle_upload('memory_file', $post_id);
             if (!is_wp_error($attach_id)) {
+                TestData::markPost((int) $attach_id);
                 $mime = get_post_mime_type($attach_id);
                 if (strpos($mime, 'image') !== false) {
                     set_post_thumbnail($post_id, $attach_id);

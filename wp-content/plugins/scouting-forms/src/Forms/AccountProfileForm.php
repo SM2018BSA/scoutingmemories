@@ -48,6 +48,7 @@ class AccountProfileForm extends FormHandler {
 
             $attach_id = media_handle_upload('avatar_file', 0);
             if (!is_wp_error($attach_id)) {
+                \ScoutingMemories\Forms\Support\TestData::markPost((int) $attach_id);
                 update_user_meta($userId, 'sm_custom_avatar_id', $attach_id);
             }
         }
