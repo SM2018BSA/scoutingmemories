@@ -44,6 +44,16 @@ class ApiController {
             ['methods' => 'GET', 'callback' => [__CLASS__, 'getForm'], 'permission_callback' => $can('view_forms')],
             ['methods' => 'POST', 'callback' => [__CLASS__, 'updateForm'], 'permission_callback' => $can('edit_forms')],
         ]);
+        register_rest_route(self::NAMESPACE, '/forms/(?P<id>\d+)/builder', [
+            'methods' => 'GET', 'callback' => [__CLASS__, 'getFormBuilder'], 'permission_callback' => $can('view_forms'),
+        ]);
+        register_rest_route(self::NAMESPACE, '/forms/(?P<id>\d+)/actions', [
+            'methods' => 'POST', 'callback' => [__CLASS__, 'createAction'], 'permission_callback' => $can('edit_forms'),
+        ]);
+        register_rest_route(self::NAMESPACE, '/actions/(?P<id>\d+)', [
+            ['methods' => 'POST', 'callback' => [__CLASS__, 'updateAction'], 'permission_callback' => $can('edit_forms')],
+            ['methods' => 'DELETE', 'callback' => [__CLASS__, 'deleteAction'], 'permission_callback' => $can('delete_forms')],
+        ]);
         register_rest_route(self::NAMESPACE, '/forms/(?P<id>\d+)/fields', [
             'methods' => 'POST', 'callback' => [__CLASS__, 'saveFormFields'], 'permission_callback' => $can('edit_forms'),
         ]);
@@ -133,93 +143,79 @@ class ApiController {
     }
 
     /**
-     * Save the form's fields (label, type, key, required, default, choices, a few field options).
-     * Only arrays and plain values are accepted: nothing from the request is unserialized.
+     * Save the form's fields: {fields: [...in their new order...], deleted: [ids]}.
+     * See FormBuilder::saveFields for what is checked and kept.
      */
     public static function saveFormFields(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
         $formId = (int) $request->get_param('id');
         if (!FormRepository::find($formId)) {
             return new WP_REST_Response(['message' => __('Form not found.', 'scouting-forms')], 404);
         }
-        $data = (array) $request->get_json_params();
-        $table = $wpdb->prefix . 'frm_fields';
-        $types = ['text', 'textarea', 'email', 'url', 'number', 'phone', 'date', 'time', 'select', 'radio', 'checkbox', 'hidden', 'html', 'divider', 'end_divider', 'break', 'data', 'toggle', 'user_id', 'file', 'rte', 'password', 'captcha', 'submit', 'range'];
-
-        foreach ((array) ($data['fields'] ?? []) as $order => $f) {
-            if (!is_array($f)) {
-                continue;
-            }
-            $fieldId = (int) ($f['id'] ?? 0);
-            $existing = $fieldId ? FormRepository::field($fieldId) : null;
-            if ($fieldId && (!$existing || (int) $existing['form_id'] !== $formId)) {
-                continue; // a field of another form cannot be changed here
-            }
-            $type = in_array($f['type'] ?? '', $types, true) ? (string) $f['type'] : ($existing['type'] ?? 'text');
-
-            $fieldOptions = $existing['field_options'] ?? [];
-            foreach (['classes', 'placeholder', 'blank', 'invalid', 'unique_msg'] as $key) {
-                if (isset($f[$key]) && is_scalar($f[$key])) {
-                    $fieldOptions[$key] = sanitize_text_field((string) $f[$key]);
-                }
-            }
-            if (isset($f['field_options']) && is_array($f['field_options'])) {
-                foreach (['label', 'show_hide', 'any_all', 'data_type', 'option_order'] as $key) {
-                    if (isset($f['field_options'][$key]) && is_scalar($f['field_options'][$key])) {
-                        $fieldOptions[$key] = sanitize_text_field((string) $f['field_options'][$key]);
-                    }
-                }
-                foreach (['hide_field', 'hide_field_cond', 'hide_opt'] as $key) {
-                    if (isset($f['field_options'][$key]) && is_array($f['field_options'][$key])) {
-                        $fieldOptions[$key] = array_values(array_map(static fn($v) => sanitize_text_field((string) $v), array_filter($f['field_options'][$key], 'is_scalar')));
-                    }
-                }
-            }
-
-            $choices = $existing['options'] ?? [];
-            if (isset($f['options']) && is_array($f['options'])) {
-                $choices = [];
-                foreach ($f['options'] as $key => $option) {
-                    if (is_array($option)) {
-                        $choices[sanitize_key((string) $key)] = [
-                            'label' => sanitize_text_field((string) ($option['label'] ?? '')),
-                            'value' => sanitize_text_field((string) ($option['value'] ?? ($option['label'] ?? ''))),
-                        ];
-                    } elseif (is_scalar($option)) {
-                        $choices[] = sanitize_text_field((string) $option);
-                    }
-                }
-            }
-
-            $row = [
-                'name' => sanitize_text_field((string) ($f['name'] ?? ($existing['name'] ?? ''))),
-                'description' => self::settingsHtml((string) ($f['description'] ?? ($existing['description'] ?? ''))),
-                'type' => $type,
-                'field_key' => sanitize_key((string) ($f['field_key'] ?? ($existing['key'] ?? ('field_' . wp_generate_password(6, false))))),
-                'required' => !empty($f['required']) ? 1 : 0,
-                'default_value' => sanitize_text_field(is_scalar($f['default_value'] ?? null) ? (string) $f['default_value'] : (string) ($existing['default_value'] ?? '')),
-                'options' => maybe_serialize($choices),
-                'field_options' => maybe_serialize($fieldOptions),
-                'field_order' => (int) $order + 1,
-            ];
-            if ($existing) {
-                $wpdb->update($table, $row, ['id' => $fieldId], ['%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d'], ['%d']);
-            } else {
-                $wpdb->insert($table, $row + ['form_id' => $formId, 'created_at' => current_time('mysql', 1)], ['%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s']);
-            }
+        $result = FormBuilder::saveFields($formId, (array) $request->get_json_params());
+        if (!$result['ok']) {
+            return new WP_REST_Response(['success' => false, 'message' => $result['message'], 'errors' => (object) $result['errors']], 422);
         }
+        return new WP_REST_Response(['success' => true, 'message' => $result['message']] + (array) FormBuilder::forBuilder($formId), 200);
+    }
 
-        self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'message' => __('Fields saved.', 'scouting-forms')], 200);
+    public static function getFormBuilder(WP_REST_Request $request): WP_REST_Response {
+        $data = FormBuilder::forBuilder((int) $request->get_param('id'));
+        if (!$data) {
+            return new WP_REST_Response(['message' => __('Form not found.', 'scouting-forms')], 404);
+        }
+        $data['can_delete'] = Permissions::can('delete_forms');
+        return new WP_REST_Response($data, 200);
+    }
+
+    public static function createAction(WP_REST_Request $request): WP_REST_Response {
+        $formId = (int) $request->get_param('id');
+        $type = (string) ($request->get_json_params()['type'] ?? '');
+        $id = FormBuilder::createAction($formId, $type);
+        if (!$id) {
+            return new WP_REST_Response(['message' => __('This action cannot be added here.', 'scouting-forms')], 400);
+        }
+        return new WP_REST_Response(['success' => true, 'id' => $id] + (array) FormBuilder::forBuilder($formId), 201);
+    }
+
+    public static function updateAction(WP_REST_Request $request): WP_REST_Response {
+        $post = self::actionPost((int) $request->get_param('id'));
+        if (!$post) {
+            return new WP_REST_Response(['message' => __('Action not found.', 'scouting-forms')], 404);
+        }
+        $result = FormBuilder::saveAction($post, (array) $request->get_json_params());
+        if (!$result['ok']) {
+            return new WP_REST_Response(['success' => false, 'message' => $result['message'], 'errors' => (object) $result['errors']], 422);
+        }
+        return new WP_REST_Response(['success' => true, 'message' => $result['message']] + (array) FormBuilder::forBuilder((int) $post->menu_order), 200);
+    }
+
+    public static function deleteAction(WP_REST_Request $request): WP_REST_Response {
+        $post = self::actionPost((int) $request->get_param('id'));
+        if (!$post || !in_array($post->post_excerpt, FormBuilder::EDITABLE_ACTIONS, true)) {
+            return new WP_REST_Response(['message' => __('This action cannot be deleted here.', 'scouting-forms')], 404);
+        }
+        // To the trash, so it can be restored
+        wp_trash_post($post->ID);
+        FormBuilder::purgeCache();
+        return new WP_REST_Response(['success' => true] + (array) FormBuilder::forBuilder((int) $post->menu_order), 200);
+    }
+
+    private static function actionPost(int $id): ?\WP_Post {
+        $post = get_post($id);
+        return $post && $post->post_type === 'frm_form_actions' && in_array($post->post_status, ['publish', 'draft'], true) ? $post : null;
     }
 
     public static function deleteField(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
         $fieldId = (int) $request->get_param('id');
-        if (!FormRepository::field($fieldId)) {
+        $field = FormRepository::field($fieldId);
+        if (!$field) {
             return new WP_REST_Response(['message' => __('Field not found.', 'scouting-forms')], 404);
         }
-        $wpdb->delete($wpdb->prefix . 'frm_fields', ['id' => $fieldId], ['%d']);
+        $blocker = FormBuilder::deleteBlocker($field, [], FormBuilder::themeFieldIds());
+        if ($blocker !== '') {
+            return new WP_REST_Response(['message' => $blocker], 409);
+        }
+        FormBuilder::deleteFieldWithAnswers($field);
         self::purgeCache();
         return new WP_REST_Response(['success' => true, 'message' => __('Field deleted.', 'scouting-forms')], 200);
     }
@@ -300,11 +296,12 @@ class ApiController {
             return current_user_can('unfiltered_html') ? $value : wp_kses_post($value);
         };
 
-        wp_update_post(wp_slash([
-            'ID' => $viewId,
-            'post_title' => sanitize_text_field((string) ($data['title'] ?? $post->post_title)),
-            'post_content' => $html($data['content'] ?? $post->post_content),
-        ]));
+        $title = sanitize_text_field((string) ($data['title'] ?? $post->post_title));
+        $content = $html($data['content'] ?? $post->post_content);
+        // Only a real change is written (and dated)
+        if ($title !== $post->post_title || $content !== $post->post_content) {
+            wp_update_post(wp_slash(['ID' => $viewId, 'post_title' => $title, 'post_content' => $content]));
+        }
         update_post_meta($viewId, 'frm_form_id', (int) ($data['form_id'] ?? get_post_meta($viewId, 'frm_form_id', true)));
         $show = (string) ($data['show_count'] ?? 'all');
         update_post_meta($viewId, 'frm_show_count', in_array($show, ['all', 'one', 'dynamic', 'calendar'], true) ? $show : 'all');
@@ -317,12 +314,35 @@ class ApiController {
         $options['before_content'] = $html($data['before_content'] ?? ($options['before_content'] ?? ''));
         $options['after_content'] = $html($data['after_content'] ?? ($options['after_content'] ?? ''));
         $options['empty_msg'] = $html($data['empty_msg'] ?? ($options['empty_msg'] ?? ''));
-        $options['page_size'] = isset($data['page_size']) && $data['page_size'] !== '' ? absint($data['page_size']) : ($options['page_size'] ?? '');
-        $options['limit'] = isset($data['limit']) && $data['limit'] !== '' ? absint($data['limit']) : ($options['limit'] ?? '');
-        $clean = static fn($list) => array_values(array_map(static fn($v) => sanitize_text_field((string) $v), array_filter((array) $list, 'is_scalar')));
-        foreach (['where', 'where_is', 'where_val', 'order_by', 'order'] as $key) {
-            if (isset($data[$key])) {
-                $options[$key] = $clean($data[$key]);
+        // A blank number removes paging / the limit
+        foreach (['page_size', 'limit'] as $key) {
+            if (array_key_exists($key, $data) && is_scalar($data[$key])) {
+                $new = trim((string) $data[$key]) === '' ? '' : absint($data[$key]);
+                // "25" stored by Formidable and 25 sent back are the same setting
+                if ((string) $new !== (string) ($options[$key] ?? '')) {
+                    $options[$key] = $new;
+                }
+            }
+        }
+        // Filter and sort rows: only the view form's fields / entry columns and known operators
+        if (isset($data['where']) || isset($data['order_by'])) {
+            $rules = FormBuilder::cleanViewRules([
+                'where' => $data['where'] ?? ($options['where'] ?? []),
+                'where_is' => $data['where_is'] ?? ($options['where_is'] ?? []),
+                'where_val' => $data['where_val'] ?? ($options['where_val'] ?? []),
+                'order_by' => $data['order_by'] ?? ($options['order_by'] ?? []),
+                'order' => $data['order'] ?? ($options['order'] ?? []),
+            ], (int) get_post_meta($viewId, 'frm_form_id', true));
+            foreach ($rules as $key => $list) {
+                // Unchanged rules keep Formidable's stored form (its lists are numbered from 1)
+                $stored = array_values(array_map('strval', array_filter((array) ($options[$key] ?? []), 'is_scalar')));
+                if ($stored === $list && (isset($options[$key]) || $list !== [])) {
+                    continue;
+                }
+                if (!isset($options[$key]) && $list === []) {
+                    continue;
+                }
+                $options[$key] = $list;
             }
         }
         update_post_meta($viewId, 'frm_options', $options);

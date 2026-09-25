@@ -172,6 +172,7 @@ class AdminMenu {
                 'can'         => [
                     'viewForms'     => Permissions::can('view_forms'),
                     'editForms'     => Permissions::can('edit_forms'),
+                    'deleteForms'   => Permissions::can('delete_forms'),
                     'views'         => Permissions::can('edit_displays'),
                     'viewEntries'   => Permissions::can('view_entries'),
                     'createEntries' => Permissions::can('create_entries'),

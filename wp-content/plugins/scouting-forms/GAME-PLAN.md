@@ -205,7 +205,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       publish posts (administrators, managers, authors, historians, regional coordinators); others
       (contributors, index contributors, subscribers) choose Draft or Pending Review, and the server
       saves their post as pending whatever is sent. See Open questions.
-- [ ] 4.4 Fire `frm_after_create_entry` / `frm_after_update_entry` so the theme's existing hooks run
+- [x] 4.4 (2026-09-25, done by 7.3) Fire `frm_after_create_entry` / `frm_after_update_entry` so the theme's existing hooks run
       (depends on Phase 7 compatibility work). The theme's PostEntry hook turns the post's state/council
       IDs into the abbreviations and slugs the theme reads (e.g. state "IL", council JSON list).
 
@@ -223,7 +223,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - [x] 5.2 (2026-09-25) Edit Account Info: update user fields/meta, avatar upload, password change, captcha.
       One-entry-per-user forms (22, 34) open the member's own entry; account fields show the account's
       current details (email, names, meta), as the add-on does.
-- [ ] 5.3 Registration/admin emails; brute-force/rate limiting; capability checks for Edit Users.
+- [x] 5.3 (2026-09-25; Edit Users done by 7.3 `Compat\EditUsers`) Registration/admin emails; brute-force/rate limiting; capability checks for Edit Users.
       Done: registration emails (welcome to the member, notice to the admins), login and reset-password
       pages (`Accounts\AccountPages`: [sm_login], [sm_reset_password], and [frm-login]/[frm-reset-password]
       plus WordPress's login/lost-password/reset screens sent to pages 229/842 once the add-on is gone;
@@ -284,8 +284,25 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       Verified: security suite 26/26 (access by role for show and save, Edit Users refused through the
       form and the admin API with no role changed, shortcodes in posts, stored injection through a view,
       custom roles, rate limit) and every earlier suite.
-- [ ] 6.4 Builder parity for the settings the site actually uses (fields, options, conditional
-      logic, actions, views); rebuild `assets/builder` with Vite.
+- [x] 6.4 (2026-09-25) Builder parity for the settings the site actually uses (fields, options, conditional
+      logic, actions, views); `assets/builder` rebuilt with Vite (npm audit: 0).
+      `Rest\FormBuilder` (builder data, field save that writes only what changed and keeps settings the
+      builder cannot edit, safe delete refused when the theme's _FID constants / logic / Dynamic fields /
+      views / actions use the field, email + confirmation actions, view filter/sort validation), routes
+      `GET forms/{id}/builder`, `POST forms/{id}/actions`, `POST|DELETE actions/{id}`; Vue `FieldSettings`,
+      `ChoicesEditor`, `LogicRows`, `ActionsPanel`, rewritten `FormEditor` / `ViewEditor`.
+      Fixed while testing: a save without edits rewrote field order numbers, CSS classes, labels with a
+      stray space, section membership, blank first choices, view filter lists (Formidable numbers them
+      from 1) and paging, and dated every action/view; the email From "Name <address>" lost its address
+      (cleaned as HTML; now kept on one line, which is what stops extra headers); actions that run on
+      Formidable Registration's user_registration event were switched to "create"; a request listing
+      only some fields reordered the whole form; deleting a new field removed old answers of a
+      long-deleted field that had the same ID (only the field's own form's answers are removed now).
+      Verified: all 23 forms, all 14 views and all 33 email/confirmation actions load and save without
+      edits with nothing changed (also through the UI in the browser); a label/placeholder edit saves only
+      that and shows on the form; new field added and deleted; theme and in-use fields cannot be deleted;
+      bad keys, types, logic targets/operators refused with nothing saved; email action created, saved,
+      recipient kept on one line, trashed; historians and subscribers refused (builder 27/27, REST 22/22).
 
 ### Phase 7: Formidable compatibility layer (only loads when Formidable is inactive)
 - [x] 7.1 (2026-09-25) Catalogue. The theme (scoutingmemories) calls: FrmEntry::getAll/getOne/get_meta,
@@ -397,3 +414,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-25: 6.6 done (legacy shortcodes → real forms, old handlers removed). Full regression standalone: all suites pass (camp 16, entry actions 13, edit 19, index 4/4, field value 11, post action 22, registration 25, account pages 20, REST 21, security 26, theme hooks 34, uploads 14, legacy 13, search forms), views 97/97 (+8 custom-role differences).
 - 2026-09-25: Archive Tools "update end dates" now accepts only a real year (it writes into every active council/camp/lodge). Incident: my test of that check included a value that cleans to a valid year, so the tool ran locally and set 609 active end dates to 2026; first "restored" from E:/WEB/wp_live_backup.sql, which was wrong (the local copy already had 2026 there before the incident, per the morning's Formidable snapshot); re-applied 2026 to the same 609 rows, and the views again match that snapshot exactly (105/105). A full comparison of the Formidable tables with that backup then showed no other changes from testing (entries/values/fields/forms); the only remaining differences are accented and non-Latin characters shown as "?" in the local copy, left by the original import (entry dates unchanged, live unaffected).
 - 2026-09-25: Owner decisions: Formidable stays off locally; regional coordinators may edit everyone's councils/lodges/camps (`Permissions::EDIT_OTHERS`); publishing stays limited to people who can publish. Checks: regional 22/22 (edit links, actual edit, child rows, other roles unchanged, Post Status choices per role, forged publish refused); views vs Formidable snapshot 105/105 identical (the regional coordinator now gets the same Edit links Formidable showed); edit 19, entry actions 13, post action 22, security 26, theme hooks 34.
+- 2026-09-25: **6.4 done** (builder reviewed, tested and fixed; see Phase 6). Incidents, all restored and verified against E:/WEB/wp_live_backup.sql: my REST test's one-field save had reordered Add a Camp (#11) twice (Camp Name moved to the top; restored, and the builder no longer moves anything for such a request); deleting a test field removed two old Contact Us answers left by a long-deleted field 585 (restored; fixed); two actions and one view were re-dated by UI saves (restored). All test suites pass; views match Formidable's output (105/105).

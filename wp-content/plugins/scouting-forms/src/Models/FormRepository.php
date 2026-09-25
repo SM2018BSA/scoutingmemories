@@ -78,6 +78,7 @@ class FormRepository {
             'id' => (int) $row->id,
             'key' => (string) $row->field_key,
             'form_id' => (int) $row->form_id,
+            'field_order' => (int) $row->field_order,
             'name' => (string) $row->name,
             'description' => (string) $row->description,
             'type' => (string) $row->type,

@@ -44,7 +44,7 @@ const ajaxUrl = adminUrl + 'admin-ajax.php';
 
 // What this person may do (the REST API checks the same capabilities)
 const can = {
-  viewForms: true, editForms: true, views: true, viewEntries: true,
+  viewForms: true, editForms: true, deleteForms: false, views: true, viewEntries: true,
   createEntries: true, editEntries: true, deleteEntries: true,
   ...(window.smBuilderConfig?.can || {})
 };
@@ -96,6 +96,23 @@ const formsLoading = ref(false);
 const activeFormId = ref<number | null>(null);
 const activeFormData = ref<any | null>(null);
 const formSaving = ref(false);
+const formErrors = ref<Record<string, string>>({});
+const actionErrors = ref<Record<string, Record<string, string>>>({});
+const actionSaving = ref<number | null>(null);
+const formEditorRef = ref<any>(null);
+
+// The builder's copy of a form: fields carry a "ref" the server uses to point at problems
+function useBuilderData(res: any) {
+  activeFormData.value = {
+    form: res.form,
+    fields: (res.fields || []).map((f: any) => ({ ...f, ref: String(f.id) })),
+    actions: res.actions || [],
+    pages: res.pages || [],
+    operators: res.operators || [],
+    new_field_types: res.new_field_types || [],
+    can_delete: res.can_delete ?? activeFormData.value?.can_delete ?? can.deleteForms
+  };
+}
 
 async function loadForms() {
   formsLoading.value = true;
@@ -112,11 +129,10 @@ async function loadForms() {
 async function selectForm(formId: number) {
   try {
     formsLoading.value = true;
-    const res = await apiFetch(`/forms/${formId}`);
-    activeFormData.value = {
-      ...res.form,
-      fields: res.fields || []
-    };
+    const res = await apiFetch(`/forms/${formId}/builder`);
+    formErrors.value = {};
+    actionErrors.value = {};
+    useBuilderData(res);
     activeFormId.value = formId;
   } catch (err: any) {
     showToast(`Failed to load form #${formId}: ${err.message}`, 'error');
@@ -125,32 +141,84 @@ async function selectForm(formId: number) {
   }
 }
 
-async function saveForm(payload: { form: any; fields: any[] }) {
+async function saveForm(payload: { form: any; fields: any[]; deleted: number[] }) {
   formSaving.value = true;
+  formErrors.value = {};
   try {
-    // 1. Update form settings
+    // 1. Form settings
     await apiFetch(`/forms/${payload.form.id}`, {
       method: 'POST',
       body: JSON.stringify({
         name: payload.form.name,
         form_key: payload.form.form_key,
+        description: payload.form.description,
         submit_value: payload.form.submit_value,
-        success_msg: payload.form.success_msg
+        edit_value: payload.form.edit_value
       })
     });
 
-    // 2. Save fields
-    await apiFetch(`/forms/${payload.form.id}/fields`, {
+    // 2. Fields: all checked by the server before anything is written
+    const res = await apiFetch(`/forms/${payload.form.id}/fields`, {
       method: 'POST',
-      body: JSON.stringify({ fields: payload.fields })
+      body: JSON.stringify({ fields: payload.fields, deleted: payload.deleted })
     });
-
-    showToast('Form and fields saved successfully!');
+    useBuilderData(res);
+    formEditorRef.value?.afterSave();
+    showToast('Form saved.');
     await loadForms();
   } catch (err: any) {
-    showToast(`Error saving form: ${err.message}`, 'error');
+    formErrors.value = err.errors || { form: err.message };
+    showToast(err.errors ? 'Nothing was saved: some fields need attention.' : `Error saving form: ${err.message}`, 'error');
   } finally {
     formSaving.value = false;
+  }
+}
+
+// Actions keep their open/closed state; only the saved one is replaced
+function mergeActions(res: any) {
+  if (activeFormData.value) activeFormData.value.actions = res.actions || [];
+}
+
+async function saveAction(action: any) {
+  actionSaving.value = action.id;
+  actionErrors.value = { ...actionErrors.value, [action.id]: {} };
+  try {
+    const res = await apiFetch(`/actions/${action.id}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: action.name, active: action.active, event: action.event,
+        settings: action.settings, conditions: action.conditions
+      })
+    });
+    mergeActions(res);
+    showToast(`"${action.name}" saved.`);
+  } catch (err: any) {
+    actionErrors.value = { ...actionErrors.value, [action.id]: err.errors || {} };
+    showToast(err.message || 'Error saving the action', 'error');
+  } finally {
+    actionSaving.value = null;
+  }
+}
+
+async function createAction(type: string) {
+  if (!activeFormId.value) return;
+  try {
+    const res = await apiFetch(`/forms/${activeFormId.value}/actions`, { method: 'POST', body: JSON.stringify({ type }) });
+    mergeActions(res);
+    showToast('Action added (inactive until you switch it on and save).');
+  } catch (err: any) {
+    showToast(`Error adding the action: ${err.message}`, 'error');
+  }
+}
+
+async function removeAction(action: any) {
+  if (!confirm(`Move the action "${action.name}" to the trash?`)) return;
+  try {
+    const res = await apiFetch(`/actions/${action.id}`, { method: 'DELETE' });
+    mergeActions(res);
+    showToast('Action moved to the trash.');
+  } catch (err: any) {
+    showToast(`Error: ${err.message}`, 'error');
   }
 }
 
@@ -438,10 +506,19 @@ onMounted(async () => {
       <TabsContent value="forms" class="focus:outline-none">
         <div v-if="activeFormId && activeFormData">
           <FormEditor
-            :form="activeFormData"
+            ref="formEditorRef"
+            :key="activeFormId"
+            :builder="activeFormData"
             :saving="formSaving"
+            :errors="formErrors"
+            :action-errors="actionErrors"
+            :action-saving="actionSaving"
+            :can-edit="can.editForms"
             @back="activeFormId = null; activeFormData = null"
             @save="saveForm"
+            @save-action="saveAction"
+            @create-action="createAction"
+            @remove-action="removeAction"
           />
         </div>
         <div v-else>
@@ -458,6 +535,7 @@ onMounted(async () => {
       <TabsContent value="views" class="focus:outline-none">
         <div v-if="activeViewId && activeViewData">
           <ViewEditor
+            :key="activeViewId"
             :view="activeViewData"
             :available-fields="availableFields"
             :saving="viewSaving"
