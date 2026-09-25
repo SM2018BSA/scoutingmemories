@@ -2089,29 +2089,6 @@
 
             body.appendChild(actionsRow);
 
-            var embedBox = el('div', 'card bg-body-tertiary border mb-2');
-            var embedHeader = el('div', 'card-header py-1 px-3 d-flex align-items-center justify-content-between');
-            embedHeader.appendChild(el('span', 'small fw-bold text-muted', 'Embed code (HTML link with image)'));
-            
-            var copyEmbedBtn = el('button', 'btn btn-sm btn-link p-0 text-decoration-none small', 'Copy HTML');
-            embedHeader.appendChild(copyEmbedBtn);
-            embedBox.appendChild(embedHeader);
-
-            var embedBody = el('div', 'card-body p-2');
-            var htmlCode = '<a href="' + escHtml(info.url) + '" target="_blank" rel="noopener">\n  <img src="' + escHtml(name) + '" alt="' + escHtml(info.title + ' - ' + describePage(num)) + '">\n</a>';
-            var codePre = el('pre', 'bg-body p-2 border rounded small user-select-all mb-0', htmlCode);
-            codePre.style.whiteSpace = 'pre-wrap';
-            codePre.style.wordBreak = 'break-all';
-            codePre.style.fontSize = '0.8rem';
-            embedBody.appendChild(codePre);
-            embedBox.appendChild(embedBody);
-
-            copyEmbedBtn.addEventListener('click', function() {
-                copyWithFeedback(htmlCode, null, 'Embed HTML code');
-            });
-
-            body.appendChild(embedBox);
-
             openDialog('Share & Cite Clipped Image', body);
         }
 
