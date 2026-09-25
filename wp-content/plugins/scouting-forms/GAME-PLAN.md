@@ -123,15 +123,15 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 
 ### Phase 1: Contact Us (form #2): the pattern for everything else
 - Findings from the Compare tool (2026-09-24), to fix in 1.1–1.3: description HTML is escaped (shows `<p>` as text); captcha field renders as a plain text input; no honeypot field (Formidable renders one: "If you are human, leave this field blank."); plugin wraps the form in a card with a small title, Formidable shows a large heading and no card; plugin marks 4 fields required while Formidable shows no markers (check field `required` + style settings); Formidable submit is `btn btn-secondary` coloured by its frm_style (light blue), plugin uses site green `btn-scout` (see Open questions).
-- [ ] 1.1 Render text, email, textarea, captcha, submit exactly like Formidable (labels, order,
+- [x] 1.1 (2026-09-25) Render text, email, textarea, captcha, submit exactly like Formidable (labels, order,
       required marks, descriptions, placeholders, default values).
-- [ ] 1.2 Validation parity (required, email format, max length) with Formidable's messages.
-- [ ] 1.3 Spam protection: honeypot + minimum-time check always; if Formidable has reCAPTCHA/hCaptcha/
+- [x] 1.2 (2026-09-25) Validation parity (required, email format, max length) with Formidable's messages.
+- [x] 1.3 (2026-09-25) Spam protection: honeypot + minimum-time check always; if Formidable has reCAPTCHA/hCaptcha/
       Turnstile keys configured, verify tokens server-side with the same keys.
-- [ ] 1.4 Actions engine (first two action types): `email` (to/cc/bcc/from/reply-to/subject/body,
+- [x] 1.4 (2026-09-25) Actions engine (first two action types): `email` (to/cc/bcc/from/reply-to/subject/body,
       `[default-message]`, field shortcodes `[123]`, `[sitename]`, `[admin_email]`, conditions) and
       `on_submit` (message / redirect / page).
-- [ ] 1.5 Saved entry identical in structure to a Formidable-created one (item_key, name, ip,
+- [x] 1.5 (2026-09-25) Saved entry identical in structure to a Formidable-created one (item_key, name, ip,
       user_id, is_draft, metas), verified with the Compare tool.
 
 ### Phase 2: Views (12 frm_display posts)
@@ -193,7 +193,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - [ ] 8.3 Re-activate Formidable locally afterwards; record results here.
 
 ### Phase 9: Handoff (the owner decides; Claude does not publish)
-- [ ] 9.1 Release notes + a go-live checklist (what to verify on live, how to roll back:
+- [ ] 9.1 Release notes + a go-live checklist (must include: submit Contact Us on live once to confirm the reCAPTCHA server check, which cannot run on localhost) (what to verify on live, how to roll back:
       reactivate Formidable).
 - [ ] 9.2 Owner reviews, moves the plugin to `master` when ready and publishes with the dashboard.
 
@@ -209,3 +209,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-24: 0.3 + 0.4 done. New `Support\Environment` (local detection), `Support\Mailer` (all plugin mail goes through it; logged, never sent, on local), `Support\TestData` (smtest- keys, `_sm_test_data` flag, cleanup) and `Models\EntryRepository` (single entry-creation path; the 3 old copies in DynamicFormRenderer, IndexEntityForms and ApiController now use it). Admin page Scouting Forms > Test Tools (local only). Also fixed: hard-coded `wp_` table prefix and unescaped shortcode attributes in DynamicFormRenderer. Verified: a real `[sm_form id=2]` submission saved as `smtest-contact-form-…` with 4 metas; mail logged not sent; cleanup removed 2 entries + 1 post; DB back to 0 test rows.
 - 2026-09-24: 0.5 + 0.6 done. `Tools\CompareTool`: `/?sm_compare=form&id=N`, `view&id=N`, `list`; local copies only; admins, or a signed 1-hour link from `CompareTool::previewUrl()` (no signature/bad signature = 403). `Ui\ThemeClasses` now returns Bootstrap 5.3 classes (same method names); new `assets/css/forms-front.css` scoped to `.sm-forms` (site-green `btn-scout`, required marker, focus colours, grids, thumbnails); all inline Tailwind removed from DynamicFormRenderer/DynamicViewRenderer; Tailwind registered only in wp-admin. Verified on Contact Us: Bootstrap `form-control` fields, forms-front.css loaded, no Tailwind on the public site.
 - 2026-09-24: 0.7 done. 39 plugin PHP files pass `php -l` (PHP 8.2); rendering all 22 forms, 12 views and the 5 dashboard shortcodes as visitor and as admin with E_ALL gives no warnings/notices/deprecations from plugin code. Leftovers noted for Phase 6: hard-coded counts in admin menu labels and the guide notice ("23 forms, 266 fields", "Councils (2,323)"), and `assets/css/tailwindcss.css` duplicating `assets/builder/builder.css`. **Phase 0 complete.**
+- 2026-09-25: **Phase 1 complete (Contact Us).** New pipeline: `Models\FormRepository`, `Forms\Rendering\{FieldRenderer,FormTemplate,DefaultValues}` (fields built from each field's Formidable `custom_html`, form from `before_html`/`submit_html`), `Forms\Submission\{Validator,SpamGuard}`, `Forms\Logic\Conditions`, `Actions\{ActionRunner,EmailAction,EntryShortcodes}`, `Support\FormidableSettings`. `DynamicFormRenderer` rewritten: submissions handled on `template_redirect` (so redirects work), then nonce, spam check, validation, uploads, EntryRepository, actions, and the on_submit message/redirect/page. EntryRepository now saves Formidable's exact shape: 5-char key, name from first filled field, browser/referrer JSON in description, no IP (Formidable `no_ips` is on), `unique_id` meta under field 0. Verified locally: Formidable's own messages (blank, invalid email), honeypot/too-fast/bad-nonce refused, valid entry saved, email logged with To/From/Bcc/subject/body per the action, success message shown and form hidden (show_form off), same labels/IDs/title/description/reCAPTCHA as Formidable in the Compare tool, all 22 forms render with no PHP warnings, test data cleaned (0 left). Not testable locally: reCAPTCHA server verification (Google rejects localhost); added to 9.1. Known gaps left for later phases: sections/page breaks (Phase 3), `wppost`/`register` actions (Phases 4/5), IndexEntityForms still uses its own name-based keys (revisit in Phase 3).

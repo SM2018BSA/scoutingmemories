@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Models;
 
+use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Support\TestData;
 
 /**
@@ -26,13 +27,18 @@ class EntryRepository {
 
         $userId = isset($args['user_id']) ? (int) $args['user_id'] : get_current_user_id();
         $now = current_time('mysql');
-        $baseKey = $args['key'] ?? ('entry-' . wp_generate_password(8, false, false));
+        $baseKey = $args['key'] ?? self::uniqueKey();
+
+        // Formidable stores a unique_id under field 0 with every entry
+        if (!array_key_exists(0, $metas)) {
+            $metas[0] = ['unique_id' => wp_generate_password(20, false, false)];
+        }
 
         $inserted = $wpdb->insert($wpdb->prefix . 'frm_items', [
             'item_key' => TestData::itemKey($baseKey),
             'name' => (string) ($args['name'] ?? ''),
-            'description' => '',
-            'ip' => isset($args['ip']) ? (string) $args['ip'] : self::clientIp(),
+            'description' => self::browserInfo(),
+            'ip' => isset($args['ip']) ? (string) $args['ip'] : (FormidableSettings::get('no_ips') ? '' : self::clientIp()),
             'form_id' => $formId,
             'post_id' => (int) ($args['post_id'] ?? 0),
             'user_id' => $userId,
@@ -59,6 +65,74 @@ class EntryRepository {
 
         self::purgeCaches($formId);
         return $entryId;
+    }
+
+    /**
+     * Basic entry details (for shortcodes like [id], [key], [ip], [created-at]).
+     *
+     * @return array<string, mixed>
+     */
+    public static function find(int $entryId): array {
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, item_key, form_id, user_id, post_id, ip, created_at, updated_at FROM {$wpdb->prefix}frm_items WHERE id = %d",
+            $entryId
+        ), ARRAY_A);
+        if (!$row) {
+            return [];
+        }
+        $row['key'] = $row['item_key'];
+        return $row;
+    }
+
+    /**
+     * Entry name the way Formidable sets it: the first filled-in text-like field of the entry.
+     *
+     * @param array<int, array<string, mixed>> $fields
+     * @param array<int, mixed> $values
+     */
+    public static function nameFromValues(array $fields, array $values, string $fallback = ''): string {
+        foreach ($fields as $field) {
+            if (!in_array($field['type'], ['text', 'email', 'textarea', 'select', 'radio', 'number', 'phone', 'url', 'hidden'], true)) {
+                continue;
+            }
+            $value = $values[(int) $field['id']] ?? '';
+            $value = is_array($value) ? implode(', ', $value) : (string) $value;
+            if (trim($value) !== '') {
+                return mb_substr(wp_strip_all_tags($value), 0, 255);
+            }
+        }
+        return $fallback;
+    }
+
+    /**
+     * Five lowercase letters/digits, unique among entry keys (Formidable's format).
+     */
+    private static function uniqueKey(): string {
+        global $wpdb;
+        do {
+            $key = strtolower(wp_generate_password(5, false, false));
+            $exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT 1 FROM {$wpdb->prefix}frm_items WHERE item_key IN (%s, %s) LIMIT 1",
+                $key,
+                TestData::KEY_PREFIX . $key
+            ));
+        } while ($exists);
+        return $key;
+    }
+
+    /**
+     * Formidable keeps the browser and referring page in the entry description as JSON.
+     */
+    private static function browserInfo(): string {
+        $info = [
+            'browser' => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : '',
+            'referrer' => '',
+        ];
+        if (!FormidableSettings::get('no_referrer') && isset($_SERVER['HTTP_REFERER'])) {
+            $info['referrer'] = esc_url_raw(wp_unslash($_SERVER['HTTP_REFERER']));
+        }
+        return (string) wp_json_encode($info);
     }
 
     private static function clientIp(): string {

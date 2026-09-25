@@ -2,21 +2,33 @@
 
 namespace ScoutingMemories\Forms\Forms;
 
+use ScoutingMemories\Forms\Actions\ActionRunner;
+use ScoutingMemories\Forms\Actions\EntryShortcodes;
+use ScoutingMemories\Forms\Forms\Rendering\FormTemplate;
+use ScoutingMemories\Forms\Forms\Submission\SpamGuard;
+use ScoutingMemories\Forms\Forms\Submission\Validator;
 use ScoutingMemories\Forms\Models\EntryRepository;
+use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\TestData;
-use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
  * DynamicFormRenderer
  *
- * Dynamically renders and processes any Formidable/Scouting form from database tables.
- * Fully encapsulated with Tailwind CSS v4 via ThemeClasses.
- * Compliant with WP Engine hosting (media_handle_upload, object cache invalidation, no sessions).
+ * [sm_form id=X] (and [formidable id=X] once Formidable is gone): renders any Formidable form from
+ * Formidable's tables and handles its submission.
+ *
+ * Submissions are processed on template_redirect, before any output, so an on_submit action can
+ * redirect. The result (values, errors, success message) is kept for the shortcode to render.
+ * Pipeline: nonce -> SpamGuard -> Validator -> uploads -> EntryRepository -> ActionRunner.
  */
 class DynamicFormRenderer extends FormHandler {
 
+    /** @var array<int, array<string, mixed>> Submission results by form ID for this request */
+    private static array $results = [];
+
     public static function registerHooks(): void {
         add_shortcode('sm_form', [__CLASS__, 'renderShortcode']);
+        add_action('template_redirect', [__CLASS__, 'processSubmission'], 5);
 
         // Fallback for existing [formidable] content, only when Formidable itself is not loaded.
         // Checked late on init so plugin load order can't let us shadow Formidable's shortcode.
@@ -30,314 +42,182 @@ class DynamicFormRenderer extends FormHandler {
     /**
      * Fallback for [formidable id=X] or [formidable key=X]
      */
-    public static function renderFormidableFallback(array $atts = []): string {
-        return self::renderShortcode($atts);
+    public static function renderFormidableFallback($atts = []): string {
+        return self::renderShortcode(is_array($atts) ? $atts : []);
     }
 
     /**
-     * [sm_form id="X" title="true" description="true"]
+     * [sm_form id="X" title="1" description="1"]
      */
-    public static function renderShortcode(array $atts = []): string {
+    public static function renderShortcode($atts = []): string {
         $atts = shortcode_atts([
             'id'          => 0,
             'key'         => '',
             'title'       => 'false',
             'description' => 'false',
             'minimize'    => 'false',
-        ], $atts, 'sm_form');
+        ], is_array($atts) ? $atts : [], 'sm_form');
 
-        global $wpdb;
-        $formId = (int) $atts['id'];
-        $formKey = sanitize_title($atts['key']);
-
-        $form = null;
-        if ($formId > 0) {
-            $form = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}frm_forms WHERE id = %d",
-                $formId
-            ));
-        } elseif (!empty($formKey)) {
-            $form = $wpdb->get_row($wpdb->prepare(
-                "SELECT * FROM {$wpdb->prefix}frm_forms WHERE form_key = %s",
-                $formKey
-            ));
-        }
-
+        $form = FormRepository::find((int) $atts['id'], sanitize_title((string) $atts['key']));
         if (!$form) {
-            return '<!-- Scouting Forms: form not found (ID: ' . (int) $formId . ', key: ' . esc_html($formKey) . ') -->';
+            return '<!-- Scouting Forms: form not found (ID: ' . (int) $atts['id'] . ', key: ' . esc_html((string) $atts['key']) . ') -->';
         }
 
-        $formId = (int) $form->id;
-
-        // Process POST submission if submitted for this form
-        $submitNotice = '';
-        if (
-            (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST') &&
-            isset($_POST['sm_form_id']) &&
-            (int)$_POST['sm_form_id'] === $formId
-        ) {
-            $submitNotice = self::handleFormSubmission($form);
-        }
-
-        // Fetch fields
-        $fields = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}frm_fields WHERE form_id = %d ORDER BY field_order ASC, id ASC",
-            $formId
-        ));
-
-        return self::renderFormHtml($form, $fields, $atts, $submitNotice);
+        $truthy = ['1', 'true', 'yes'];
+        return FormTemplate::render(
+            $form,
+            FormRepository::fields($form['id']),
+            self::$results[$form['id']] ?? ['values' => [], 'errors' => []],
+            [
+                'title' => in_array(strtolower((string) $atts['title']), $truthy, true),
+                'description' => in_array(strtolower((string) $atts['description']), $truthy, true),
+            ]
+        );
     }
 
     /**
-     * Render the complete form HTML
+     * Handle a POST from a plugin-rendered form (runs on template_redirect).
      */
-    private static function renderFormHtml(object $form, array $fields, array $atts, string $submitNotice = ''): string {
-        $showTitle = in_array(strtolower($atts['title']), ['1', 'true', 'yes'], true);
-        $showDesc = in_array(strtolower($atts['description']), ['1', 'true', 'yes'], true);
+    public static function processSubmission(): void {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || empty($_POST['sm_form_id'])) {
+            return;
+        }
+        $form = FormRepository::find(absint($_POST['sm_form_id']));
+        if (!$form) {
+            return;
+        }
+        self::$results[$form['id']] = self::handle($form);
+    }
 
-        wp_enqueue_style('sm-forms-front');
-        $html = '<div class="' . ThemeClasses::SCOPE . ' sm-form-container ' . ThemeClasses::card() . '">';
+    /**
+     * @param array<string, mixed> $form
+     * @return array<string, mixed> State for FormTemplate::render()
+     */
+    public static function handle(array $form): array {
+        $fields = FormRepository::fields($form['id']);
+        $posted = isset($_POST['item_meta']) && is_array($_POST['item_meta']) ? wp_unslash($_POST['item_meta']) : [];
 
-        if ($showTitle && !empty($form->name)) {
-            $html .= '<div class="' . ThemeClasses::cardHeader() . '">';
-            $html .= '<h3 class="' . ThemeClasses::cardTitle() . '">' . esc_html($form->name) . '</h3>';
-            $html .= '</div>';
+        $nonce = isset($_POST['_sm_form_nonce']) ? sanitize_text_field(wp_unslash($_POST['_sm_form_nonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'sm_submit_form_' . $form['id'])) {
+            return ['values' => [], 'errors' => [], 'form_error' => __('Security check failed. Please refresh the page and try again.', 'scouting-forms')];
         }
 
-        if ($showDesc && !empty($form->description)) {
-            $html .= '<p class="text-muted mb-4">' . esc_html($form->description) . '</p>';
+        $validated = Validator::validate($fields, $posted);
+        $spamError = SpamGuard::check((int) $form['id'], $fields);
+        if ($spamError !== '') {
+            return ['values' => $validated['values'], 'errors' => [], 'form_error' => $spamError];
         }
 
-        if (!empty($submitNotice)) {
-            $html .= $submitNotice;
+        $errors = $validated['errors'] + self::checkRequiredFiles($fields);
+        if ($errors) {
+            return ['values' => $validated['values'], 'errors' => $errors];
         }
 
-        $html .= '<form method="POST" action="" enctype="multipart/form-data" class="sm-form">';
-        $html .= wp_nonce_field('sm_submit_form_' . $form->id, '_sm_form_nonce', true, false);
-        $html .= '<input type="hidden" name="sm_form_id" value="' . esc_attr($form->id) . '" />';
+        $values = $validated['values'] + self::saveUploads($fields);
 
-        foreach ($fields as $field) {
-            $html .= self::renderFieldHtml($field);
+        $entryId = EntryRepository::create((int) $form['id'], $values, [
+            'name' => EntryRepository::nameFromValues($fields, $values, $form['name']),
+        ]);
+        if (!$entryId) {
+            return ['values' => $validated['values'], 'errors' => [], 'form_error' => __('Your submission could not be saved. Please try again.', 'scouting-forms')];
         }
 
-        // Check if there is already a submit button in fields, otherwise add default submit
-        $hasSubmit = false;
-        foreach ($fields as $f) {
-            if ($f->type === 'submit') {
-                $hasSubmit = true;
-                break;
+        $context = [
+            'form' => $form,
+            'fields' => $fields,
+            'values' => $values,
+            'entry' => EntryRepository::find($entryId),
+        ];
+        $actions = ActionRunner::run('create', $context);
+
+        return self::afterSubmit($form, $context, $actions['on_submit']);
+    }
+
+    /**
+     * What to show after a successful submission: the on_submit action (or the form's own
+     * success settings) decides between a message, a redirect or another page's content.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, mixed>|null $onSubmit
+     * @return array<string, mixed>
+     */
+    private static function afterSubmit(array $form, array $context, ?array $onSubmit): array {
+        $settings = $onSubmit ?? $form['options'];
+        $action = (string) ($settings['success_action'] ?? 'message');
+        $replace = static function (string $text, bool $html) use ($context): string {
+            return EntryShortcodes::replace($text, $context['form'], $context['fields'], $context['values'], $context['entry'], $html);
+        };
+
+        if ($action === 'redirect' && !empty($settings['success_url'])) {
+            $url = esc_url_raw($replace((string) $settings['success_url'], false));
+            if ($url !== '') {
+                wp_redirect($url);
+                exit;
             }
         }
 
-        if (!$hasSubmit) {
-            $html .= '<div class="' . ThemeClasses::cardFooter() . '">';
-            $html .= '<button type="submit" class="' . ThemeClasses::button('scout', 'md') . '">';
-            $html .= esc_html__('Submit', 'scouting-forms');
-            $html .= '</button>';
-            $html .= '</div>';
+        if ($action === 'page' && !empty($settings['success_page_id'])) {
+            $page = get_post((int) $settings['success_page_id']);
+            if ($page && $page->post_status === 'publish') {
+                return ['values' => [], 'errors' => [], 'message' => apply_filters('the_content', $page->post_content), 'show_form' => false];
+            }
         }
 
-        $html .= '</form>';
-        $html .= '</div>';
+        $message = (string) ($settings['success_msg'] ?? '');
+        if ($message === '') {
+            $message = __('Your responses were successfully submitted. Thank you!', 'scouting-forms');
+        }
 
-        return $html;
+        return [
+            'values' => [],
+            'errors' => [],
+            'message' => wpautop(wp_kses_post(do_shortcode($replace($message, true)))),
+            'show_form' => !empty($settings['show_form']),
+        ];
     }
 
     /**
-     * Render an individual field based on type
+     * @param array<int, array<string, mixed>> $fields
+     * @return array<int, string>
      */
-    private static function renderFieldHtml(object $field): string {
-        $options = maybe_unserialize($field->field_options);
-        if (!is_array($options)) {
-            $options = [];
+    private static function checkRequiredFiles(array $fields): array {
+        $errors = [];
+        foreach ($fields as $field) {
+            if ($field['type'] !== 'file' || !$field['required']) {
+                continue;
+            }
+            $key = 'file_' . $field['id'];
+            if (empty($_FILES[$key]['name'])) {
+                $message = (string) ($field['field_options']['blank'] ?? '');
+                $errors[(int) $field['id']] = str_replace('[field_name]', $field['name'], $message !== '' ? $message : '[field_name] cannot be blank.');
+            }
         }
-
-        $fieldId = (int) $field->id;
-        $fieldName = "item_meta[{$fieldId}]";
-        $isRequired = !empty($field->required);
-        $defaultValue = $field->default_value ?? '';
-
-        // Hidden or User ID
-        if ($field->type === 'hidden') {
-            return '<input type="hidden" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" />';
-        }
-
-        if ($field->type === 'user_id') {
-            $userId = get_current_user_id();
-            return '<input type="hidden" name="' . esc_attr($fieldName) . '" value="' . esc_attr($userId) . '" />';
-        }
-
-        // Section Dividers
-        if ($field->type === 'divider') {
-            return '<div class="pt-3 pb-2 border-bottom mb-3"><h4 class="h6 mb-0">' . esc_html($field->name) . '</h4></div>';
-        }
-
-        if ($field->type === 'end_divider' || $field->type === 'break') {
-            return '<div class="my-3"></div>';
-        }
-
-        if ($field->type === 'html') {
-            return '<div class="small text-muted mb-3">' . wp_kses_post($field->description ?: $defaultValue) . '</div>';
-        }
-
-        if ($field->type === 'submit') {
-            $btnText = !empty($field->name) ? $field->name : __('Submit', 'scouting-forms');
-            return '<div class="' . ThemeClasses::cardFooter() . '"><button type="submit" class="' . ThemeClasses::button('scout', 'md') . '">' . esc_html($btnText) . '</button></div>';
-        }
-
-        // Standard Field Wrapper
-        $html = '<div class="mb-3">';
-        $html .= '<label class="' . ThemeClasses::label($isRequired) . '" for="field_' . esc_attr($fieldId) . '">';
-        $html .= esc_html($field->name);
-        $html .= '</label>';
-
-        switch ($field->type) {
-            case 'textarea':
-            case 'rte':
-                $html .= '<textarea id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" rows="4" class="' . ThemeClasses::textarea() . '"' . ($isRequired ? ' required' : '') . '>' . esc_textarea($defaultValue) . '</textarea>';
-                break;
-
-            case 'select':
-            case 'data':
-                $choices = maybe_unserialize($field->options);
-                $html .= '<select id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" class="' . ThemeClasses::select() . '"' . ($isRequired ? ' required' : '') . '>';
-                $html .= '<option value="">' . esc_html__('— Select —', 'scouting-forms') . '</option>';
-                if (is_array($choices)) {
-                    foreach ($choices as $choiceVal => $choiceLabel) {
-                        if (is_array($choiceLabel)) {
-                            $cVal = (string)($choiceLabel['value'] ?? ($choiceLabel['label'] ?? ''));
-                            $cText = (string)($choiceLabel['label'] ?? $cVal);
-                        } else {
-                            $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
-                            $cText = (string)$choiceLabel;
-                        }
-                        $selected = ($cVal === (string)$defaultValue) ? ' selected' : '';
-                        $html .= '<option value="' . esc_attr($cVal) . '"' . $selected . '>' . esc_html($cText) . '</option>';
-                    }
-                }
-                $html .= '</select>';
-                break;
-
-            case 'checkbox':
-                $choices = maybe_unserialize($field->options);
-                $html .= '<div class="mt-1">';
-                if (is_array($choices)) {
-                    foreach ($choices as $choiceVal => $choiceLabel) {
-                        if (is_array($choiceLabel)) {
-                            $cVal = (string)($choiceLabel['value'] ?? ($choiceLabel['label'] ?? ''));
-                            $cText = (string)($choiceLabel['label'] ?? $cVal);
-                        } else {
-                            $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
-                            $cText = (string)$choiceLabel;
-                        }
-                        $html .= '<label class="form-check form-check-inline">';
-                        $html .= '<input type="checkbox" name="' . esc_attr($fieldName) . '[]" value="' . esc_attr($cVal) . '" class="' . ThemeClasses::checkbox() . '" />';
-                        $html .= '<span class="form-check-label">' . esc_html($cText) . '</span>';
-                        $html .= '</label>';
-                    }
-                }
-                $html .= '</div>';
-                break;
-
-            case 'radio':
-                $choices = maybe_unserialize($field->options);
-                $html .= '<div class="mt-1">';
-                if (is_array($choices)) {
-                    foreach ($choices as $choiceVal => $choiceLabel) {
-                        if (is_array($choiceLabel)) {
-                            $cVal = (string)($choiceLabel['value'] ?? ($choiceLabel['label'] ?? ''));
-                            $cText = (string)($choiceLabel['label'] ?? $cVal);
-                        } else {
-                            $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
-                            $cText = (string)$choiceLabel;
-                        }
-                        $html .= '<label class="form-check form-check-inline">';
-                        $html .= '<input type="radio" name="' . esc_attr($fieldName) . '" value="' . esc_attr($cVal) . '" class="' . ThemeClasses::radio() . '"' . ($isRequired ? ' required' : '') . ' />';
-                        $html .= '<span class="form-check-label">' . esc_html($cText) . '</span>';
-                        $html .= '</label>';
-                    }
-                }
-                $html .= '</div>';
-                break;
-
-            case 'file':
-                $html .= '<input type="file" id="field_' . esc_attr($fieldId) . '" name="file_' . esc_attr($fieldId) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
-                break;
-
-            case 'email':
-                $html .= '<input type="email" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
-                break;
-
-            case 'number':
-                $html .= '<input type="number" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
-                break;
-
-            case 'date':
-                $html .= '<input type="date" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
-                break;
-
-            default:
-                $html .= '<input type="text" id="field_' . esc_attr($fieldId) . '" name="' . esc_attr($fieldName) . '" value="' . esc_attr($defaultValue) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
-                break;
-        }
-
-        if (!empty($field->description)) {
-            $html .= '<p class="' . ThemeClasses::helperText() . '">' . esc_html($field->description) . '</p>';
-        }
-
-        $html .= '</div>';
-        return $html;
+        return $errors;
     }
 
     /**
-     * Process form submission and save it as a Formidable entry (via EntryRepository)
+     * Upload files to the media library (WP Stateless offloads them on the live site).
+     *
+     * @param array<int, array<string, mixed>> $fields
+     * @return array<int, int> field_id => attachment ID
      */
-    private static function handleFormSubmission(object $form): string {
-        if (!isset($_POST['_sm_form_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_sm_form_nonce'])), 'sm_submit_form_' . $form->id)) {
-            return '<div class="' . ThemeClasses::alert('danger') . '">' . esc_html__('Security check failed. Please refresh and try again.', 'scouting-forms') . '</div>';
-        }
-
-        $userId = get_current_user_id();
-        $itemMetas = isset($_POST['item_meta']) && is_array($_POST['item_meta']) ? $_POST['item_meta'] : [];
-
-        // Handle file uploads using media_handle_upload() (WP Engine / WP Stateless compliant)
-        if (!empty($_FILES)) {
+    private static function saveUploads(array $fields): array {
+        $saved = [];
+        foreach ($fields as $field) {
+            $key = 'file_' . $field['id'];
+            if ($field['type'] !== 'file' || empty($_FILES[$key]['name'])) {
+                continue;
+            }
             require_once ABSPATH . 'wp-admin/includes/image.php';
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/media.php';
 
-            foreach ($_FILES as $inputKey => $fileData) {
-                if (strpos($inputKey, 'file_') === 0 && !empty($fileData['name'])) {
-                    $targetFieldId = (int) str_replace('file_', '', $inputKey);
-                    $attachId = media_handle_upload($inputKey, 0);
-                    if (!is_wp_error($attachId)) {
-                        TestData::markPost((int) $attachId);
-                        $itemMetas[$targetFieldId] = $attachId;
-                    }
-                }
+            $attachId = media_handle_upload($key, 0);
+            if (!is_wp_error($attachId)) {
+                TestData::markPost((int) $attachId);
+                $saved[(int) $field['id']] = (int) $attachId;
             }
         }
-
-        $cleanMetas = [];
-        foreach ($itemMetas as $fieldId => $fieldValue) {
-            $cleanMetas[(int) $fieldId] = is_array($fieldValue)
-                ? map_deep(wp_unslash($fieldValue), 'sanitize_textarea_field')
-                : sanitize_textarea_field(wp_unslash((string) $fieldValue));
-        }
-
-        $itemId = EntryRepository::create((int) $form->id, $cleanMetas, [
-            'key' => $form->form_key . '-' . wp_generate_password(8, false, false),
-            'name' => $form->name . ' Entry',
-            'user_id' => $userId,
-        ]);
-
-        if (!$itemId) {
-            return '<div class="' . ThemeClasses::alert('danger') . '">' . esc_html__('Failed to save entry. Please try again.', 'scouting-forms') . '</div>';
-        }
-
-        return '<div class="' . ThemeClasses::alert('success', 'd-flex align-items-center gap-2') . '">' .
-               '<i class="bi bi-check-circle-fill" aria-hidden="true"></i>' .
-               esc_html__('Your entry was saved successfully!', 'scouting-forms') .
-               '</div>';
+        return $saved;
     }
 }

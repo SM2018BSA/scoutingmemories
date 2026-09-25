@@ -76,3 +76,77 @@
     height: 3rem;
     object-fit: cover;
 }
+
+/* ---- Formidable-compatible form markup (FieldRenderer / FormTemplate) ---- */
+
+.sm-forms .frm_form_field {
+    margin-bottom: 1rem;
+}
+
+.sm-forms .frm_primary_label {
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+/* Formidable's "Bootstrap5" style: bold #B94A48 required marker */
+.sm-forms .frm_required {
+    color: #b94a48;
+    font-weight: 700;
+}
+
+/* Label position "none" / "hidden" keeps the label for screen readers only */
+.sm-forms .frm_none_container > .frm_primary_label,
+.sm-forms .frm_hidden_container > .frm_primary_label {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.sm-forms .frm_description {
+    font-size: 0.875em;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-top: 0.25rem;
+}
+
+.sm-forms .frm_form_title + .frm_description,
+.sm-forms fieldset > .frm_description {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.sm-forms .frm_error {
+    font-size: 0.875em;
+    color: var(--bs-danger, #dc3545);
+    margin-top: 0.25rem;
+}
+
+.sm-forms fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+
+.sm-forms .frm_screen_reader {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.sm-forms .frm_submit {
+    margin-top: 1rem;
+}
+
+/* Honeypot: invisible to people, still in the page for bots */
+.sm-forms .sm-hp {
+    position: absolute !important;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
