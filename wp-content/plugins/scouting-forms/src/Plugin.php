@@ -8,14 +8,11 @@ use ScoutingMemories\Forms\Admin\AdminMenu;
 use ScoutingMemories\Forms\Ajax\CascadingSearch;
 use ScoutingMemories\Forms\Ajax\DynamicFields;
 use ScoutingMemories\Forms\Compat\Compat;
-use ScoutingMemories\Forms\Forms\AccountProfileForm;
 use ScoutingMemories\Forms\Forms\DynamicFormRenderer;
 use ScoutingMemories\Forms\Forms\DynamicViewRenderer;
-use ScoutingMemories\Forms\Forms\IndexEntityForms;
 use ScoutingMemories\Forms\Forms\IndexingBrowser;
-use ScoutingMemories\Forms\Forms\MemoryForm;
+use ScoutingMemories\Forms\Forms\LegacyShortcodes;
 use ScoutingMemories\Forms\Forms\Modal;
-use ScoutingMemories\Forms\Forms\UserDefaultsForm;
 use ScoutingMemories\Forms\Forms\UserPostsView;
 use ScoutingMemories\Forms\Rest\ApiController;
 use ScoutingMemories\Forms\Support\Capabilities;
@@ -68,13 +65,10 @@ class Plugin {
         // 4. Frontend Forms & Shortcodes
         DynamicFormRenderer::registerHooks();
         DynamicViewRenderer::registerHooks();
-        AccountProfileForm::registerHooks();
-        UserDefaultsForm::registerHooks();
         UserPostsView::registerHooks();
         IndexingBrowser::registerHooks();
-        MemoryForm::registerHooks();
-        IndexEntityForms::registerHooks();
         Modal::registerHooks();
+        LegacyShortcodes::registerHooks();
 
         // 5. WP Admin Management
         if (is_admin()) {

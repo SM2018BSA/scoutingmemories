@@ -330,6 +330,16 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       not read by the theme (rich-text array output keeps HTML; typed brackets stay inert; getOne may
       include form_name where Formidable's cache left it out).
 
+- [x] 6.6 (2026-09-25) First-version shortcodes the 2026 theme uses ([sm_add_council_form],
+      [sm_add_camp_form], [sm_add_lodge_form], [sm_add_memory_form], [sm_account_profile],
+      [sm_user_defaults]) had their own simplified forms and POST handlers that skipped every check:
+      any logged-in member could create posts, upload any file type to the media library, change
+      their email without checks, and council/camp/lodge entries were saved without validation, spam
+      check or the theme's slug hooks (a visitor without access got a wp_die page). They now show the
+      real forms (8, 11, 7, 6, 22, 34 — the ones the current theme uses there); the old handlers,
+      templates and the MemoryPost/UserDefaults models are removed (`Forms\LegacyShortcodes`).
+      [sm_user_posts] (own posts) and [sm_indexing_browser] (nonce + permission) stay. 13/13 checks.
+
 ### Phase 8: Local cutover rehearsal (local only; owner OK'd deactivating Formidable locally, 2026-09-25)
 - [x] 8.1 (2026-09-25) Formidable and its 7 add-ons deactivated on the local site (active_plugins
       edited; no deactivation hooks ran). To turn them back on: Plugins screen, activate Formidable
@@ -384,3 +394,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-25: Owner: working with Formidable no longer matters; test every feature; close security gaps. **6.5 done** (see Phase 6): FormAccess, ShortcodeTrust, custom-role tightening, upload checks, rate limit. Formidable snapshot for standalone comparison saved (100 view cases x 5 users, 5 field-value cases). Next: Phase 7 with Formidable deactivated locally.
 - 2026-09-25: **Phase 7 done, 8.1-8.2 done.** Formidable is off on the local site. New: `src/Compat/{Compat,Data,EntryArray,Api,Hooks,EditUsers}.php`, `compat/Frm*.php`, `src/Forms/Modal.php`; rich text editor; ACF-aware custom fields; stored slug values survive edits. Checks: 752/757 theme calls identical to Formidable; theme hooks suite 34/34; every earlier suite passes standalone; crawl clean. Incident: one crashed test run (my test overwrote ACF's global) left three ACF field definitions changed locally; restored byte-for-byte from E:/WEB/wp_live_backup.sql (rows 604-606 only) and verified; tests now back up ACF rows to a file and restore on shutdown.
 - 2026-09-25: 8.3/8.4 done (see Phase 8). Local leftovers removed: 5 crawl login sessions, one dashboard auto-draft, WordPress's recovery-mode timestamp from the first Formidable-off crash, 8 untracked image sizes from the upload tests. Formidable stays off locally.
+- 2026-09-25: 6.6 done (legacy shortcodes → real forms, old handlers removed). Full regression standalone: all suites pass (camp 16, entry actions 13, edit 19, index 4/4, field value 11, post action 22, registration 25, account pages 20, REST 21, security 26, theme hooks 34, uploads 14, legacy 13, search forms), views 97/97 (+8 custom-role differences).
