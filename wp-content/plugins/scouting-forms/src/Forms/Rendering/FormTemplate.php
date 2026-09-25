@@ -228,7 +228,7 @@ class FormTemplate {
                     'hidden' => !FieldLogic::isShown($child, $rowValues, $childById),
                 ]);
             }
-            $html .= self::repeatButtons($sectionId, (string) $key);
+            $html .= self::repeatButtons($section, (string) $key);
             $html .= '</div>';
             $first = false;
         }
@@ -264,9 +264,26 @@ class FormTemplate {
         return $rows;
     }
 
-    private static function repeatButtons(int $sectionId, string $key): string {
-        $add = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon"><path d="M11 5H9v4H5v2h4v4h2v-4h4V9h-4V5zm-1-5a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
-        $remove = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon"><path d="M5 9v2h10V9H5zm5-9a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
+    /**
+     * The add/remove row buttons. Their labels and look (icon, text or both) are set on the
+     * section's closing field, as in Formidable (e.g. "Add Council" / "Remove Council").
+     *
+     * @param array<string, mixed> $section
+     */
+    private static function repeatButtons(array $section, string $key): string {
+        $sectionId = (int) $section['id'];
+        $end = self::sectionEnd($section);
+        $format = (string) ($end['field_options']['format'] ?? 'icon');
+        $addLabel = trim((string) ($end['field_options']['add_label'] ?? ''));
+        $removeLabel = trim((string) ($end['field_options']['remove_label'] ?? ''));
+        $addIcon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon"><path d="M11 5H9v4H5v2h4v4h2v-4h4V9h-4V5zm-1-5a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
+        $removeIcon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon"><path d="M5 9v2h10V9H5zm5-9a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
+        $content = static function (string $icon, string $label) use ($format): string {
+            if ($label === '' || $format === 'icon') {
+                return $icon;
+            }
+            return ($format === 'text' ? '' : $icon . ' ') . '<span>' . esc_html($label) . '</span>';
+        };
         return sprintf(
             '<div class="frm_form_field frm_hidden_container frm_repeat_buttons">'
             . '<button type="button" class="sm-add-row frm_button btn btn-link" data-parent="%1$d" title="%3$s" aria-label="%3$s">%5$s</button>'
@@ -274,11 +291,29 @@ class FormTemplate {
             . '</div>',
             $sectionId,
             esc_attr($key),
-            esc_attr__('Add another row', 'scouting-forms'),
-            esc_attr__('Remove this row', 'scouting-forms'),
-            $add,
-            $remove
+            esc_attr($addLabel !== '' ? $addLabel : __('Add another row', 'scouting-forms')),
+            esc_attr($removeLabel !== '' ? $removeLabel : __('Remove this row', 'scouting-forms')),
+            $content($addIcon, $addLabel),
+            $content($removeIcon, $removeLabel)
         );
+    }
+
+    /**
+     * The closing field (end_divider) of a section: the first one after it in its form.
+     *
+     * @param array<string, mixed> $section
+     * @return array<string, mixed>|null
+     */
+    private static function sectionEnd(array $section): ?array {
+        $after = false;
+        foreach (FormRepository::fields((int) $section['form_id']) as $field) {
+            if ((int) $field['id'] === (int) $section['id']) {
+                $after = true;
+            } elseif ($after && $field['type'] === 'end_divider') {
+                return $field;
+            }
+        }
+        return null;
     }
 
     /**

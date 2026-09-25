@@ -88,8 +88,8 @@ class Data {
         }
         if (is_array($value)) {
             if (!$value) {
-                // Formidable leaves an empty list out of the query
-                return '1=1';
+                // An empty list matches nothing ("any of these IDs" with no IDs), never everything
+                return $op === '!' ? '1=1' : '1=0';
             }
             $values = array_merge($values, array_values($value));
             return $column . ($op === '!' ? ' NOT' : '') . ' IN (' . implode(',', array_fill(0, count($value), '%s')) . ')';

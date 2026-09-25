@@ -99,8 +99,19 @@ class Hooks {
             return $data;
         }
         if (isset($field['choices']) && is_array($field['choices'])) {
+            // Choices already stored stay exactly as they are; new or changed ones are cleaned
+            $stored = [];
+            $postId = (int) ($postarr['ID'] ?? 0);
+            if ($postId > 0) {
+                $current = maybe_unserialize((string) get_post_field('post_content', $postId, 'raw'));
+                $stored = is_array($current) && isset($current['choices']) && is_array($current['choices']) ? $current['choices'] : [];
+            }
             $clean = [];
             foreach ($field['choices'] as $value => $label) {
+                if (array_key_exists($value, $stored) && $stored[$value] === $label) {
+                    $clean[$value] = $label;
+                    continue;
+                }
                 $clean[sanitize_text_field((string) $value)] = sanitize_text_field((string) $label);
             }
             $field['choices'] = $clean;
