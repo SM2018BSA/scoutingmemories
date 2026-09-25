@@ -15,6 +15,20 @@ class Mailer {
     private const LOG_LIMIT = 50;
 
     /**
+     * On a local copy, WordPress's own mail (password/email change notices, core emails) is also
+     * logged instead of sent, so account tests cannot email real people. No effect on live.
+     */
+    public static function registerHooks(): void {
+        if (!Environment::isLocal()) {
+            return;
+        }
+        add_filter('pre_wp_mail', static function ($return, $atts) {
+            self::log($atts['to'] ?? '', '[WordPress] ' . (string) ($atts['subject'] ?? ''), (string) ($atts['message'] ?? ''), $atts['headers'] ?? [], (array) ($atts['attachments'] ?? []));
+            return true;
+        }, 10, 2);
+    }
+
+    /**
      * @param string|string[] $to
      * @param string|string[] $headers
      * @param string[] $attachments

@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Actions\ActionRunner;
+use ScoutingMemories\Forms\Actions\RegisterAction;
 use ScoutingMemories\Forms\Actions\EntryShortcodes;
 use ScoutingMemories\Forms\Forms\Logic\FieldLogic;
 use ScoutingMemories\Forms\Forms\Rendering\FormTemplate;
@@ -76,6 +77,11 @@ class DynamicFormRenderer extends FormHandler {
             if ($editId) {
                 $state['values'] = EntryRepository::formValues($editId, $fields);
                 $state['entry_id'] = $editId;
+                // Account fields show the account's current details (Formidable Registration)
+                $register = RegisterAction::forForm((int) $form['id'], 'update', $state['values']);
+                if ($register) {
+                    $state['values'] = RegisterAction::prefillFromUser($register, $fields, $state['values']);
+                }
             }
         }
 
@@ -129,7 +135,20 @@ class DynamicFormRenderer extends FormHandler {
             }
         }
 
-        $validated = Validator::validate($fields, $posted);
+        $validated = Validator::validate($fields, $posted, $editId);
+
+        // Register User action: whose account this is, and the add-on's own checks
+        $register = RegisterAction::forForm((int) $form['id'], $editId ? 'update' : 'create', $validated['values']);
+        if ($register) {
+            $validated['values'] = RegisterAction::prepareValues($register, $fields, $validated['values'], (bool) $editId);
+            $passwordId = RegisterAction::passwordFieldId($register);
+            if ($passwordId && RegisterAction::selectedUser($fields, $validated['values']) && trim((string) ($validated['values'][$passwordId] ?? '')) === '') {
+                // The password is optional when an existing account is updated
+                unset($validated['errors'][$passwordId]);
+            }
+            $validated['errors'] += RegisterAction::validate($register, $fields, $validated['values']);
+        }
+
         $spamError = SpamGuard::check((int) $form['id'], $fields);
         if ($spamError !== '') {
             return ['values' => $validated['values'], 'errors' => [], 'form_error' => $spamError];
@@ -137,13 +156,17 @@ class DynamicFormRenderer extends FormHandler {
 
         $errors = $validated['errors'] + ($editId ? [] : self::checkRequiredFiles($fields));
         if ($errors) {
-            return ['values' => $validated['values'], 'errors' => $errors, 'entry_id' => $editId];
+            return ['values' => self::withoutPasswords($fields, $validated['values']), 'errors' => $errors, 'entry_id' => $editId];
         }
 
         $values = $validated['values'] + self::saveUploads($fields);
 
+        // Passwords are handed to the Register User action only, never stored with the entry
+        $secret = $values;
+        $values = self::withoutPasswords($fields, $values);
+
         if ($editId) {
-            return self::update($form, $fields, $entry, $values, $validated['rows']);
+            return self::update($form, $fields, $entry, $values, $validated['rows'], $register ? $secret : null, $register);
         }
 
         // Repeating sections are saved as child entries once the parent entry exists
@@ -170,6 +193,12 @@ class DynamicFormRenderer extends FormHandler {
             'values' => $values,
             'entry' => EntryRepository::find($entryId),
         ];
+        if ($register) {
+            // First, as in Formidable: the account exists before the other actions run
+            RegisterAction::run($register, ['values' => $secret] + $context);
+            $context['entry'] = EntryRepository::find($entryId);
+            $context['values'] = EntryRepository::formValues($entryId, $fields) + $values;
+        }
         $actions = ActionRunner::run('create', $context);
 
         // "Do not store entries": like Formidable, the entry exists only while its actions run
@@ -252,7 +281,7 @@ class DynamicFormRenderer extends FormHandler {
      * @param array<int, array<string, array<int, mixed>>> $rows
      * @return array<string, mixed>
      */
-    private static function update(array $form, array $fields, array $entry, array $values, array $rows): array {
+    private static function update(array $form, array $fields, array $entry, array $values, array $rows, ?array $secret = null, ?array $register = null): array {
         $entryId = (int) $entry['id'];
         // Actions (the post action especially) need every submitted value, including the ones
         // that are not stored on the entry
@@ -302,6 +331,9 @@ class DynamicFormRenderer extends FormHandler {
             'values' => $submitted,
             'entry' => EntryRepository::find($entryId),
         ];
+        if ($register && $secret !== null) {
+            RegisterAction::run($register, ['values' => $secret + $submitted] + $context);
+        }
         $actions = ActionRunner::run('update', $context);
         return self::afterSubmit($form, $context, $actions['on_submit'], true);
     }
@@ -350,6 +382,22 @@ class DynamicFormRenderer extends FormHandler {
             "SELECT field_id FROM {$wpdb->prefix}frm_item_metas WHERE item_id = %d AND field_id <> 0",
             $entryId
         )));
+    }
+
+    /**
+     * Values without any password field (never saved, never shown again after an error).
+     *
+     * @param array<int, array<string, mixed>> $fields
+     * @param array<int, mixed> $values
+     * @return array<int, mixed>
+     */
+    private static function withoutPasswords(array $fields, array $values): array {
+        foreach ($fields as $field) {
+            if ($field['type'] === 'password') {
+                unset($values[(int) $field['id']]);
+            }
+        }
+        return $values;
     }
 
     /**

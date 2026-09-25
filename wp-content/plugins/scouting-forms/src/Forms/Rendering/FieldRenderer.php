@@ -89,6 +89,11 @@ class FieldRenderer {
         $marker = ' data-sm-field="' . (int) $field['id'] . '"' . (!empty($ctx['hidden']) ? ' hidden' : '');
         $html = preg_replace('/<div id="frm_field_' . preg_quote(esc_attr($ctx['id']), '/') . '_container"/', '$0' . $marker, $html, 1);
 
+        // Inline "Confirm password" (or email) box, as a second field container like Formidable's
+        if (!empty($opts['conf_field']) && in_array($type, ['password', 'email', 'text'], true)) {
+            $html .= self::confirmation($field, $ctx, $error);
+        }
+
         if ($collapsible) {
             // A collapsible section heading opens and closes its fields (forms-front.js)
             $icon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon sm-toggle-icon"><path d="M5 6l5 5 5-5 2 1-7 7-7-7 2-1z"></path></svg>';
@@ -243,6 +248,9 @@ class FieldRenderer {
                 if ($inputType === 'email') {
                     $attrs .= ' autocomplete="email"';
                 }
+                if ($inputType === 'password') {
+                    $attrs .= ' autocomplete="new-password"';
+                }
                 if ($inputType === 'date') {
                     // Stored as Y-m-d (as Formidable does); older values may be in the site's format
                     $value = self::isoDate(self::scalar($value));
@@ -388,6 +396,32 @@ class FieldRenderer {
             esc_attr($keys['site_key']),
             esc_attr((string) ($opts['captcha_size'] ?? 'normal')),
             esc_attr((string) ($opts['captcha_theme'] ?? 'light'))
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $ctx
+     */
+    private static function confirmation(array $field, array $ctx, string $error): string {
+        $opts = $field['field_options'];
+        $key = 'conf_' . $ctx['key'];
+        $name = preg_replace('/\[(\d+)\]$/', '[conf_$1]', (string) $ctx['name']);
+        $label = (string) ($opts['conf_desc'] ?? '');
+        $type = $field['type'] === 'password' ? 'password' : ($field['type'] === 'email' ? 'email' : 'text');
+        return sprintf(
+            '<div id="frm_field_conf_%1$s_container" class="frm_form_field form-field frm_top_container %2$s"%3$s>'
+            . '<label for="field_%4$s" class="frm_primary_label">%5$s%6$s</label>'
+            . '<input type="%7$s" id="field_%4$s" name="%8$s" value="" class="%9$s"%10$s /></div>',
+            esc_attr((string) $ctx['id']),
+            esc_attr(trim((string) ($opts['classes'] ?? '') . ($field['required'] ? ' frm_required_field' : ''))),
+            !empty($ctx['hidden']) ? ' hidden' : '',
+            esc_attr($key),
+            esc_html($label !== '' ? $label : __('Confirm', 'scouting-forms')),
+            $field['required'] ? ' <span class="frm_required">*</span>' : '',
+            $type,
+            esc_attr($name),
+            esc_attr(ThemeClasses::input() . ($error !== '' ? ' is-invalid' : '')),
+            $type === 'password' ? ' autocomplete="new-password"' : ''
         );
     }
 

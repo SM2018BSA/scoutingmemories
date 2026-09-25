@@ -46,6 +46,9 @@ class ActionRunner {
                         $result['ran'][] = 'email:' . $action['id'];
                     }
                     break;
+                case 'register':
+                    // Run first by DynamicFormRenderer (it needs the password, which the entry never stores)
+                    break;
                 case 'on_submit':
                     if ($result['on_submit'] === null) {
                         $result['on_submit'] = $settings;

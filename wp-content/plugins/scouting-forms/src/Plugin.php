@@ -2,6 +2,8 @@
 
 namespace ScoutingMemories\Forms;
 
+use ScoutingMemories\Forms\Accounts\AccountPages;
+use ScoutingMemories\Forms\Accounts\Avatar;
 use ScoutingMemories\Forms\Admin\AdminMenu;
 use ScoutingMemories\Forms\Ajax\CascadingSearch;
 use ScoutingMemories\Forms\Ajax\DynamicFields;
@@ -14,6 +16,7 @@ use ScoutingMemories\Forms\Forms\MemoryForm;
 use ScoutingMemories\Forms\Forms\UserDefaultsForm;
 use ScoutingMemories\Forms\Forms\UserPostsView;
 use ScoutingMemories\Forms\Rest\ApiController;
+use ScoutingMemories\Forms\Support\Mailer;
 use ScoutingMemories\Forms\Tools\CompareTool;
 
 /**
@@ -51,6 +54,9 @@ class Plugin {
         // 3. AJAX Services
         CascadingSearch::registerHooks();
         DynamicFields::registerHooks();
+        Mailer::registerHooks();
+        AccountPages::registerHooks();
+        Avatar::registerHooks();
 
         // 4. Frontend Forms & Shortcodes
         DynamicFormRenderer::registerHooks();

@@ -26,7 +26,7 @@ class Validator {
      *         errors: field ID, or "FIELD-SECTION-ROW" for a repeating row, => message;
      *         rows: repeating section ID => row key => child field values (blank rows dropped)
      */
-    public static function validate(array $fields, array $posted): array {
+    public static function validate(array $fields, array $posted, int $entryId = 0): array {
         $values = [];
         $errors = [];
         $rows = [];
@@ -86,7 +86,15 @@ class Validator {
                 continue;
             }
 
-            $error = self::check($field, $values[$id], $values);
+            $error = self::check($field, $values[$id], $values, $entryId);
+            if ($error === '' && !empty($field['field_options']['conf_field']) && in_array($type, ['password', 'email', 'text'], true)) {
+                // "Confirm" box (item_meta[conf_ID]) must match
+                $confirm = $posted['conf_' . $id] ?? '';
+                if ((string) (is_array($confirm) ? '' : $confirm) !== (string) (is_array($raw[$id] ?? '') ? '' : ($raw[$id] ?? ''))) {
+                    $message = (string) ($field['field_options']['conf_msg'] ?? '');
+                    $error = $message !== '' ? $message : 'The entered values do not match';
+                }
+            }
             if ($error !== '') {
                 $errors[$id] = $error;
             }
@@ -157,6 +165,9 @@ class Validator {
                 return sanitize_text_field(is_array($raw) ? (string) reset($raw) : (string) $raw);
             case 'textarea':
                 return sanitize_textarea_field((string) $raw);
+            case 'password':
+                // Kept exactly as typed (WordPress hashes it); only surrounding line breaks removed
+                return is_array($raw) ? '' : trim((string) $raw, "\r\n");
             case 'rte':
                 return wp_kses_post((string) $raw);
             case 'email':
@@ -175,7 +186,7 @@ class Validator {
     /**
      * @param mixed $value
      */
-    private static function check(array $field, $value, array $values = []): string {
+    private static function check(array $field, $value, array $values = [], int $entryId = 0): string {
         $opts = $field['field_options'];
         $isEmpty = is_array($value) ? count($value) === 0 : trim((string) $value) === '';
 
@@ -233,7 +244,7 @@ class Validator {
                 break;
         }
 
-        if (!empty($opts['unique']) && self::isDuplicate($field, $value)) {
+        if (!empty($opts['unique']) && self::isDuplicate($field, $value, $entryId)) {
             return self::message($field, 'unique_msg', '[field_name] must be unique');
         }
 
@@ -243,13 +254,19 @@ class Validator {
     /**
      * @param mixed $value
      */
-    private static function isDuplicate(array $field, $value): bool {
+    /**
+     * Another entry already has this value (the entry being edited does not count).
+     *
+     * @param mixed $value
+     */
+    private static function isDuplicate(array $field, $value, int $entryId = 0): bool {
         global $wpdb;
         $stored = is_array($value) ? maybe_serialize($value) : (string) $value;
         return (bool) $wpdb->get_var($wpdb->prepare(
-            "SELECT 1 FROM {$wpdb->prefix}frm_item_metas WHERE field_id = %d AND meta_value = %s LIMIT 1",
+            "SELECT 1 FROM {$wpdb->prefix}frm_item_metas WHERE field_id = %d AND meta_value = %s AND item_id <> %d LIMIT 1",
             (int) $field['id'],
-            $stored
+            $stored,
+            $entryId
         ));
     }
 
