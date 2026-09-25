@@ -7,12 +7,14 @@ use ScoutingMemories\Forms\Accounts\Avatar;
 use ScoutingMemories\Forms\Admin\AdminMenu;
 use ScoutingMemories\Forms\Ajax\CascadingSearch;
 use ScoutingMemories\Forms\Ajax\DynamicFields;
+use ScoutingMemories\Forms\Compat\Compat;
 use ScoutingMemories\Forms\Forms\AccountProfileForm;
 use ScoutingMemories\Forms\Forms\DynamicFormRenderer;
 use ScoutingMemories\Forms\Forms\DynamicViewRenderer;
 use ScoutingMemories\Forms\Forms\IndexEntityForms;
 use ScoutingMemories\Forms\Forms\IndexingBrowser;
 use ScoutingMemories\Forms\Forms\MemoryForm;
+use ScoutingMemories\Forms\Forms\Modal;
 use ScoutingMemories\Forms\Forms\UserDefaultsForm;
 use ScoutingMemories\Forms\Forms\UserPostsView;
 use ScoutingMemories\Forms\Rest\ApiController;
@@ -45,6 +47,9 @@ class Plugin {
      * Boot the plugin and register components
      */
     public function boot(): void {
+        // 0. Formidable's classes and hooks for the theme, when Formidable is not active
+        Compat::register();
+
         // 1. Unified Tailwind CSS v4 Registration
         add_action('wp_enqueue_scripts', [__CLASS__, 'registerUnifiedStyles'], 1);
         add_action('admin_enqueue_scripts', [__CLASS__, 'registerUnifiedStyles'], 1);
@@ -69,6 +74,7 @@ class Plugin {
         IndexingBrowser::registerHooks();
         MemoryForm::registerHooks();
         IndexEntityForms::registerHooks();
+        Modal::registerHooks();
 
         // 5. WP Admin Management
         if (is_admin()) {

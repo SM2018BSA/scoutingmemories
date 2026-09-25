@@ -159,7 +159,11 @@ class Validator {
                 return array_values(array_filter(array_map('sanitize_text_field', (array) $raw), 'strlen'));
             case 'select':
             case 'data':
-                if (!empty($field['field_options']['multiple'])) {
+                // A list of text (not entry IDs) is a Dynamic field value the theme keeps (council
+                // slugs); it stays a list, and check() only accepts it unchanged
+                $textList = $field['type'] === 'data' && is_array($raw) && count($raw) > 1
+                    && !array_filter(array_map('strval', $raw), static fn($v) => $v === '' || ctype_digit($v));
+                if (!empty($field['field_options']['multiple']) || $textList) {
                     return array_values(array_filter(array_map('sanitize_text_field', (array) $raw), 'strlen'));
                 }
                 return sanitize_text_field(is_array($raw) ? (string) reset($raw) : (string) $raw);
@@ -236,7 +240,11 @@ class Validator {
                 break;
             case 'data':
                 // A Dynamic field only accepts the entries it offers (for a dependent field, the
-                // ones that match its parent's choice), so no other entry IDs can be saved
+                // ones that match its parent's choice), so no other entry IDs can be saved. An
+                // edited entry may keep the value it has (the theme stores slugs in some of these)
+                if ($entryId && self::isStoredValue($entryId, (int) $field['id'], $value)) {
+                    break;
+                }
                 $allowed = array_map('strval', array_keys(FieldRenderer::choiceList($field, $values)));
                 if (array_diff(array_map('strval', (array) $value), $allowed)) {
                     return self::message($field, 'invalid', '[field_name] is invalid');
@@ -259,6 +267,23 @@ class Validator {
      *
      * @param mixed $value
      */
+    /**
+     * @param mixed $value
+     */
+    private static function isStoredValue(int $entryId, int $fieldId, $value): bool {
+        global $wpdb;
+        $stored = $wpdb->get_var($wpdb->prepare(
+            "SELECT meta_value FROM {$wpdb->prefix}frm_item_metas WHERE item_id = %d AND field_id = %d",
+            $entryId,
+            $fieldId
+        ));
+        if ($stored === null) {
+            return false;
+        }
+        $normalize = static fn($v) => array_values(array_map('strval', (array) $v));
+        return $normalize(maybe_unserialize($stored)) === $normalize($value);
+    }
+
     private static function isDuplicate(array $field, $value, int $entryId = 0): bool {
         global $wpdb;
         $stored = is_array($value) ? maybe_serialize($value) : (string) $value;

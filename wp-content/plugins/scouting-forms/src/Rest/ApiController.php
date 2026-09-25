@@ -115,7 +115,7 @@ class ApiController {
         $row = $wpdb->get_row($wpdb->prepare("SELECT options FROM {$wpdb->prefix}frm_forms WHERE id = %d", $formId), ARRAY_A);
         $options = maybe_unserialize($row['options'] ?? '');
         $options = is_array($options) ? $options : [];
-        foreach (['submit_value' => 'sanitize_text_field', 'success_msg' => 'wp_kses_post', 'edit_msg' => 'wp_kses_post', 'edit_value' => 'sanitize_text_field'] as $key => $clean) {
+        foreach (['submit_value' => 'sanitize_text_field', 'success_msg' => [self::class, 'settingsHtml'], 'edit_msg' => [self::class, 'settingsHtml'], 'edit_value' => 'sanitize_text_field'] as $key => $clean) {
             if (isset($data[$key]) && is_string($data[$key])) {
                 $options[$key] = $clean($data[$key]);
             }
@@ -124,7 +124,7 @@ class ApiController {
         $wpdb->update($wpdb->prefix . 'frm_forms', [
             'name' => sanitize_text_field((string) ($data['name'] ?? $form['name'])),
             'form_key' => sanitize_title((string) ($data['form_key'] ?? $form['key'])),
-            'description' => wp_kses_post((string) ($data['description'] ?? $form['description'])),
+            'description' => self::settingsHtml((string) ($data['description'] ?? $form['description'])),
             'options' => maybe_serialize($options),
         ], ['id' => $formId], ['%s', '%s', '%s', '%s'], ['%d']);
 
@@ -193,7 +193,7 @@ class ApiController {
 
             $row = [
                 'name' => sanitize_text_field((string) ($f['name'] ?? ($existing['name'] ?? ''))),
-                'description' => wp_kses_post((string) ($f['description'] ?? ($existing['description'] ?? ''))),
+                'description' => self::settingsHtml((string) ($f['description'] ?? ($existing['description'] ?? ''))),
                 'type' => $type,
                 'field_key' => sanitize_key((string) ($f['field_key'] ?? ($existing['key'] ?? ('field_' . wp_generate_password(6, false))))),
                 'required' => !empty($f['required']) ? 1 : 0,
@@ -277,6 +277,14 @@ class ApiController {
             ],
             'available_fields' => $fields,
         ], 200);
+    }
+
+    /**
+     * HTML saved in form settings (descriptions, messages, HTML fields) is shown as saved, so it is
+     * filtered here for anyone WordPress does not allow raw HTML, as for posts.
+     */
+    public static function settingsHtml(string $value): string {
+        return current_user_can('unfiltered_html') ? $value : wp_kses_post($value);
     }
 
     public static function updateView(WP_REST_Request $request): WP_REST_Response {

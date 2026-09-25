@@ -73,13 +73,38 @@ class FieldValue {
 
         $values = new EntryValues((int) $field['form_id']);
         $values->load($ids);
+        // Categories as plain names unless links=1; long text in paragraphs, as Formidable does
+        $show = array_intersect_key($atts, array_flip(['show', 'sep', 'format', 'size', 'links'])) + ['links' => '0', 'unlinked' => 'raw'];
         $parts = [];
         foreach ($ids as $id) {
-            $shown = $values->display($id, (int) $field['id'], array_intersect_key($atts, array_flip(['show', 'sep', 'format', 'size'])));
+            $shown = $field['type'] === 'file' && !isset($atts['show'])
+                ? self::fileLinks($values->raw($id, (int) $field['id']), (string) ($atts['size'] ?? 'thumbnail'))
+                : $values->display($id, (int) $field['id'], $show);
+            if ($shown !== '' && in_array($field['type'], ['textarea', 'rte'], true) && !isset($atts['show'])) {
+                $shown = wpautop($field['type'] === 'textarea' ? str_replace('<br />', '', $shown) : $shown);
+            }
             if ($shown !== '') {
                 $parts[] = $shown;
             }
         }
         return $parts ? implode(', ', $parts) : esc_html($default);
+    }
+
+    /**
+     * Files as Formidable shows them here: the thumbnail linked to the file.
+     *
+     * @param mixed $value Attachment ID(s)
+     */
+    private static function fileLinks($value, string $size): string {
+        $links = [];
+        foreach ((array) $value as $attachmentId) {
+            $url = (int) $attachmentId ? wp_get_attachment_url((int) $attachmentId) : false;
+            if (!$url) {
+                continue;
+            }
+            $image = wp_get_attachment_image((int) $attachmentId, $size);
+            $links[] = '<a href="' . esc_url($url) . '" class="frm_file_link">' . ($image !== '' ? $image : esc_html(basename($url))) . '</a>';
+        }
+        return implode(' ', $links);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Forms;
 
+use ScoutingMemories\Forms\Compat\Compat;
 use ScoutingMemories\Forms\Views\EntryActions;
 use ScoutingMemories\Forms\Views\FieldValue;
 use ScoutingMemories\Forms\Views\ViewRenderer;
@@ -23,7 +24,7 @@ class DynamicViewRenderer extends FormHandler {
         // Fallbacks for existing Formidable view shortcodes, only when Formidable Views is not
         // loaded. Checked late on init so plugin load order can't shadow the real shortcodes.
         add_action('init', function () {
-            if (!class_exists('FrmViewsDisplaysController') && !class_exists('FrmProDisplaysController')) {
+            if (!Compat::formidableActive()) {
                 if (!shortcode_exists('display-frm-data')) {
                     add_shortcode('display-frm-data', [__CLASS__, 'renderShortcode']);
                 }

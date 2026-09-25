@@ -49,7 +49,7 @@ class PostFields {
         }
         switch ($map['kind']) {
             case 'meta':
-                return get_post_meta($postId, $map['name'], true);
+                return self::metaValue($postId, $map['name']);
             case 'taxonomy':
                 $terms = get_the_terms($postId, $map['name']);
                 if (!is_array($terms)) {
@@ -66,6 +66,64 @@ class PostFields {
             default:
                 return $post->{$map['name']} ?? '';
         }
+    }
+
+    /**
+     * A custom field named "_name" is the ACF field "name" when the post has ACF fields: read
+     * with get_field(), as Formidable does ("_name" itself holds ACF's reference key).
+     *
+     * @return mixed
+     */
+    public static function metaValue(int $postId, string $key) {
+        if (self::isAcfField($postId, $key) && function_exists('get_field')) {
+            return get_field(substr($key, 1), $postId);
+        }
+        return get_post_meta($postId, $key, true);
+    }
+
+    /**
+     * Save a custom field as Formidable does: blank removes it; "_name" of an ACF field on a post
+     * that already has ACF fields is saved through ACF (on a new post the Add a Post form's hidden
+     * fields write ACF's reference keys into "_name" themselves).
+     *
+     * @param mixed $value
+     */
+    public static function saveMeta(int $postId, string $key, $value): void {
+        if ($value === '' || $value === [] || $value === null) {
+            delete_post_meta($postId, $key);
+            return;
+        }
+        if (self::isAcfField($postId, $key) && function_exists('update_field')) {
+            update_field(self::acfFieldKey($key), $value, $postId);
+            return;
+        }
+        update_post_meta($postId, $key, wp_slash($value));
+    }
+
+    private static function isAcfField(int $postId, string $key): bool {
+        if (self::acfFieldKey($key) === '') {
+            return false;
+        }
+        $objects = get_field_objects($postId);
+        return is_array($objects) && isset($objects[substr($key, 1)]);
+    }
+
+    /**
+     * ACF field key (field_...) for a custom field named "_name", or ''.
+     */
+    private static function acfFieldKey(string $key): string {
+        static $cache = [];
+        if ($key === '' || $key[0] !== '_' || !function_exists('get_field_objects')) {
+            return '';
+        }
+        if (!array_key_exists($key, $cache)) {
+            global $wpdb;
+            $cache[$key] = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT post_name FROM {$wpdb->posts} WHERE post_type = 'acf-field' AND post_excerpt = %s LIMIT 1",
+                substr($key, 1)
+            ));
+        }
+        return $cache[$key];
     }
 
     /**

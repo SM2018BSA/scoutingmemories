@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Actions\ActionRunner;
 use ScoutingMemories\Forms\Actions\RegisterAction;
+use ScoutingMemories\Forms\Compat\Hooks;
 use ScoutingMemories\Forms\Forms\Logic\FieldLogic;
 use ScoutingMemories\Forms\Forms\Submission\SpamGuard;
 use ScoutingMemories\Forms\Forms\Submission\Validator;
@@ -104,6 +105,9 @@ class EntryService {
             unset($values[$sectionId]);
         }
 
+        // Without Formidable the theme's frm_pre_create_entry runs here (after the checks above)
+        $values = Hooks::preCreate($form, $values, $fields);
+
         $name = EntryRepository::nameFromValues($fields, $values, $form['name']);
         $entryId = EntryRepository::create((int) $form['id'], $values, ['name' => $name]);
         if (!$entryId) {
@@ -130,6 +134,7 @@ class EntryService {
             $context['values'] = EntryRepository::formValues($entryId, $fields) + $values;
         }
         $actions = ActionRunner::run('create', $context);
+        Hooks::afterSave($entryId, (int) $form['id'], $context['values'], true, $fields);
 
         // "Do not store entries": like Formidable, the entry exists only while its actions run
         if (!empty($form['options']['no_save'])) {
@@ -215,6 +220,7 @@ class EntryService {
             RegisterAction::run($register, ['values' => $secret + $submitted] + $context);
         }
         $actions = ActionRunner::run('update', $context);
+        Hooks::afterSave($entryId, (int) $form['id'], $submitted, false, $fields);
         return ['ok' => true, 'errors' => [], 'form_error' => '', 'entry_id' => $entryId, 'context' => $context, 'on_submit' => $actions['on_submit'], 'updated' => true];
     }
 

@@ -288,23 +288,62 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       logic, actions, views); rebuild `assets/builder` with Vite.
 
 ### Phase 7: Formidable compatibility layer (only loads when Formidable is inactive)
-- [ ] 7.1 Catalogue every Formidable class/method/hook/constant the theme uses, with call sites.
-- [ ] 7.2 Provide those classes/methods (`FrmEntry`, `FrmEntryMeta`, `FrmProEntriesController`,
-      `FrmProAppHelper`, `FrmAppHelper`, `FrmDb`, `FrmProDb`, `FrmSettings`, ...) backed by the
-      plugin, matching the signatures and return shapes the theme relies on.
-- [ ] 7.3 Fire the Formidable hooks the theme listens to (`frm_after_create_entry`,
-      `frm_setup_new_fields_vars`, `frm_where_filter`, `frm_no_entries`, `frm_include_meta_keys`,
-      `frm_get_default_value`, `frm_rte_options`, ...) at the equivalent points.
-      Already done: `frm_where_filter` (Phase 2, camp/lodge searches). Depends on this: the council slug
-      fields (556 on lodges, 560 on camps) are filled by the theme's frm_after_create/update_entry hooks;
-      Add a Post / registration defaults come from the theme's frm_setup_new_fields_vars.
-- [ ] 7.4 Automated check: every theme call site exercised with Formidable active vs. plugin shim.
+- [x] 7.1 (2026-09-25) Catalogue. The theme (scoutingmemories) calls: FrmEntry::getAll/getOne/get_meta,
+      FrmEntryMeta::getEntryIds/add_entry_meta/update_entry_meta (also as FrmEntrymeta),
+      FrmProEntriesController::show_entry_shortcode(format=array)/get_field_value_shortcode,
+      FrmFormsController::show_form, FrmProDisplaysController::get_shortcode, and creates FrmEntryMeta,
+      FrmAppHelper and FrmDb objects in functions.php (the site fatals without them). Hooks it listens to:
+      frm_pre_create_entry (Edit Users), frm_after_create_entry / frm_after_update_entry (council, camp,
+      lodge slugs + ACF choices; Add a Post taxonomies and slug meta), frm_setup_new_fields_vars /
+      frm_setup_edit_fields_vars (council numbers "(#441)", Add a Post and Edit Users defaults),
+      frm_get_default_value, frm_include_meta_keys, frm_rte_options (Add Media), frm_where_filter,
+      frm_*_page_link (My Account tab anchors). Its own AJAX searches (search_councils/camps/lodges) use
+      the same calls. The rest of the theme's AppHelper copy of Formidable code is never reached.
+      Content uses one more add-on shortcode: [frmmodal-content] (Add a Post help link).
+- [x] 7.2 (2026-09-25) `compat/Frm*.php` (global classes, autoloaded only when Formidable is not
+      loaded; `Compat\Compat::formidableActive()` decides once) over `Compat\Data` (Formidable's where
+      syntax with an allow-list of columns/operators, so a condition can never carry SQL), `Compat\
+      EntryArray` (Formidable's array format: key/display, key-value/saved, repeaters as form + i<id>
+      rows and per-field lists) and `Compat\Api`. `Forms\Modal`: [frmmodal-content]/[frmmodal] as a
+      Bootstrap modal printed in the footer (never a form inside a form). Rich text fields are now
+      WordPress's editor (was a plain box). Custom fields named "_x" read/save through ACF like
+      Formidable (Add a Post's hidden fields hold ACF's reference keys).
+- [x] 7.3 (2026-09-25) `Compat\Hooks` fires the hooks above from EntryService (after the access,
+      validation and spam checks; $_POST['item_meta'] holds the checked values as a browser posts
+      them) and from FormTemplate / the dependent-choices endpoint (field set-up filters).
+      Fixed on the way (theme/ACF problems that also exist on live with Formidable):
+      - Edit Users with one role: the theme removed every role, then stopped with a fatal error
+        (set_role() given a list), leaving the member with no role; an empty choice also removed every
+        role. `Compat\EditUsers` does that form's work instead (same fields, same user meta), checks
+        promote_users/edit_user, keeps roles when none is chosen, and nobody can drop their own
+        administrator role.
+      - Adding a council/camp/lodge as someone without unfiltered_html broke the ACF select that the
+        theme adds the name to (WordPress's HTML filter ran over ACF's serialized settings; the next
+        addition then left one choice). While the theme's hooks run, ACF field definitions are saved
+        as ACF built them, labels cleaned as plain text.
+      - The theme keeps council slugs (text) in the hidden Dynamic fields 556/560; editing an entry
+        now carries them back unchanged (and accepts only the stored value there).
+- [x] 7.4 (2026-09-25) With Formidable active, Formidable's answer to 757 theme calls was recorded
+      (entry arrays, field values, getAll/getOne/get_meta/getEntryIds, the theme's CouncilEntry,
+      CampEntry, LodgeEntry, NewUserEntry, StateEntry, Post, CurrentUser objects and its council/camp/
+      lodge lists). With Formidable off and the stand-ins: 752 identical; the 5 others are known and
+      not read by the theme (rich-text array output keeps HTML; typed brackets stay inert; getOne may
+      include form_name where Formidable's cache left it out).
 
 ### Phase 8: Local cutover rehearsal (local only; owner OK'd deactivating Formidable locally, 2026-09-25)
-- [ ] 8.1 Deactivate Formidable (and its add-ons) on the local site only.
-- [ ] 8.2 Click through every page, form and view as: logged out, subscriber, historian,
-      index_contributor, regional, administrator. PHP error log clean.
-- [ ] 8.3 Re-activate Formidable locally afterwards; record results here.
+- [x] 8.1 (2026-09-25) Formidable and its 7 add-ons deactivated on the local site (active_plugins
+      edited; no deactivation hooks ran). To turn them back on: Plugins screen, activate Formidable
+      Forms, Formidable Forms Pro, Views, Registration, Modal, Bootstrap, Logs, Zapier.
+- [x] 8.2 (2026-09-25) Crawl of 43 pages (all pages, posts, category/state/date filters, search,
+      My Account tabs, admin screens) as logged out, subscriber, historian, index contributor,
+      regional, administrator: no errors from the plugin; 207 of 265 pages have the same text as with
+      Formidable. The rest differ as intended: subscribers get "no permission" on the council/camp/
+      lodge forms; multi-page forms show all pages (stepped in the browser); pre-filled council lists
+      are listed in full (Formidable loaded them later); Edit/Delete as forms. All test suites pass
+      standalone (security 26, theme hooks 34, REST 21, edit 19, camp 16, entry actions 13, field
+      value 11, post action 22, registration 25, account pages 20, index forms 4/4, search forms) and
+      the views match Formidable's saved output (97 same, 8 differ only by the custom-role rule).
+- [ ] 8.3 Browser pass of the remaining screens (entries admin, builder) with Formidable off.
 
 ### Phase 9: Handoff (the owner decides; Claude does not publish)
 - [ ] 9.1 Release notes + a go-live checklist (must include: submit Contact Us on live once to confirm the reCAPTCHA server check, which cannot run on localhost) (what to verify on live, how to roll back:
@@ -317,6 +356,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - Submit button colour: Formidable shows light blue (its own style settings); the plugin uses the site green like the PDF viewer. Default: site green, unless the owner prefers matching the old look.
 - ~~Who can edit council/camp/lodge entries~~ Closed 2026-09-25 (owner: secure choice wins): custom roles must be held; see 6.5. To give regional coordinators front-end Edit links again, add "regional" to forms 7/8/11's edit-role setting.
 - Add a Post status: on the live site today anyone who can open Add a Post can choose "Published" in the Post Status field and skip review (Formidable shows it to everyone). The plugin limits Published/Private/Scheduled to people WordPress lets publish posts; contributors, index contributors and subscribers get Draft or Pending Review. Say if the old behaviour is wanted instead.
+- Theme bugs the plugin now works around (they also affect live while Formidable runs): Edit Users with a single role leaves the member with no role (fatal error); adding a council/camp/lodge as a non-administrator corrupts the ACF select of names. See 7.3. The theme also logs an "Array to string conversion" warning in CampEntry::frm_where_filter (line 106) on camp searches; harmless, theme code.
 - Search forms 36, 37 and 38 (now rate limited, 30 per 10 minutes per visitor) (Search Councils/Camps/Lodges) each have an active email action to the site admin, so every search sends the admin an email on live today. The plugin does the same (locally it only logs). The owner may want those three actions turned off.
 
 ## Progress log
@@ -333,3 +373,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-25: **Phase 5 done (5.1, 5.2; 5.3 except Edit Users, which needs Phase 7).** New `Actions\RegisterAction`, `Accounts\AccountPages`, `Accounts\Avatar`; `Mailer::registerHooks` (local copies log all WordPress mail); `Validator` (password sanitizing, confirmation boxes, unique ignores the edited entry); `FieldRenderer` (confirmation box, autocomplete hints); `DynamicFormRenderer` (register first, passwords kept out of entries and re-renders, account prefill on edit). Verified: registration 25/25 (account created with role/username/names/meta, password with a quote logs in, entry moved to the member, password never stored or emailed, member logged in, welcome + admin emails logged; duplicate email / mismatch / blank / backslash refused; member updates details without a password, cannot take another member's email, changes password; WordPress's "Password Changed" notice logged not sent; an administrator registers a separate account and stays themselves); login/reset pages 20/20 (forms post to wp-login.php, messages are fixed texts only, full reset cycle with WordPress's reset email logged, bad key and mismatch refused, old password stops working, failed sign-in returns to the Login page, avatar from the upload); Edit Account Info opens the member's own entry with account details and no password. All earlier suites still pass; test data 0.
 - 2026-09-25: **Phase 6: 6.1-6.3 done (6.4 next).** New `Support\Capabilities`, `Forms\EntryService` (shared save pipeline; DynamicFormRenderer now only checks the nonce and shows confirmations), rewritten `Rest\ApiController`, new Vue components `UiCombobox`, `EntryField`, rewritten `EntriesList` and `EntryEditorModal`, App.vue permissions/search/sort/CSV; builder rebuilt with Vite (dependencies unchanged; npm audit 0). Verified: REST 21/21 (historian can list/search entries but not edit forms or open views; a plain subscriber is refused on every route; create with missing fields gives field errors; valid create with a repeating row; detail with display values and dependent choices; update through the same rules; rows kept when the section is not sent; CSV with headers and formula cells neutralised; delete removes child entries; serialized input ignored; another form's field cannot be changed). Builder UI checked in a browser against real API responses captured as a historian (Views tab hidden, entries tab opens, columns, search, editor sections/fields/chips, server error under the field, State -> Council reload, save keeps the repeating row). All earlier suites still pass; test data 0.
 - 2026-09-25: Owner: working with Formidable no longer matters; test every feature; close security gaps. **6.5 done** (see Phase 6): FormAccess, ShortcodeTrust, custom-role tightening, upload checks, rate limit. Formidable snapshot for standalone comparison saved (100 view cases x 5 users, 5 field-value cases). Next: Phase 7 with Formidable deactivated locally.
+- 2026-09-25: **Phase 7 done, 8.1-8.2 done.** Formidable is off on the local site. New: `src/Compat/{Compat,Data,EntryArray,Api,Hooks,EditUsers}.php`, `compat/Frm*.php`, `src/Forms/Modal.php`; rich text editor; ACF-aware custom fields; stored slug values survive edits. Checks: 752/757 theme calls identical to Formidable; theme hooks suite 34/34; every earlier suite passes standalone; crawl clean. Incident: one crashed test run (my test overwrote ACF's global) left three ACF field definitions changed locally; restored byte-for-byte from E:/WEB/wp_live_backup.sql (rows 604-606 only) and verified; tests now back up ACF rows to a file and restore on shutdown.

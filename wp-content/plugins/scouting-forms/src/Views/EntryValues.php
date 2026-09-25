@@ -112,6 +112,83 @@ class EntryValues {
     }
 
     /**
+     * Displayed value as data, not HTML (Formidable's array format; the theme reads it): lists stay
+     * lists, a Dynamic field gives the linked entry's value, choices with separate values their
+     * labels, a post category its name, a user field the username.
+     *
+     * @return mixed
+     */
+    public function plain(int $entryId, int $fieldId) {
+        $field = $this->fields[$fieldId] ?? null;
+        $value = $this->raw($entryId, $fieldId);
+        if (!$field) {
+            return $value;
+        }
+        if (($this->postMapped[$fieldId]['kind'] ?? '') === 'taxonomy' && ($this->entries[$entryId]['post_id'] ?? 0) > 0) {
+            $names = [];
+            foreach ((array) $value as $termId) {
+                $term = get_term((int) $termId, $this->postMapped[$fieldId]['name']);
+                if ($term && !is_wp_error($term)) {
+                    $names[] = $term->name;
+                }
+            }
+            return implode(', ', $names);
+        }
+        switch ($field['type']) {
+            case 'data':
+                if (($field['field_options']['data_type'] ?? '') === 'data') {
+                    // "Just show the value": the linked value itself is what was saved
+                    return $value;
+                }
+                $displayField = (int) ($field['field_options']['form_select'] ?? 0);
+                $parts = [];
+                foreach ((array) $value as $linkedId) {
+                    $parts[] = $this->linked[(int) $linkedId . ':' . $displayField] ?? '';
+                }
+                $parts = array_values(array_filter($parts, 'strlen'));
+                return is_array($value) ? $parts : (string) ($parts[0] ?? '');
+
+            case 'user_id':
+                $user = is_numeric($value) ? get_userdata((int) $value) : false;
+                return $user ? $user->display_name : '';
+
+            case 'date':
+                $time = is_string($value) && $value !== '' ? strtotime($value) : false;
+                return $time ? date_i18n((string) get_option('date_format'), $time) : $value;
+
+            case 'file':
+                $urls = [];
+                foreach ((array) $value as $attachmentId) {
+                    $url = (int) $attachmentId ? wp_get_attachment_url((int) $attachmentId) : false;
+                    if ($url) {
+                        $urls[] = $url;
+                    }
+                }
+                return is_array($value) ? $urls : (string) ($urls[0] ?? '');
+
+            case 'select':
+            case 'radio':
+            case 'checkbox':
+                if (!empty($field['field_options']['separate_value'])) {
+                    $labels = [];
+                    foreach ((array) $field['options'] as $option) {
+                        if (is_array($option) && isset($option['value'], $option['label'])) {
+                            $labels[(string) $option['value']] = (string) $option['label'];
+                        }
+                    }
+                    $map = static function ($v) use ($labels) {
+                        return $labels[(string) $v] ?? (string) $v;
+                    };
+                    return is_array($value) ? array_map($map, $value) : $map($value);
+                }
+                return $value;
+
+            default:
+                return $value;
+        }
+    }
+
+    /**
      * Display value as HTML (escaped).
      *
      * @param array<string, string> $atts Tag options: show, sep, size, format
@@ -137,15 +214,20 @@ class EntryValues {
         }
 
         if (($this->postMapped[$fieldId]['kind'] ?? '') === 'taxonomy' && ($this->entries[$entryId]['post_id'] ?? 0) > 0) {
-            return $this->termLinks((array) $value, $this->postMapped[$fieldId]['name'], $sep);
+            return $this->termLinks((array) $value, $this->postMapped[$fieldId]['name'], $sep, ($atts['links'] ?? '1') !== '0');
         }
 
         switch ($field['type']) {
             case 'data':
+                if (($field['field_options']['data_type'] ?? '') === 'data') {
+                    return esc_html(is_array($value) ? implode($sep, array_map('strval', $value)) : (string) $value);
+                }
                 $parts = [];
                 foreach ((array) $value as $linkedId) {
-                    // A value that is not a linked entry shows as blank, as in Formidable
-                    $parts[] = $this->linked[(int) $linkedId . ':' . (int) ($field['field_options']['form_select'] ?? 0)] ?? '';
+                    // A value that is not a linked entry shows as blank, as in Formidable's views;
+                    // its field-value shortcode shows such values in a list as they are
+                    $parts[] = $this->linked[(int) $linkedId . ':' . (int) ($field['field_options']['form_select'] ?? 0)]
+                        ?? (is_array($value) && ($atts['unlinked'] ?? '') === 'raw' ? (string) $linkedId : '');
                 }
                 return esc_html(implode($sep, array_filter($parts, 'strlen')));
 
@@ -241,14 +323,14 @@ class EntryValues {
      *
      * @param int[] $termIds
      */
-    private function termLinks(array $termIds, string $taxonomy, string $sep): string {
+    private function termLinks(array $termIds, string $taxonomy, string $sep, bool $withLinks = true): string {
         $links = [];
         foreach ($termIds as $termId) {
             $term = get_term((int) $termId, $taxonomy);
             if (!$term || is_wp_error($term)) {
                 continue;
             }
-            $url = get_term_link($term, $taxonomy);
+            $url = $withLinks ? get_term_link($term, $taxonomy) : new \WP_Error('no_link');
             $links[] = is_wp_error($url)
                 ? esc_html($term->name)
                 /* translators: %s: category name */

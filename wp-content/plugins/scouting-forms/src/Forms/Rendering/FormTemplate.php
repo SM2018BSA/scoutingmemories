@@ -2,10 +2,12 @@
 
 namespace ScoutingMemories\Forms\Forms\Rendering;
 
+use ScoutingMemories\Forms\Compat\Hooks;
 use ScoutingMemories\Forms\Forms\Logic\FieldLogic;
 use ScoutingMemories\Forms\Forms\Submission\SpamGuard;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\FormidableSettings;
+use ScoutingMemories\Forms\Support\ShortcodeTrust;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
@@ -22,6 +24,9 @@ use ScoutingMemories\Forms\Ui\ThemeClasses;
  * their logic start hidden; assets/js/forms-front.js applies the same rules as values change.
  */
 class FormTemplate {
+
+    /** Entry being edited while a form is rendered (0 for a new entry) */
+    private static int $entryId = 0;
 
     private const DEFAULT_BEFORE = '[if form_name]<h3 class="frm_form_title">[form_name]</h3>[/if form_name][if form_description]<div class="frm_description">[form_description]</div>[/if form_description]';
     private const DEFAULT_SUBMIT = '<div class="frm_submit"><button class="frm_button_submit" type="submit">[button_label]</button></div>';
@@ -59,6 +64,12 @@ class FormTemplate {
             $id = (int) $field['id'];
             $byId[$id] = $field;
             $values[$id] = array_key_exists($id, $state['values'] ?? []) ? $state['values'][$id] : DefaultValues::resolve($field);
+        }
+        // Without Formidable, the theme's field set-up filters run here (defaults, choice labels)
+        self::$entryId = (int) ($state['entry_id'] ?? 0);
+        [$fields, $values] = Hooks::setupFields($fields, $values, array_fill_keys(array_keys($state['values'] ?? []), true), self::$entryId, [FieldRenderer::class, 'choiceList']);
+        foreach ($fields as $field) {
+            $byId[(int) $field['id']] = $field;
         }
         $errors = (array) ($state['errors'] ?? []);
 
@@ -112,7 +123,7 @@ class FormTemplate {
         $html .= '<noscript><style>.sm-forms .sm-toggle-container[hidden]{display:block!important}</style></noscript>';
 
         if (!empty($opts['after_html'])) {
-            $html .= wp_kses_post(do_shortcode((string) $opts['after_html']));
+            $html .= self::settingsHtml((string) $opts['after_html']);
         }
 
         wp_enqueue_script('sm-forms-front');
@@ -191,11 +202,13 @@ class FormTemplate {
         $html = sprintf('<input type="hidden" name="item_meta[%d][form]" value="%d" class="frm_dnc" />', $sectionId, $childFormId);
         $first = true;
         foreach ($rows as $key => $rowValues) {
+            $fixed = array_fill_keys(array_keys($rowValues), true);
             foreach ($childFields as $child) {
                 if (!array_key_exists((int) $child['id'], $rowValues)) {
                     $rowValues[(int) $child['id']] = DefaultValues::resolve($child);
                 }
             }
+            [$rowFields, $rowValues] = Hooks::setupFields($childFields, $rowValues, $fixed, self::$entryId, [FieldRenderer::class, 'choiceList']);
             $html .= sprintf(
                 '<div id="frm_section_%1$d-%2$s" class="frm_repeat_grid frm_repeat_%1$d%3$s frm_grid_container" data-sm-row="%1$d" data-sm-row-key="%2$s">',
                 $sectionId,
@@ -203,7 +216,7 @@ class FormTemplate {
                 $first ? ' frm_first_repeat' : ''
             );
             $html .= sprintf('<input type="hidden" name="item_meta[%d][row_ids][]" value="%s" />', $sectionId, esc_attr((string) $key));
-            foreach ($childFields as $child) {
+            foreach ($rowFields as $child) {
                 $childId = (int) $child['id'];
                 $containerId = $childId . '-' . $sectionId . '-' . $key;
                 $html .= FieldRenderer::render($child, $rowValues[$childId] ?? '', (string) ($errors[$containerId] ?? ''), [
@@ -372,7 +385,7 @@ class FormTemplate {
         // [form_name] outside the [if form_name] block (the screen-reader legend) always shows
         return strtr($template, [
             '[form_name]' => esc_html($form['name']),
-            '[form_description]' => $showDesc ? wp_kses_post(do_shortcode($form['description'])) : '',
+            '[form_description]' => $showDesc ? self::settingsHtml((string) $form['description']) : '',
             '[form_key]' => esc_attr($form['key']),
         ]);
     }
@@ -421,5 +434,18 @@ class FormTemplate {
         }
 
         return preg_replace('/\[(?:if [a-z_]+|\/if [a-z_]+)\]/', '', $template);
+    }
+
+    /**
+     * HTML from the form's settings (description, text after the form, HTML fields) as it was
+     * saved: like post content, it is filtered when someone without unfiltered_html saves it (the
+     * form builder does this; so did Formidable), so scripts administrators added keep working.
+     * Its shortcodes run as administrators' settings (a form or modal placed there keeps its inputs).
+     */
+    public static function settingsHtml(string $html): string {
+        if ($html === '') {
+            return '';
+        }
+        return ShortcodeTrust::trusted(static fn() => do_shortcode($html));
     }
 }

@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Forms\Rendering;
 
+use ScoutingMemories\Forms\Compat\Hooks;
 use ScoutingMemories\Forms\Views\TemplateTags;
 use ScoutingMemories\Forms\Support\ShortcodeTrust;
 
@@ -19,6 +20,14 @@ class DefaultValues {
      * @return mixed
      */
     public static function resolve(array $field) {
+        return Hooks::defaultValue(self::resolveOwn($field), $field);
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     * @return mixed
+     */
+    private static function resolveOwn(array $field) {
         $default = $field['default_value'];
         if (is_array($default)) {
             return $default;

@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Actions\EntryShortcodes;
 use ScoutingMemories\Forms\Actions\RegisterAction;
+use ScoutingMemories\Forms\Compat\Compat;
 use ScoutingMemories\Forms\Forms\Rendering\FormTemplate;
 use ScoutingMemories\Forms\Models\EntryRepository;
 use ScoutingMemories\Forms\Models\FormRepository;
@@ -34,7 +35,7 @@ class DynamicFormRenderer extends FormHandler {
         // Fallback for existing [formidable] content, only when Formidable itself is not loaded.
         // Checked late on init so plugin load order can't let us shadow Formidable's shortcode.
         add_action('init', function () {
-            if (!class_exists('FrmFormsController') && !shortcode_exists('formidable')) {
+            if (!Compat::formidableActive() && !shortcode_exists('formidable')) {
                 add_shortcode('formidable', [__CLASS__, 'renderFormidableFallback']);
             }
         }, 999);

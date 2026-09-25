@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Ajax;
 
+use ScoutingMemories\Forms\Compat\Hooks;
 use ScoutingMemories\Forms\Forms\Logic\FieldLogic;
 use ScoutingMemories\Forms\Forms\Rendering\DynamicOptions;
 use ScoutingMemories\Forms\Models\FormRepository;
@@ -54,6 +55,10 @@ class DynamicFields {
 
         $linked = FormRepository::field((int) ($field['field_options']['form_select'] ?? 0));
         $options = $linked ? DynamicOptions::dependent($field, $linked, $parentId, $values) : [];
+        $options = array_combine(array_map('strval', array_keys($options)), array_map('strval', $options)) ?: [];
+        // The theme's field set-up filter (council numbers) also applies to reloaded choices
+        [$set] = Hooks::setupFields([$field], [], [], 0, static fn() => $options);
+        $options = $set[0]['sm_choices'] ?? $options;
         $list = [];
         foreach ($options as $id => $label) {
             $list[] = [(string) $id, $label];

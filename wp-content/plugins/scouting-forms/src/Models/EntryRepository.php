@@ -202,7 +202,7 @@ class EntryRepository {
         if ($map && (int) $entry['post_id'] > 0) {
             $postId = (int) $entry['post_id'];
             if ($map['kind'] === 'meta') {
-                update_post_meta($postId, $map['name'], $value);
+                PostFields::saveMeta($postId, $map['name'], $value);
             } elseif ($map['kind'] === 'taxonomy') {
                 wp_set_post_terms($postId, array_map('intval', (array) $value), $map['name']);
             } else {

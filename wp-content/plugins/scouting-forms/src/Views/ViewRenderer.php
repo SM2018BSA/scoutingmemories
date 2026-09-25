@@ -125,7 +125,7 @@ class ViewRenderer {
         $before = self::fillParams((string) ($options['before_content'] ?? ''), $params);
         $after = self::fillParams((string) ($options['after_content'] ?? ''), $params);
 
-        return $before . $rows . $after . self::pagination($pageParam, $result['page'], $result['pages']);
+        return $before . $rows . $after . self::pagination($pageParam, $result['page'], $result['pages'], ['view' => get_post((int) $view['id'])] + $params);
     }
 
     /**
@@ -226,17 +226,23 @@ class ViewRenderer {
         return $params;
     }
 
-    private static function pagination(string $param, int $page, int $pages): string {
+    /**
+     * @param array<string, mixed> $atts For Formidable's page link filters (the theme adds anchors)
+     */
+    private static function pagination(string $param, int $page, int $pages, array $atts = []): string {
         if ($pages <= 1) {
             return '';
         }
-        $link = static function (int $n, string $label, bool $active = false, bool $disabled = false, string $aria = '') use ($param): string {
+        $link = static function (int $n, string $label, bool $active = false, bool $disabled = false, string $aria = '') use ($param, $page, $pages, $atts): string {
             $class = 'page-item' . ($active ? ' active' : '') . ($disabled ? ' disabled' : '');
             $attr = $aria !== '' ? ' aria-label="' . esc_attr($aria) . '"' : '';
             if ($active || $disabled) {
                 return '<li class="' . $class . '"' . ($active ? ' aria-current="page"' : '') . '><span class="page-link"' . $attr . '>' . $label . '</span></li>';
             }
-            return '<li class="' . $class . '"><a class="page-link" href="' . esc_url(add_query_arg($param, $n)) . '"' . $attr . '>' . $label . '</a></li>';
+            $filter = $label === '&laquo;' ? 'frm_prev_page_link' : ($label === '&raquo;' ? 'frm_next_page_link'
+                : ($n === 1 ? 'frm_first_page_link' : ($n === $pages ? 'frm_last_page_link' : 'frm_page_link')));
+            $url = (string) apply_filters($filter, add_query_arg($param, $n), $atts);
+            return '<li class="' . $class . '"><a class="page-link" href="' . esc_url($url) . '"' . $attr . '>' . $label . '</a></li>';
         };
 
         // Like Formidable, no previous arrow on the first page and no next arrow on the last

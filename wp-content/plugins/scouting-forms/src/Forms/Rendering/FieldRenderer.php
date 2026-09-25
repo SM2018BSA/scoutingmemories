@@ -68,7 +68,7 @@ class FieldRenderer {
             '[collapse_this]' => (string) ($ctx['inner'] ?? ''),
             '[entry_key]' => '',
             '[help]' => '',
-            '[description]' => wp_kses_post($field['description']),
+            '[description]' => FormTemplate::settingsHtml((string) $field['description']),
             '[error]' => esc_html($error),
             '[input]' => $type === 'divider' ? '' : self::input($field, $value, $error, $ctx),
         ];
@@ -162,8 +162,12 @@ class FieldRenderer {
             case 'user_id':
                 return sprintf('<input type="hidden"%s value="%d" />', $attrs, get_current_user_id());
 
-            case 'textarea':
             case 'rte':
+                if (function_exists('wp_editor')) {
+                    return self::editor($field, self::scalar($value), $ctx, $opts);
+                }
+                // no break: a plain box without the editor
+            case 'textarea':
                 // For textareas Formidable's "max" setting is the number of rows
                 $rows = isset($opts['max']) && is_numeric($opts['max']) && (int) $opts['max'] > 0 ? (int) $opts['max'] : 5;
                 return sprintf(
@@ -187,6 +191,21 @@ class FieldRenderer {
                         esc_attr($name),
                         esc_attr($shown)
                     );
+                }
+                // Text the theme keeps in some of these (council slugs), not chosen entries: sent
+                // back as it is, so editing the entry does not lose it
+                $kept = array_values(array_filter(array_map('strval', (array) $value), 'strlen'));
+                if ($kept && array_filter($kept, static fn($v) => !ctype_digit($v))) {
+                    $html = '';
+                    foreach ($kept as $i => $v) {
+                        $html .= sprintf(
+                            '<input type="hidden"%s name="%s" value="%s" />',
+                            $i === 0 ? ' id="' . esc_attr($domId) . '"' : '',
+                            esc_attr(is_array($value) ? $name . '[]' : $name),
+                            esc_attr($v)
+                        );
+                    }
+                    return $html;
                 }
                 if ($dataType === 'checkbox' || $dataType === 'radio') {
                     return self::choices($field, $value, $invalidClass, $ctx);
@@ -225,7 +244,7 @@ class FieldRenderer {
 
             case 'html':
                 $content = $field['description'] !== '' ? $field['description'] : self::scalar($field['default_value']);
-                return '<div class="frm_html_content">' . wp_kses_post(do_shortcode($content)) . '</div>';
+                return '<div class="frm_html_content">' . FormTemplate::settingsHtml($content) . '</div>';
 
             case 'divider':
                 return '';
@@ -272,6 +291,10 @@ class FieldRenderer {
      * @return array<string, string>
      */
     public static function choiceList(array $field, array $values = []): array {
+        if (isset($field['sm_choices'])) {
+            // Set by the theme's field set-up filter (see Compat\Hooks)
+            return $field['sm_choices'];
+        }
         $map = PostFields::mapping($field);
         if ($map && $map['kind'] === 'taxonomy') {
             // A category field offers the site's terms (IDs), like Formidable's category fields
@@ -423,6 +446,35 @@ class FieldRenderer {
             esc_attr(ThemeClasses::input() . ($error !== '' ? ' is-invalid' : '')),
             $type === 'password' ? ' autocomplete="new-password"' : ''
         );
+    }
+
+    /**
+     * A rich text field as WordPress's editor, like Formidable (the theme turns on Add Media
+     * through frm_rte_options). What is saved is filtered like any post content.
+     *
+     * @param array<string, mixed> $ctx
+     * @param array<string, mixed> $opts
+     */
+    private static function editor(array $field, string $value, array $ctx, array $opts): string {
+        $ctx = self::context($field, $ctx);
+        $settings = apply_filters('frm_rte_options', [
+            'textarea_name' => $ctx['name'],
+            'textarea_rows' => isset($opts['max']) && is_numeric($opts['max']) && (int) $opts['max'] > 0 ? (int) $opts['max'] : 8,
+            'media_buttons' => false,
+            'teeny' => false,
+            'editor_class' => 'form-control',
+        ], $field);
+        if (!is_array($settings)) {
+            $settings = [];
+        }
+        // The box must post under this field's name, whatever the filter returns
+        $settings['textarea_name'] = $ctx['name'];
+        if (!empty($settings['media_buttons']) && !current_user_can('upload_files')) {
+            $settings['media_buttons'] = false;
+        }
+        ob_start();
+        wp_editor($value, 'field_' . preg_replace('/[^a-z0-9_]/', '_', strtolower((string) $ctx['key'])), $settings);
+        return '<div class="sm-rte">' . ob_get_clean() . '</div>';
     }
 
     /**

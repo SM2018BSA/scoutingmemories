@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Actions;
 
+use ScoutingMemories\Forms\Models\PostFields;
 use ScoutingMemories\Forms\Support\TestData;
 
 /**
@@ -76,11 +77,7 @@ class PostAction {
         }
         self::linkAttachments($postId, $fields, $values);
         foreach ($new['post_custom'] as $key => $value) {
-            if ($value === '' || $value === [] || $value === null) {
-                delete_post_meta($postId, $key);
-            } else {
-                update_post_meta($postId, $key, wp_slash($value));
-            }
+            PostFields::saveMeta($postId, (string) $key, $value);
         }
         update_post_meta($postId, '_edit_last', get_current_user_id());
 
