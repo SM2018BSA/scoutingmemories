@@ -17,10 +17,19 @@ use ScoutingMemories\Forms\Models\FormRepository;
  * Role checks follow Formidable's settings with one deliberate difference: Formidable lets anyone
  * holding a built-in WordPress role (even a subscriber) pass a check for a custom role such as
  * "index_contributor". Here a custom role must actually be held (administrators always pass).
+ * Regional coordinators may edit everyone's councils, lodges and camps (owner, 2026-09-25): under
+ * Formidable they only could because of that loophole.
  */
 class Permissions {
 
     private const ROLE_LADDER = ['administrator', 'editor', 'author', 'contributor', 'subscriber'];
+
+    /** Roles that may also edit everyone's entries of a form (by form key), besides its settings */
+    private const EDIT_OTHERS = [
+        'council_key' => ['regional'],
+        'vvdlj' => ['regional'],
+        'camp_key' => ['regional'],
+    ];
 
     /**
      * @param string $cap Without prefix: view_entries, edit_entries, delete_entries, create_entries, ...
@@ -59,7 +68,10 @@ class Permissions {
         }
 
         $options = $form['options'];
-        $canEditOthers = $form['editable'] && isset($options['open_editable_role']) && self::hasRole($options['open_editable_role']);
+        $canEditOthers = $form['editable'] && (
+            (isset($options['open_editable_role']) && self::hasRole($options['open_editable_role']))
+            || self::hasRole(self::EDIT_OTHERS[$form['key']] ?? '-1')
+        );
         if ($canEditOthers) {
             return true;
         }
