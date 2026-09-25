@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Forms\Rendering;
 
+use ScoutingMemories\Forms\Models\PostFields;
 use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
 
@@ -242,6 +243,10 @@ class FieldRenderer {
                 if ($inputType === 'email') {
                     $attrs .= ' autocomplete="email"';
                 }
+                if ($inputType === 'date') {
+                    // Stored as Y-m-d (as Formidable does); older values may be in the site's format
+                    $value = self::isoDate(self::scalar($value));
+                }
 
                 return sprintf(
                     '<input type="%s"%s value="%s" class="%s" />',
@@ -259,6 +264,22 @@ class FieldRenderer {
      * @return array<string, string>
      */
     public static function choiceList(array $field, array $values = []): array {
+        $map = PostFields::mapping($field);
+        if ($map && $map['kind'] === 'taxonomy') {
+            // A category field offers the site's terms (IDs), like Formidable's category fields
+            $exclude = array_map('intval', (array) ($field['field_options']['exclude_cat'] ?? []));
+            $list = [];
+            foreach (get_terms(['taxonomy' => $map['name'], 'hide_empty' => false, 'orderby' => 'name', 'exclude' => array_filter($exclude)]) as $term) {
+                if (!is_wp_error($term)) {
+                    $list[(string) $term->term_id] = $term->name;
+                }
+            }
+            return $list;
+        }
+        if ($map && $map['name'] === 'post_status' && !current_user_can('publish_posts')) {
+            // Publishing needs publish rights (see Actions\PostAction); others choose draft or review
+            return array_intersect_key(self::baseChoices($field), ['draft' => true, 'pending' => true]);
+        }
         if ($field['type'] === 'data') {
             $list = [];
             foreach (DynamicOptions::forField($field, $values) as $id => $label) {
@@ -267,6 +288,15 @@ class FieldRenderer {
             return $list;
         }
 
+        return self::baseChoices($field);
+    }
+
+    /**
+     * The field's own choices as value => label.
+     *
+     * @return array<string, string>
+     */
+    private static function baseChoices(array $field): array {
         $list = [];
         $separateValues = !empty($field['field_options']['separate_value']);
         $choices = is_array($field['options']) ? $field['options'] : [];
@@ -375,6 +405,23 @@ class FieldRenderer {
             'key' => (string) $field['key'],
             'id' => (string) $field['id'],
         ];
+    }
+
+    /**
+     * A date in Y-m-d for <input type="date">, from Y-m-d or the site's date format (m/d/Y).
+     */
+    private static function isoDate(string $value): string {
+        $value = trim($value);
+        if ($value === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value;
+        }
+        $format = (string) FormidableSettings::pro('date_format', 'm/d/Y');
+        $date = \DateTime::createFromFormat('!' . $format, $value);
+        if (!$date) {
+            $time = strtotime($value);
+            return $time ? gmdate('Y-m-d', $time) : '';
+        }
+        return $date->format('Y-m-d');
     }
 
     /**

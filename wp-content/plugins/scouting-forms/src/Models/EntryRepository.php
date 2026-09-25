@@ -195,6 +195,39 @@ class EntryRepository {
             return false;
         }
 
+        // A field mapped to the entry's post is changed on the post (the "Publish" button sets
+        // post_status), as Formidable's update_single_field does
+        $field = FormRepository::field($fieldId);
+        $map = $field ? PostFields::mapping($field) : null;
+        if ($map && (int) $entry['post_id'] > 0) {
+            $postId = (int) $entry['post_id'];
+            if ($map['kind'] === 'meta') {
+                update_post_meta($postId, $map['name'], $value);
+            } elseif ($map['kind'] === 'taxonomy') {
+                wp_set_post_terms($postId, array_map('intval', (array) $value), $map['name']);
+            } else {
+                $post = get_post($postId, ARRAY_A);
+                if (!$post) {
+                    return false;
+                }
+                $new = is_array($value) ? implode(', ', $value) : (string) $value;
+                if ($map['name'] === 'post_status') {
+                    $new = \ScoutingMemories\Forms\Actions\PostAction::allowedStatus($new, (string) $post['post_type'], $post);
+                }
+                $post[$map['name']] = $new;
+                $result = wp_update_post(wp_slash($post), true);
+                if (is_wp_error($result)) {
+                    return false;
+                }
+            }
+            $wpdb->update($wpdb->prefix . 'frm_items', [
+                'updated_at' => current_time('mysql', 1),
+                'updated_by' => get_current_user_id(),
+            ], ['id' => $entryId], ['%s', '%d'], ['%d']);
+            self::purgeCaches((int) $entry['form_id']);
+            return true;
+        }
+
         $stored = is_array($value) ? maybe_serialize($value) : (string) $value;
         $metas = $wpdb->prefix . 'frm_item_metas';
         $existing = $wpdb->get_var($wpdb->prepare(

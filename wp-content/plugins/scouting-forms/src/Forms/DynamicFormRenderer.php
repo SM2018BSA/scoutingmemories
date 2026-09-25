@@ -254,6 +254,9 @@ class DynamicFormRenderer extends FormHandler {
      */
     private static function update(array $form, array $fields, array $entry, array $values, array $rows): array {
         $entryId = (int) $entry['id'];
+        // Actions (the post action especially) need every submitted value, including the ones
+        // that are not stored on the entry
+        $submitted = $values;
         $keep = [];
         foreach ($fields as $field) {
             $id = (int) $field['id'];
@@ -290,10 +293,13 @@ class DynamicFormRenderer extends FormHandler {
             }
         }
 
+        foreach ($values as $id => $value) {
+            $submitted[$id] = $value;
+        }
         $context = [
             'form' => $form,
             'fields' => $fields,
-            'values' => $values,
+            'values' => $submitted,
             'entry' => EntryRepository::find($entryId),
         ];
         $actions = ActionRunner::run('update', $context);

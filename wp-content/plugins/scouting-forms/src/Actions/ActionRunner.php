@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Actions;
 
 use ScoutingMemories\Forms\Forms\Logic\Conditions;
+use ScoutingMemories\Forms\Models\EntryRepository;
 
 /**
  * ActionRunner
@@ -10,8 +11,8 @@ use ScoutingMemories\Forms\Forms\Logic\Conditions;
  * Runs a form's Formidable "form actions" (frm_form_actions posts: post_excerpt = type,
  * menu_order = form ID, post_content = JSON settings) for an event such as "create".
  *
- * Supported: email, on_submit (returned to the caller, which shows the message or redirects).
- * Not yet: wppost (Phase 4), register (Phase 5); these are reported as skipped.
+ * Supported: email, wppost (create/update the entry's post), on_submit (returned to the caller,
+ * which shows the message or redirects). Not yet: register (Phase 5), reported as skipped.
  */
 class ActionRunner {
 
@@ -33,6 +34,13 @@ class ActionRunner {
             }
 
             switch ($action['type']) {
+                case 'wppost':
+                    if (PostAction::save($settings, $context)) {
+                        $result['ran'][] = 'wppost:' . $action['id'];
+                        // Later actions (emails) see the entry with its post
+                        $context['entry'] = EntryRepository::find((int) $context['entry']['id']);
+                    }
+                    break;
                 case 'email':
                     if (EmailAction::send($settings, $context)) {
                         $result['ran'][] = 'email:' . $action['id'];
