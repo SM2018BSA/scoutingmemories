@@ -18,8 +18,15 @@ class IndexingBrowser extends FormHandler {
     }
 
     public static function handleBatchUpdate(): void {
-        if (!isset($_GET['smp_action']) || $_GET['smp_action'] !== 'update_end_dates') {
+        // Own action name: the theme's My Account page handles `smp_action=update_end_dates`
+        // itself, and the plugin must not intercept it while both are in use.
+        if (!isset($_GET['sm_indexing_action']) || $_GET['sm_indexing_action'] !== 'update_end_dates') {
             return;
+        }
+
+        // A link click changes data, so require a nonce to block cross-site requests
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'sm_update_end_dates')) {
+            wp_die(__('Security check failed. Please reload the page and try again.', 'scouting-forms'), 403);
         }
 
         if (!current_user_can('edit_others_posts') && !in_array('index_contributor', (array) wp_get_current_user()->roles)) {
@@ -27,7 +34,7 @@ class IndexingBrowser extends FormHandler {
         }
 
         $counts = ArchiveRepository::updateActiveEndDates();
-        $redirect = remove_query_arg('smp_action', wp_get_referer() ?: home_url('/my-account/'));
+        $redirect = remove_query_arg(['sm_indexing_action', '_wpnonce'], wp_get_referer() ?: home_url('/my-account/'));
         $redirect = add_query_arg([
             'updated_end_dates' => '1',
             'tab'               => 'myIndexing',

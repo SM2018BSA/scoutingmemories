@@ -109,7 +109,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - [x] 0.1 (2026-09-24) Baseline: generate `docs/formidable-usage.json` (read-only export of forms, fields,
       field options, actions, views, placements) with a plugin CLI/admin tool, so later phases can
       check behaviour against it without re-querying by hand.
-- [ ] 0.2 Coexistence audit: while Formidable is active the plugin must not change any Formidable
+- [x] 0.2 (2026-09-24) Coexistence audit: while Formidable is active the plugin must not change any Formidable
       behaviour (shortcodes, hooks, admin menus, REST, scripts/styles on Formidable pages). Fix any overlap.
 - [ ] 0.3 Local mail interceptor: when the site URL host is `localhost`/`127.0.0.1`, mail sent by the
       plugin is logged (wp-admin > Scouting Forms > Test Mail Log) instead of sent.
@@ -204,3 +204,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 ## Progress log
 - 2026-09-24: Plan written. Audit of Formidable usage and plugin coverage recorded above.
 - 2026-09-24: 0.1 done. `src/Tools/FormidableAudit.php` writes `docs/formidable-usage.json` (git-ignored via the plugin's own `.gitignore`): 22 forms, 263 fields, 36 actions, 14 views, 10 placements, 139 theme call sites; emails redacted, no entries.
+- 2026-09-24: 0.2 done. Every init handler is guarded by its own `sm_action` + nonce; admin assets load only on plugin pages. Fixed: (a) `[formidable]`/`[display-frm-data]` fallbacks now register late on `init` and only if Formidable's classes are absent; (b) the guide notice shows only on Dashboard/Plugins screens; (c) the indexing "update end dates" action used the theme's own `smp_action=update_end_dates` (the plugin hijacked the theme's My Account tool) and had no nonce. It is now `sm_indexing_action` + nonce `sm_update_end_dates`. Verified: Formidable owns its shortcodes, Contact Us renders Formidable's form, plugin action without nonce returns 403, no PHP warnings.

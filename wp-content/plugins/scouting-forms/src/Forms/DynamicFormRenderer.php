@@ -16,10 +16,13 @@ class DynamicFormRenderer extends FormHandler {
     public static function registerHooks(): void {
         add_shortcode('sm_form', [__CLASS__, 'renderShortcode']);
 
-        // Fallback shortcode for existing content if Formidable plugin is deactivated
-        if (!shortcode_exists('formidable')) {
-            add_shortcode('formidable', [__CLASS__, 'renderFormidableFallback']);
-        }
+        // Fallback for existing [formidable] content, only when Formidable itself is not loaded.
+        // Checked late on init so plugin load order can't let us shadow Formidable's shortcode.
+        add_action('init', function () {
+            if (!class_exists('FrmFormsController') && !shortcode_exists('formidable')) {
+                add_shortcode('formidable', [__CLASS__, 'renderFormidableFallback']);
+            }
+        }, 999);
     }
 
     /**

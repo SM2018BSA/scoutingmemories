@@ -183,8 +183,10 @@ class AdminMenu {
             return;
         }
 
+        // Only on the Dashboard and Plugins screens, so it never sits on top of Formidable's
+        // (or anyone else's) admin pages while both plugins are in use
         $screen = get_current_screen();
-        if ($screen && (strpos($screen->id, 'scouting-forms') !== false || strpos($screen->id, 'scouting-archives') !== false)) {
+        if (!$screen || !in_array($screen->id, ['dashboard', 'plugins'], true)) {
             return;
         }
 

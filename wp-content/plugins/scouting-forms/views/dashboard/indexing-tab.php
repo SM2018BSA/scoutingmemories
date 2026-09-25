@@ -140,8 +140,8 @@ if (!defined('ABSPATH')) exit;
                     <i class="bi bi-info-circle me-1"></i>
                     <?php esc_html_e('This is the native replacement for the Formidable maintenance action.', 'scouting-forms'); ?>
                 </div>
-                <a href="<?php echo esc_url(add_query_arg(['smp_action' => 'update_end_dates'])); ?>" class="btn btn-primary px-4">
-                    <i class="bi bi-arrow-repeat me-1"></i> <?php esc_html_e('Run Update for ' . date('Y'), 'scouting-forms'); ?>
+                <a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['sm_indexing_action' => 'update_end_dates']), 'sm_update_end_dates')); ?>" class="btn btn-primary px-4">
+                    <i class="bi bi-arrow-repeat me-1"></i> <?php echo esc_html(sprintf(__('Run Update for %s', 'scouting-forms'), wp_date('Y'))); ?>
                 </a>
             </div>
         </div>

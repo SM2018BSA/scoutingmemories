@@ -16,10 +16,13 @@ class DynamicViewRenderer extends FormHandler {
     public static function registerHooks(): void {
         add_shortcode('sm_view', [__CLASS__, 'renderShortcode']);
 
-        // Fallback shortcode for existing content if Formidable plugin is deactivated
-        if (!shortcode_exists('display-frm-data')) {
-            add_shortcode('display-frm-data', [__CLASS__, 'renderFormidableFallback']);
-        }
+        // Fallback for existing [display-frm-data] content, only when Formidable Views is not
+        // loaded. Checked late on init so plugin load order can't shadow the real shortcode.
+        add_action('init', function () {
+            if (!class_exists('FrmViewsDisplaysController') && !class_exists('FrmProDisplaysController') && !shortcode_exists('display-frm-data')) {
+                add_shortcode('display-frm-data', [__CLASS__, 'renderFormidableFallback']);
+            }
+        }, 999);
     }
 
     /**
