@@ -451,13 +451,50 @@
             return base.split('#')[0] + '#' + pageHash(viewerIndex, num);
         }
 
-        var resumeKey = 'scouting-pdf:last-page:' + pdfUrl;
+        var resumeKey = 'scouting-pdf:last-state:' + pdfUrl;
+        var legacyResumeKey = 'scouting-pdf:last-page:' + pdfUrl;
         var resumeTimer = null;
-        function rememberPage() {
+
+        function getSavedState() {
+            var raw = storageGet(resumeKey) || storageGet(legacyResumeKey);
+            if (!raw) return null;
+            try {
+                var data = JSON.parse(raw);
+                if (data && (Date.now() - (data.t || 0) <= RESUME_DAYS * 86400000)) {
+                    return data;
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        function rememberState() {
+            if (!pdfDoc || !api.ready) return;
             clearTimeout(resumeTimer);
             resumeTimer = setTimeout(function() {
-                storageSet(resumeKey, JSON.stringify({ page: currentPage, t: Date.now() }));
-            }, 800);
+                var b = control('brightness');
+                var c = control('contrast');
+                var g = control('grayscale');
+                var inv = control('invert');
+                var adj = {
+                    brightness: b ? b.value : '100',
+                    contrast: c ? c.value : '100',
+                    grayscale: g ? g.checked : false,
+                    invert: inv ? inv.checked : false,
+                    adjustOpen: adjustbar ? !adjustbar.hidden : false
+                };
+                var state = {
+                    page: currentPage,
+                    rotation: rotation,
+                    scale: scale,
+                    fitMode: fitMode,
+                    spread: spread,
+                    adjustments: adj,
+                    sidebarOpen: sidebar ? !sidebar.hidden : true,
+                    sidebarTab: sidebarTab || 'thumbs',
+                    t: Date.now()
+                };
+                storageSet(resumeKey, JSON.stringify(state));
+            }, 600);
         }
 
         function updateUI() {
@@ -481,7 +518,7 @@
             updateThumbSelection();
             // Only once the reader is moving around, so opening a document doesn't
             // overwrite where they were last time
-            if (total && api.ready) rememberPage();
+            if (total && api.ready) rememberState();
         }
 
         // Bootstrap's .active shows the selected state in the site green
@@ -1096,6 +1133,7 @@
                 onViewerResized();
             }
             showTab(tab || sidebarTab);
+            rememberState();
         }
 
         function closeSidebar() {
@@ -1103,6 +1141,7 @@
             sidebar.hidden = true;
             setPressed(sidebarBtn, false);
             onViewerResized();
+            rememberState();
         }
 
         function showTab(tab) {
@@ -1121,6 +1160,7 @@
             if (tab === 'thumbs') buildThumbs();
             if (tab === 'info') buildInfo();
             if (tab === 'results') updateResultSelection();
+            rememberState();
         }
 
         function panel(name) {
@@ -1481,10 +1521,22 @@
 
         function toast(message, actionLabel, action, timeout) {
             if (!toasts) return;
-            var t = el('div', 'toast show align-items-center shadow-sm');
+            var existing = toasts.querySelectorAll('.toast');
+            if (existing.length > 2) {
+                existing[0].remove();
+            }
+            var t = el('div', 'toast show align-items-center shadow');
             t.setAttribute('role', 'status');
             var row = el('div', 'd-flex align-items-center gap-2 p-2');
-            row.appendChild(el('div', 'toast-body p-1 small flex-grow-1', message));
+            
+            var msgEl = el('div', 'toast-body p-1 small flex-grow-1 d-flex align-items-center gap-1');
+            if (message.indexOf('copied') !== -1 || message.indexOf('Copied') !== -1) {
+                msgEl.innerHTML = '<i class="bi bi-check-circle-fill text-success fs-6" aria-hidden="true"></i> <span class="fw-semibold">' + message + '</span>';
+            } else {
+                msgEl.textContent = message;
+            }
+            row.appendChild(msgEl);
+
             if (actionLabel) {
                 var btn = el('button', 'btn btn-sm btn-sm-green text-nowrap', actionLabel);
                 btn.type = 'button';
@@ -1499,8 +1551,16 @@
             row.appendChild(x);
             t.appendChild(row);
             toasts.appendChild(t);
-            if (timeout) {
-                setTimeout(function() { t.remove(); }, timeout);
+
+            var ms = (timeout !== undefined) ? timeout : (actionLabel ? 12000 : 3500);
+            if (ms > 0) {
+                setTimeout(function() {
+                    if (t.parentNode) {
+                        t.style.opacity = '0';
+                        t.style.transition = 'opacity 0.3s ease';
+                        setTimeout(function() { t.remove(); }, 300);
+                    }
+                }, ms);
             }
         }
 
@@ -1533,9 +1593,11 @@
 
         function copyWithFeedback(text, html, what) {
             copyText(text, html).then(function() {
-                toast(what + ' copied');
+                var isLink = (what && String(what).toLowerCase().indexOf('link') !== -1);
+                var msg = isLink ? 'Link copied!' : what + ' copied!';
+                toast(msg, null, null, 3500);
             }, function() {
-                toast('Couldn’t copy automatically. Select the text and copy it instead.');
+                toast('Couldn’t copy automatically. Select the text and copy it instead.', null, null, 5000);
             });
         }
 
@@ -1850,8 +1912,16 @@
         if (adjustbar) {
             ['brightness', 'contrast', 'grayscale', 'invert'].forEach(function(name) {
                 var input = control(name);
-                if (input) input.addEventListener('input', applyAdjustments);
-                if (input) input.addEventListener('change', applyAdjustments);
+                if (input) {
+                    input.addEventListener('input', function() {
+                        applyAdjustments();
+                        rememberState();
+                    });
+                    input.addEventListener('change', function() {
+                        applyAdjustments();
+                        rememberState();
+                    });
+                }
             });
             var resetBtn = control('adjust-reset');
             if (resetBtn) resetBtn.addEventListener('click', function() {
@@ -1860,6 +1930,7 @@
                 control('grayscale').checked = false;
                 control('invert').checked = false;
                 applyAdjustments();
+                rememberState();
             });
             var adjustClose = control('adjust-close');
             if (adjustClose) adjustClose.addEventListener('click', function() { toggleAdjust(false); });
@@ -1874,6 +1945,7 @@
                 if (first) first.focus();
             }
             onViewerResized();
+            rememberState();
         }
 
         // ---- Save an area as a picture ------------------------------------------------
@@ -2123,11 +2195,13 @@
         function zoomBy(factor, anchorX, anchorY) {
             fitMode = null;
             setScale(scale * factor, anchorX, anchorY);
+            rememberState();
         }
 
         function setFitMode(mode) {
             fitMode = mode;
             applyFit();
+            rememberState();
         }
 
         function rotate() {
@@ -2139,6 +2213,7 @@
             applyFit();
             goToPage(currentPage, true);
             resetThumbs();
+            rememberState();
         }
 
         function toggleSpread() {
@@ -2153,6 +2228,7 @@
             layout();
             applyFit();
             goToPage(keep, true);
+            rememberState();
         }
 
         // CSS-only "expanded" mode for browsers without the Fullscreen API on elements (iPhone)
@@ -2215,13 +2291,11 @@
             commentBox.setSelectionRange(commentBox.value.length, commentBox.value.length);
         }
 
-        function offerResume() {
-            var saved = null;
-            try { saved = JSON.parse(storageGet(resumeKey) || 'null'); } catch (e) {}
+        function offerResume(saved) {
+            if (!saved) saved = getSavedState();
             if (!saved || !saved.page || saved.page <= 1 || saved.page > pages.length || pages.length < 3) return;
-            if (Date.now() - (saved.t || 0) > RESUME_DAYS * 86400000) return;
             var page = saved.page;
-            toast('You were reading ' + describePage(page) + '.', 'Continue there', function() { goToPage(page, true); });
+            toast('You were reading ' + describePage(page) + '.', 'Continue there', function() { goToPage(page, true); }, 12000);
         }
 
         var handlers = {
@@ -2475,10 +2549,51 @@
                     pageEl.setAttribute('aria-label', 'Page ' + num + ' of ' + doc.numPages + (hasDistinctLabel(num) ? ', printed page ' + labelFor(num) : ''));
                     return { num: num, page: pageProxy, el: pageEl, canvas: null, baseW: 0, baseH: 0, renderedKey: null };
                 });
+                var saved = getSavedState();
+                if (saved) {
+                    if (saved.adjustments) {
+                        var b = control('brightness');
+                        var c = control('contrast');
+                        var g = control('grayscale');
+                        var inv = control('invert');
+                        if (b && saved.adjustments.brightness !== undefined) b.value = saved.adjustments.brightness;
+                        if (c && saved.adjustments.contrast !== undefined) c.value = saved.adjustments.contrast;
+                        if (g && saved.adjustments.grayscale !== undefined) g.checked = !!saved.adjustments.grayscale;
+                        if (inv && saved.adjustments.invert !== undefined) inv.checked = !!saved.adjustments.invert;
+                        applyAdjustments();
+                        if (saved.adjustments.adjustOpen && adjustbar && adjustbar.hidden) toggleAdjust(true);
+                    }
+                    if (saved.rotation !== undefined && saved.rotation !== 0) {
+                        rotation = (saved.rotation % 360 + 360) % 360;
+                    }
+                    if (saved.spread !== undefined && saved.spread !== spread) {
+                        spread = !!saved.spread;
+                        var item = control('spread');
+                        if (item) {
+                            item.setAttribute('aria-checked', spread ? 'true' : 'false');
+                            item.classList.toggle('active', spread);
+                        }
+                    }
+                    if (saved.fitMode !== undefined) {
+                        fitMode = saved.fitMode;
+                    }
+                    if (saved.fitMode === null && saved.scale) {
+                        scale = saved.scale;
+                    }
+                    if (saved.sidebarOpen !== undefined) {
+                        if (saved.sidebarOpen && sidebar && sidebar.hidden) openSidebar();
+                        else if (!saved.sidebarOpen && sidebar && !sidebar.hidden) closeSidebar();
+                    }
+                    if (saved.sidebarTab && sidebarTab !== saved.sidebarTab) {
+                        sidebarTab = saved.sidebarTab;
+                    }
+                }
                 arrangePages();
                 measureBase();
                 layout();
-                applyFit();
+                if (fitMode) applyFit();
+                else if (saved && saved.fitMode === null && saved.scale) setScale(saved.scale);
+                else applyFit();
                 viewportEl.scrollTop = 0;
                 updateUI();
                 buildOutline();

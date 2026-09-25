@@ -810,7 +810,7 @@ class Scouting_PDF_Embedder {
                     <div class="card-body small" data-pdf-role="dialog-body"></div>
                 </div>
 
-                <div class="toast-container position-absolute bottom-0 end-0 p-3" data-pdf-role="toasts" aria-live="polite"></div>
+                <div class="toast-container position-absolute top-0 start-50 translate-middle-x p-3" data-pdf-role="toasts" aria-live="polite"></div>
             </div>
 
             <div class="card-footer d-flex align-items-center justify-content-center py-2 user-select-none bg-body" data-pdf-role="bottom-toolbar">

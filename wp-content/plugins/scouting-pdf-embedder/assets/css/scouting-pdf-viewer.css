@@ -538,28 +538,54 @@
 }
 
 [data-pdf-viewer] [data-pdf-role="toasts"] {
-    z-index: 1055;
+    position: absolute !important;
+    top: 1rem !important;
+    bottom: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    z-index: 1070;
     pointer-events: none;
-    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: auto;
+    max-width: min(28rem, calc(100% - 2rem));
 }
 
 [data-pdf-viewer] [data-pdf-role="toasts"] .toast {
     pointer-events: auto;
-    max-width: min(24rem, calc(100vw - 2rem));
+    width: auto;
+    min-width: 14rem;
+    max-width: 100%;
     background-color: var(--bs-card-bg, #fff);
-    border: 1px solid var(--bs-border-color, #dee2e6);
+    border: 1px solid var(--sm-green);
     border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
+    animation: pdfToastSlideDown 0.22s ease-out;
+}
+
+@keyframes pdfToastSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @media (max-width: 576px) {
     [data-pdf-viewer] [data-pdf-role="toasts"] {
-        padding: 0.5rem !important;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        top: 0.75rem !important;
+        left: 0.75rem !important;
+        right: 0.75rem !important;
+        transform: none !important;
+        width: calc(100% - 1.5rem) !important;
+        max-width: calc(100% - 1.5rem) !important;
+        padding: 0 !important;
     }
 
     [data-pdf-viewer] [data-pdf-role="toasts"] .toast {
