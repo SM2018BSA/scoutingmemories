@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Admin;
 
+use ScoutingMemories\Forms\Support\Permissions;
 use ScoutingMemories\Forms\Models\ArchiveRepository;
 use ScoutingMemories\Forms\Support\Environment;
 use ScoutingMemories\Forms\Support\Mailer;
@@ -28,7 +29,7 @@ class AdminMenu {
         add_menu_page(
             __('Scouting Forms & Views Studio', 'scouting-forms'),
             __('Scouting Forms', 'scouting-forms'),
-            'manage_options',
+            'sm_view_forms',
             'scouting-forms-builder',
             [__CLASS__, 'renderBuilderPage'],
             'dashicons-feedback',
@@ -40,7 +41,7 @@ class AdminMenu {
             'scouting-forms-builder',
             __('Forms & Fields Studio', 'scouting-forms'),
             __('📋 Forms & Fields', 'scouting-forms'),
-            'manage_options',
+            'sm_view_forms',
             'scouting-forms-builder',
             [__CLASS__, 'renderBuilderPage']
         );
@@ -50,7 +51,7 @@ class AdminMenu {
             'scouting-forms-builder',
             __('Views & Templates Studio', 'scouting-forms'),
             __('👁️ Views Studio', 'scouting-forms'),
-            'manage_options',
+            'sm_edit_displays',
             'scouting-forms-views',
             [__CLASS__, 'renderBuilderPage']
         );
@@ -60,7 +61,7 @@ class AdminMenu {
             'scouting-forms-builder',
             __('Entries Manager', 'scouting-forms'),
             __('📑 Entries Manager', 'scouting-forms'),
-            'manage_options',
+            'sm_view_entries',
             'scouting-forms-entries',
             [__CLASS__, 'renderBuilderPage']
         );
@@ -69,7 +70,7 @@ class AdminMenu {
         add_submenu_page(
             'scouting-forms-builder',
             __('Historical Councils Archive', 'scouting-forms'),
-            __('🏛️ Councils (2,323)', 'scouting-forms'),
+            __('🏛️ Councils', 'scouting-forms'),
             'manage_options',
             'scouting-archives-councils',
             [__CLASS__, 'renderCouncilsPage']
@@ -79,7 +80,7 @@ class AdminMenu {
         add_submenu_page(
             'scouting-forms-builder',
             __('Historical Camps Archive', 'scouting-forms'),
-            __('🏕️ Camps (3,552)', 'scouting-forms'),
+            __('🏕️ Camps', 'scouting-forms'),
             'manage_options',
             'scouting-archives-camps',
             [__CLASS__, 'renderCampsPage']
@@ -89,7 +90,7 @@ class AdminMenu {
         add_submenu_page(
             'scouting-forms-builder',
             __('Order of the Arrow Lodges', 'scouting-forms'),
-            __('🏹 Lodges (1,003)', 'scouting-forms'),
+            __('🏹 Lodges', 'scouting-forms'),
             'manage_options',
             'scouting-archives-lodges',
             [__CLASS__, 'renderLodgesPage']
@@ -166,7 +167,17 @@ class AdminMenu {
                 'nonce'       => wp_create_nonce('wp_rest'),
                 'adminUrl'    => admin_url(),
                 'activeTheme' => get_stylesheet(),
-                'hook'        => $hook
+                'hook'        => $hook,
+                // What this person may do (the REST API checks the same capabilities)
+                'can'         => [
+                    'viewForms'     => Permissions::can('view_forms'),
+                    'editForms'     => Permissions::can('edit_forms'),
+                    'views'         => Permissions::can('edit_displays'),
+                    'viewEntries'   => Permissions::can('view_entries'),
+                    'createEntries' => Permissions::can('create_entries'),
+                    'editEntries'   => Permissions::can('edit_entries'),
+                    'deleteEntries' => Permissions::can('delete_entries'),
+                ],
             ]);
         }
 
@@ -217,7 +228,7 @@ class AdminMenu {
         <div class="notice notice-info is-dismissible sm-admin-notice" style="border-left: 4px solid #2563eb; background: #ffffff; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin: 15px 0;">
             <p style="font-size: 14px; margin: 0 0 8px 0; color: #0f172a;">
                 <strong style="color: #1e3a8a;">🎉 Scouting Forms & Views Studio is active!</strong>
-                Manage your 23 forms, 266 fields, 14 views, and historical archives from the left sidebar under <strong>Scouting Forms</strong>.
+                Manage your forms, fields, views, entries and historical archives from the left sidebar under <strong>Scouting Forms</strong>.
             </p>
             <p style="margin: 0;">
                 <a href="<?php echo esc_url($builder_url); ?>" class="button button-primary" style="background: #2563eb; border-color: #1d4ed8;">

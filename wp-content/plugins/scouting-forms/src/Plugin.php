@@ -16,6 +16,7 @@ use ScoutingMemories\Forms\Forms\MemoryForm;
 use ScoutingMemories\Forms\Forms\UserDefaultsForm;
 use ScoutingMemories\Forms\Forms\UserPostsView;
 use ScoutingMemories\Forms\Rest\ApiController;
+use ScoutingMemories\Forms\Support\Capabilities;
 use ScoutingMemories\Forms\Support\Mailer;
 use ScoutingMemories\Forms\Tools\CompareTool;
 
@@ -55,6 +56,7 @@ class Plugin {
         CascadingSearch::registerHooks();
         DynamicFields::registerHooks();
         Mailer::registerHooks();
+        Capabilities::registerHooks();
         AccountPages::registerHooks();
         Avatar::registerHooks();
 

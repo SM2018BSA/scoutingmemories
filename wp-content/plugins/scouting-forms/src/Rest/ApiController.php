@@ -2,620 +2,638 @@
 
 namespace ScoutingMemories\Forms\Rest;
 
+use ScoutingMemories\Forms\Forms\EntryService;
+use ScoutingMemories\Forms\Forms\Rendering\FieldRenderer;
 use ScoutingMemories\Forms\Models\EntryRepository;
+use ScoutingMemories\Forms\Models\FormRepository;
+use ScoutingMemories\Forms\Support\Permissions;
 use ScoutingMemories\Forms\Support\TestData;
-use WP_REST_Server;
+use ScoutingMemories\Forms\Views\EntryValues;
 use WP_REST_Request;
 use WP_REST_Response;
-use WP_Error;
 
 /**
  * ApiController
  *
- * Provides REST API endpoints for Forms, Fields, Views, and Entries management.
- * 100% compatible with existing Formidable database tables with zero data loss.
- * Built according to WP Engine hosting guidelines (object caching, prepared queries, no PHP sessions).
+ * REST API for the admin builder (wp-json/scouting-forms/v1). Every route checks the capability
+ * Formidable would (Permissions::can accepts the frm_* or the plugin's sm_* capability): forms need
+ * view/edit_forms, views need edit_displays, entries need view/create/edit/delete_entries.
+ * Entries are created and changed through EntryService, so the admin gets the same validation and
+ * form actions as the front end; deleting removes child entries and trashes a linked post.
+ * Request data is never unserialized; view HTML is filtered for people without unfiltered_html.
  */
 class ApiController {
 
-    const NAMESPACE = 'scouting-forms/v1';
+    private const NAMESPACE = 'scouting-forms/v1';
 
     public static function registerHooks(): void {
         add_action('rest_api_init', [__CLASS__, 'registerRoutes']);
     }
 
     public static function registerRoutes(): void {
-        // Forms
+        $can = static function (string $cap): callable {
+            return static function () use ($cap): bool {
+                return Permissions::can($cap);
+            };
+        };
+
         register_rest_route(self::NAMESPACE, '/forms', [
-            'methods'             => WP_REST_Server::READABLE,
-            'callback'            => [__CLASS__, 'getForms'],
-            'permission_callback' => [__CLASS__, 'checkAdminPermission'],
+            'methods' => 'GET', 'callback' => [__CLASS__, 'getForms'], 'permission_callback' => $can('view_forms'),
         ]);
-
         register_rest_route(self::NAMESPACE, '/forms/(?P<id>\d+)', [
-            [
-                'methods'             => WP_REST_Server::READABLE,
-                'callback'            => [__CLASS__, 'getForm'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::EDITABLE,
-                'callback'            => [__CLASS__, 'updateForm'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ]
+            ['methods' => 'GET', 'callback' => [__CLASS__, 'getForm'], 'permission_callback' => $can('view_forms')],
+            ['methods' => 'POST', 'callback' => [__CLASS__, 'updateForm'], 'permission_callback' => $can('edit_forms')],
         ]);
-
         register_rest_route(self::NAMESPACE, '/forms/(?P<id>\d+)/fields', [
-            'methods'             => WP_REST_Server::CREATABLE,
-            'callback'            => [__CLASS__, 'saveFormFields'],
-            'permission_callback' => [__CLASS__, 'checkAdminPermission'],
+            'methods' => 'POST', 'callback' => [__CLASS__, 'saveFormFields'], 'permission_callback' => $can('edit_forms'),
         ]);
-
         register_rest_route(self::NAMESPACE, '/fields/(?P<id>\d+)', [
-            'methods'             => WP_REST_Server::DELETABLE,
-            'callback'            => [__CLASS__, 'deleteField'],
-            'permission_callback' => [__CLASS__, 'checkAdminPermission'],
+            'methods' => 'DELETE', 'callback' => [__CLASS__, 'deleteField'], 'permission_callback' => $can('delete_forms'),
         ]);
 
-        // Views
         register_rest_route(self::NAMESPACE, '/views', [
-            [
-                'methods'             => WP_REST_Server::READABLE,
-                'callback'            => [__CLASS__, 'getViews'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::CREATABLE,
-                'callback'            => [__CLASS__, 'createView'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ]
+            ['methods' => 'GET', 'callback' => [__CLASS__, 'getViews'], 'permission_callback' => $can('edit_displays')],
+            ['methods' => 'POST', 'callback' => [__CLASS__, 'createView'], 'permission_callback' => $can('edit_displays')],
         ]);
-
         register_rest_route(self::NAMESPACE, '/views/(?P<id>\d+)', [
-            [
-                'methods'             => WP_REST_Server::READABLE,
-                'callback'            => [__CLASS__, 'getView'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::EDITABLE,
-                'callback'            => [__CLASS__, 'updateView'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::DELETABLE,
-                'callback'            => [__CLASS__, 'deleteView'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ]
+            ['methods' => 'GET', 'callback' => [__CLASS__, 'getView'], 'permission_callback' => $can('edit_displays')],
+            ['methods' => 'POST', 'callback' => [__CLASS__, 'updateView'], 'permission_callback' => $can('edit_displays')],
+            ['methods' => 'DELETE', 'callback' => [__CLASS__, 'deleteView'], 'permission_callback' => $can('edit_displays')],
         ]);
 
-        // Entries
         register_rest_route(self::NAMESPACE, '/entries', [
-            [
-                'methods'             => WP_REST_Server::READABLE,
-                'callback'            => [__CLASS__, 'getEntries'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::CREATABLE,
-                'callback'            => [__CLASS__, 'createEntry'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ]
+            ['methods' => 'GET', 'callback' => [__CLASS__, 'getEntries'], 'permission_callback' => $can('view_entries')],
+            ['methods' => 'POST', 'callback' => [__CLASS__, 'createEntry'], 'permission_callback' => $can('create_entries')],
         ]);
-
+        register_rest_route(self::NAMESPACE, '/entries/export', [
+            'methods' => 'GET', 'callback' => [__CLASS__, 'exportEntries'], 'permission_callback' => $can('view_entries'),
+        ]);
         register_rest_route(self::NAMESPACE, '/entries/(?P<id>\d+)', [
-            [
-                'methods'             => WP_REST_Server::READABLE,
-                'callback'            => [__CLASS__, 'getEntry'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::EDITABLE,
-                'callback'            => [__CLASS__, 'updateEntry'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ],
-            [
-                'methods'             => WP_REST_Server::DELETABLE,
-                'callback'            => [__CLASS__, 'deleteEntry'],
-                'permission_callback' => [__CLASS__, 'checkAdminPermission'],
-            ]
+            ['methods' => 'GET', 'callback' => [__CLASS__, 'getEntry'], 'permission_callback' => $can('view_entries')],
+            ['methods' => 'POST', 'callback' => [__CLASS__, 'updateEntry'], 'permission_callback' => $can('edit_entries')],
+            ['methods' => 'DELETE', 'callback' => [__CLASS__, 'deleteEntry'], 'permission_callback' => $can('delete_entries')],
         ]);
     }
 
-    public static function checkAdminPermission(): bool {
-        return current_user_can('manage_options');
-    }
-
-    /**
-     * Purge caches on mutation (WP Engine compatible)
-     */
-    private static function purgeCache(string $key = ''): void {
-        if ($key) {
-            wp_cache_delete($key);
-        }
-        wp_cache_delete('sm_archive_counts');
-
-        if (class_exists('WpeCommon') && method_exists('WpeCommon', 'purge_memcached')) {
-            \WpeCommon::purge_memcached();
-        }
-    }
-
-    // ==========================================
-    // FORMS
-    // ==========================================
+    // ------------------------------------------------------------------ forms
 
     public static function getForms(WP_REST_Request $request): WP_REST_Response {
         global $wpdb;
-
-        $forms_table  = $wpdb->prefix . 'frm_forms';
-        $fields_table = $wpdb->prefix . 'frm_fields';
-        $items_table  = $wpdb->prefix . 'frm_items';
-
-        $query = "
-            SELECT 
-                f.id,
-                f.form_key,
-                f.name,
-                f.description,
-                f.status,
-                f.created_at,
-                (SELECT COUNT(*) FROM {$fields_table} fi WHERE fi.form_id = f.id AND fi.type NOT IN ('end_divider')) AS field_count,
-                (SELECT COUNT(*) FROM {$items_table} it WHERE it.form_id = f.id) AS entry_count
-            FROM {$forms_table} f
-            WHERE f.status = 'published' OR f.status = 'draft'
-            ORDER BY f.name ASC
-        ";
-
-        $results = $wpdb->get_results($query, ARRAY_A);
+        $results = $wpdb->get_results(
+            "SELECT f.id, f.form_key, f.name, f.description, f.status, f.created_at, f.parent_form_id,
+                (SELECT COUNT(*) FROM {$wpdb->prefix}frm_fields fi WHERE fi.form_id = f.id AND fi.type <> 'end_divider') AS field_count,
+                (SELECT COUNT(*) FROM {$wpdb->prefix}frm_items it WHERE it.form_id = f.id AND it.is_draft = 0) AS entry_count
+             FROM {$wpdb->prefix}frm_forms f
+             WHERE f.status IN ('published', 'draft') AND f.is_template = 0
+             ORDER BY f.name ASC",
+            ARRAY_A
+        );
         return new WP_REST_Response(['forms' => $results ?: []], 200);
     }
 
     public static function getForm(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
-
-        $form_id      = (int) $request->get_param('id');
-        $forms_table  = $wpdb->prefix . 'frm_forms';
-        $fields_table = $wpdb->prefix . 'frm_fields';
-
-        $form = $wpdb->get_row(
-            $wpdb->prepare("SELECT * FROM {$forms_table} WHERE id = %d", $form_id),
-            ARRAY_A
-        );
-
+        $form = FormRepository::find((int) $request->get_param('id'));
         if (!$form) {
-            return new WP_REST_Response(['error' => 'Form not found'], 404);
+            return new WP_REST_Response(['message' => __('Form not found.', 'scouting-forms')], 404);
         }
-
-        $form['options'] = maybe_unserialize($form['options']);
-
-        // Fetch fields ordered by field_order
-        $fields = $wpdb->get_results(
-            $wpdb->prepare("SELECT * FROM {$fields_table} WHERE form_id = %d ORDER BY field_order ASC, id ASC", $form_id),
-            ARRAY_A
-        );
-
-        $parsed_fields = [];
-        if ($fields) {
-            foreach ($fields as $f) {
-                $f['field_options'] = maybe_unserialize($f['field_options']);
-                $f['options']       = maybe_unserialize($f['options']);
-                $f['required']      = (bool) $f['required'];
-                $f['field_order']   = (int) $f['field_order'];
-                $parsed_fields[]    = $f;
-            }
+        $fields = [];
+        foreach (FormRepository::fields((int) $form['id']) as $field) {
+            $fields[] = self::fieldForClient($field);
         }
-
-        return new WP_REST_Response([
-            'form'   => $form,
-            'fields' => $parsed_fields
-        ], 200);
+        return new WP_REST_Response(['form' => $form, 'fields' => $fields], 200);
     }
 
     public static function updateForm(WP_REST_Request $request): WP_REST_Response {
         global $wpdb;
-
-        $form_id = (int) $request->get_param('id');
-        $data    = $request->get_json_params();
-
-        $forms_table = $wpdb->prefix . 'frm_forms';
-
-        $name        = sanitize_text_field($data['name'] ?? '');
-        $form_key    = sanitize_text_field($data['form_key'] ?? '');
-        $description = wp_kses_post($data['description'] ?? '');
-
-        // Fetch existing form to merge options
-        $existing = $wpdb->get_row($wpdb->prepare("SELECT options FROM {$forms_table} WHERE id = %d", $form_id), ARRAY_A);
-        $options  = maybe_unserialize($existing['options'] ?? []);
-
-        if (isset($data['submit_value'])) {
-            $options['submit_value'] = sanitize_text_field($data['submit_value']);
+        $formId = (int) $request->get_param('id');
+        $form = FormRepository::find($formId);
+        if (!$form) {
+            return new WP_REST_Response(['message' => __('Form not found.', 'scouting-forms')], 404);
         }
-        if (isset($data['success_msg'])) {
-            $options['success_msg'] = wp_kses_post($data['success_msg']);
+        $data = (array) $request->get_json_params();
+
+        $row = $wpdb->get_row($wpdb->prepare("SELECT options FROM {$wpdb->prefix}frm_forms WHERE id = %d", $formId), ARRAY_A);
+        $options = maybe_unserialize($row['options'] ?? '');
+        $options = is_array($options) ? $options : [];
+        foreach (['submit_value' => 'sanitize_text_field', 'success_msg' => 'wp_kses_post', 'edit_msg' => 'wp_kses_post', 'edit_value' => 'sanitize_text_field'] as $key => $clean) {
+            if (isset($data[$key]) && is_string($data[$key])) {
+                $options[$key] = $clean($data[$key]);
+            }
         }
 
-        $wpdb->update(
-            $forms_table,
-            [
-                'name'        => $name,
-                'form_key'    => $form_key,
-                'description' => $description,
-                'options'     => maybe_serialize($options)
-            ],
-            ['id' => $form_id],
-            ['%s', '%s', '%s', '%s'],
-            ['%d']
-        );
+        $wpdb->update($wpdb->prefix . 'frm_forms', [
+            'name' => sanitize_text_field((string) ($data['name'] ?? $form['name'])),
+            'form_key' => sanitize_title((string) ($data['form_key'] ?? $form['key'])),
+            'description' => wp_kses_post((string) ($data['description'] ?? $form['description'])),
+            'options' => maybe_serialize($options),
+        ], ['id' => $formId], ['%s', '%s', '%s', '%s'], ['%d']);
 
         self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'message' => 'Form updated successfully'], 200);
+        return new WP_REST_Response(['success' => true, 'message' => __('Form updated.', 'scouting-forms')], 200);
     }
 
+    /**
+     * Save the form's fields (label, type, key, required, default, choices, a few field options).
+     * Only arrays and plain values are accepted: nothing from the request is unserialized.
+     */
     public static function saveFormFields(WP_REST_Request $request): WP_REST_Response {
         global $wpdb;
+        $formId = (int) $request->get_param('id');
+        if (!FormRepository::find($formId)) {
+            return new WP_REST_Response(['message' => __('Form not found.', 'scouting-forms')], 404);
+        }
+        $data = (array) $request->get_json_params();
+        $table = $wpdb->prefix . 'frm_fields';
+        $types = ['text', 'textarea', 'email', 'url', 'number', 'phone', 'date', 'time', 'select', 'radio', 'checkbox', 'hidden', 'html', 'divider', 'end_divider', 'break', 'data', 'toggle', 'user_id', 'file', 'rte', 'password', 'captcha', 'submit', 'range'];
 
-        $form_id = (int) $request->get_param('id');
-        $data    = $request->get_json_params();
-        $fields  = $data['fields'] ?? [];
+        foreach ((array) ($data['fields'] ?? []) as $order => $f) {
+            if (!is_array($f)) {
+                continue;
+            }
+            $fieldId = (int) ($f['id'] ?? 0);
+            $existing = $fieldId ? FormRepository::field($fieldId) : null;
+            if ($fieldId && (!$existing || (int) $existing['form_id'] !== $formId)) {
+                continue; // a field of another form cannot be changed here
+            }
+            $type = in_array($f['type'] ?? '', $types, true) ? (string) $f['type'] : ($existing['type'] ?? 'text');
 
-        $fields_table = $wpdb->prefix . 'frm_fields';
+            $fieldOptions = $existing['field_options'] ?? [];
+            foreach (['classes', 'placeholder', 'blank', 'invalid', 'unique_msg'] as $key) {
+                if (isset($f[$key]) && is_scalar($f[$key])) {
+                    $fieldOptions[$key] = sanitize_text_field((string) $f[$key]);
+                }
+            }
+            if (isset($f['field_options']) && is_array($f['field_options'])) {
+                foreach (['label', 'show_hide', 'any_all', 'data_type', 'option_order'] as $key) {
+                    if (isset($f['field_options'][$key]) && is_scalar($f['field_options'][$key])) {
+                        $fieldOptions[$key] = sanitize_text_field((string) $f['field_options'][$key]);
+                    }
+                }
+                foreach (['hide_field', 'hide_field_cond', 'hide_opt'] as $key) {
+                    if (isset($f['field_options'][$key]) && is_array($f['field_options'][$key])) {
+                        $fieldOptions[$key] = array_values(array_map(static fn($v) => sanitize_text_field((string) $v), array_filter($f['field_options'][$key], 'is_scalar')));
+                    }
+                }
+            }
 
-        foreach ($fields as $order => $f) {
-            $field_id      = (int) ($f['id'] ?? 0);
-            $name          = sanitize_text_field($f['name'] ?? '');
-            $type          = sanitize_text_field($f['type'] ?? 'text');
-            $field_key     = sanitize_text_field($f['field_key'] ?? ('field_' . uniqid()));
-            $required      = !empty($f['required']) ? 1 : 0;
-            $default_value = sanitize_text_field($f['default_value'] ?? '');
-            $options       = maybe_serialize($f['options'] ?? []);
+            $choices = $existing['options'] ?? [];
+            if (isset($f['options']) && is_array($f['options'])) {
+                $choices = [];
+                foreach ($f['options'] as $key => $option) {
+                    if (is_array($option)) {
+                        $choices[sanitize_key((string) $key)] = [
+                            'label' => sanitize_text_field((string) ($option['label'] ?? '')),
+                            'value' => sanitize_text_field((string) ($option['value'] ?? ($option['label'] ?? ''))),
+                        ];
+                    } elseif (is_scalar($option)) {
+                        $choices[] = sanitize_text_field((string) $option);
+                    }
+                }
+            }
 
-            $field_options = maybe_unserialize($f['field_options'] ?? []);
-            if (!is_array($field_options)) $field_options = [];
-            if (isset($f['classes'])) $field_options['classes'] = sanitize_text_field($f['classes']);
-            if (isset($f['placeholder'])) $field_options['placeholder'] = sanitize_text_field($f['placeholder']);
-
-            if ($field_id > 0) {
-                // Update existing field
-                $wpdb->update(
-                    $fields_table,
-                    [
-                        'name'          => $name,
-                        'type'          => $type,
-                        'field_key'     => $field_key,
-                        'required'      => $required,
-                        'default_value' => $default_value,
-                        'options'       => $options,
-                        'field_options' => maybe_serialize($field_options),
-                        'field_order'   => $order + 1
-                    ],
-                    ['id' => $field_id],
-                    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d'],
-                    ['%d']
-                );
+            $row = [
+                'name' => sanitize_text_field((string) ($f['name'] ?? ($existing['name'] ?? ''))),
+                'description' => wp_kses_post((string) ($f['description'] ?? ($existing['description'] ?? ''))),
+                'type' => $type,
+                'field_key' => sanitize_key((string) ($f['field_key'] ?? ($existing['key'] ?? ('field_' . wp_generate_password(6, false))))),
+                'required' => !empty($f['required']) ? 1 : 0,
+                'default_value' => sanitize_text_field(is_scalar($f['default_value'] ?? null) ? (string) $f['default_value'] : (string) ($existing['default_value'] ?? '')),
+                'options' => maybe_serialize($choices),
+                'field_options' => maybe_serialize($fieldOptions),
+                'field_order' => (int) $order + 1,
+            ];
+            if ($existing) {
+                $wpdb->update($table, $row, ['id' => $fieldId], ['%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d'], ['%d']);
             } else {
-                // Insert new field
-                $wpdb->insert(
-                    $fields_table,
-                    [
-                        'form_id'       => $form_id,
-                        'name'          => $name,
-                        'type'          => $type,
-                        'field_key'     => $field_key,
-                        'required'      => $required,
-                        'default_value' => $default_value,
-                        'options'       => $options,
-                        'field_options' => maybe_serialize($field_options),
-                        'field_order'   => $order + 1,
-                        'created_at'    => current_time('mysql', 1)
-                    ],
-                    ['%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s']
-                );
+                $wpdb->insert($table, $row + ['form_id' => $formId, 'created_at' => current_time('mysql', 1)], ['%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d', '%d', '%s']);
             }
         }
 
         self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'message' => 'Fields saved successfully'], 200);
+        return new WP_REST_Response(['success' => true, 'message' => __('Fields saved.', 'scouting-forms')], 200);
     }
 
     public static function deleteField(WP_REST_Request $request): WP_REST_Response {
         global $wpdb;
-
-        $field_id     = (int) $request->get_param('id');
-        $fields_table = $wpdb->prefix . 'frm_fields';
-
-        $wpdb->delete($fields_table, ['id' => $field_id], ['%d']);
+        $fieldId = (int) $request->get_param('id');
+        if (!FormRepository::field($fieldId)) {
+            return new WP_REST_Response(['message' => __('Field not found.', 'scouting-forms')], 404);
+        }
+        $wpdb->delete($wpdb->prefix . 'frm_fields', ['id' => $fieldId], ['%d']);
         self::purgeCache();
-
-        return new WP_REST_Response(['success' => true, 'message' => 'Field deleted'], 200);
+        return new WP_REST_Response(['success' => true, 'message' => __('Field deleted.', 'scouting-forms')], 200);
     }
 
-    // ==========================================
-    // VIEWS
-    // ==========================================
+    // ------------------------------------------------------------------ views
 
     public static function getViews(WP_REST_Request $request): WP_REST_Response {
         global $wpdb;
-
-        $forms_table = $wpdb->prefix . 'frm_forms';
-
-        $query = "
-            SELECT 
-                p.ID as id,
-                p.post_title as title,
-                p.post_name as slug,
-                pm1.meta_value as form_id,
-                pm2.meta_value as show_count,
-                f.name as form_name
-            FROM {$wpdb->posts} p
-            LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = 'frm_form_id'
-            LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = 'frm_show_count'
-            LEFT JOIN {$forms_table} f ON pm1.meta_value = f.id
-            WHERE p.post_type = 'frm_display'
-            ORDER BY p.post_title ASC
-        ";
-
-        $results = $wpdb->get_results($query, ARRAY_A);
+        $results = $wpdb->get_results(
+            "SELECT p.ID AS id, p.post_title AS title, p.post_name AS slug, p.post_status AS status,
+                pm1.meta_value AS form_id, pm2.meta_value AS show_count, f.name AS form_name
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm1 ON p.ID = pm1.post_id AND pm1.meta_key = 'frm_form_id'
+             LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = 'frm_show_count'
+             LEFT JOIN {$wpdb->prefix}frm_forms f ON pm1.meta_value = f.id
+             WHERE p.post_type = 'frm_display' AND p.post_status IN ('publish', 'private', 'draft')
+             ORDER BY p.post_title ASC",
+            ARRAY_A
+        );
         return new WP_REST_Response(['views' => $results ?: []], 200);
     }
 
     public static function getView(WP_REST_Request $request): WP_REST_Response {
-        $view_id = (int) $request->get_param('id');
-        $post    = get_post($view_id);
-
+        $viewId = (int) $request->get_param('id');
+        $post = get_post($viewId);
         if (!$post || $post->post_type !== 'frm_display') {
-            return new WP_REST_Response(['error' => 'View not found'], 404);
+            return new WP_REST_Response(['message' => __('View not found.', 'scouting-forms')], 404);
         }
-
-        $form_id    = (int) get_post_meta($view_id, 'frm_form_id', true);
-        $show_count = get_post_meta($view_id, 'frm_show_count', true) ?: 'all';
-        $options    = get_post_meta($view_id, 'frm_options', true);
-        if (!is_array($options)) $options = maybe_unserialize($options) ?: [];
-
-        // Also fetch form fields for tag inserter
-        global $wpdb;
-        $fields_table = $wpdb->prefix . 'frm_fields';
-        $fields = $wpdb->get_results(
-            $wpdb->prepare("SELECT id, name, field_key, type FROM {$fields_table} WHERE form_id = %d ORDER BY field_order ASC", $form_id),
-            ARRAY_A
-        );
-
+        $formId = (int) get_post_meta($viewId, 'frm_form_id', true);
+        $options = maybe_unserialize(get_post_meta($viewId, 'frm_options', true));
+        $options = is_array($options) ? $options : [];
+        $fields = [];
+        foreach (FormRepository::fields($formId) as $field) {
+            $fields[] = ['id' => $field['id'], 'name' => $field['name'], 'field_key' => $field['key'], 'type' => $field['type']];
+        }
         return new WP_REST_Response([
             'view' => [
-                'id'             => $post->ID,
-                'title'          => $post->post_title,
-                'slug'           => $post->post_name,
-                'form_id'        => $form_id,
-                'show_count'     => $show_count,
-                'content'        => $post->post_content,
+                'id' => $post->ID,
+                'title' => $post->post_title,
+                'slug' => $post->post_name,
+                'form_id' => $formId,
+                'show_count' => get_post_meta($viewId, 'frm_show_count', true) ?: 'all',
+                'content' => $post->post_content,
+                'detail' => (string) get_post_meta($viewId, 'frm_dyncontent', true),
                 'before_content' => $options['before_content'] ?? '',
-                'after_content'  => $options['after_content'] ?? '',
-                'empty_msg'      => $options['empty_msg'] ?? 'No Entries Found',
-                'page_size'      => $options['page_size'] ?? 25,
-                'where'          => $options['where'] ?? [],
-                'where_is'       => $options['where_is'] ?? [],
-                'where_val'      => $options['where_val'] ?? []
+                'after_content' => $options['after_content'] ?? '',
+                'empty_msg' => $options['empty_msg'] ?? '',
+                'page_size' => $options['page_size'] ?? '',
+                'limit' => $options['limit'] ?? '',
+                'where' => array_values((array) ($options['where'] ?? [])),
+                'where_is' => array_values((array) ($options['where_is'] ?? [])),
+                'where_val' => array_values((array) ($options['where_val'] ?? [])),
+                'order_by' => array_values((array) ($options['order_by'] ?? [])),
+                'order' => array_values((array) ($options['order'] ?? [])),
             ],
-            'available_fields' => $fields ?: []
+            'available_fields' => $fields,
         ], 200);
     }
 
     public static function updateView(WP_REST_Request $request): WP_REST_Response {
-        $view_id = (int) $request->get_param('id');
-        $data    = $request->get_json_params();
+        $viewId = (int) $request->get_param('id');
+        $post = get_post($viewId);
+        if (!$post || $post->post_type !== 'frm_display') {
+            return new WP_REST_Response(['message' => __('View not found.', 'scouting-forms')], 404);
+        }
+        $data = (array) $request->get_json_params();
+        $html = static function ($value): string {
+            $value = is_string($value) ? $value : '';
+            // View templates are HTML with shortcodes; only people allowed raw HTML keep it as is
+            return current_user_can('unfiltered_html') ? $value : wp_kses_post($value);
+        };
 
-        $title      = sanitize_text_field($data['title'] ?? '');
-        $form_id    = (int) ($data['form_id'] ?? 0);
-        $show_count = sanitize_text_field($data['show_count'] ?? 'all');
-        $content    = $data['content'] ?? '';
+        wp_update_post(wp_slash([
+            'ID' => $viewId,
+            'post_title' => sanitize_text_field((string) ($data['title'] ?? $post->post_title)),
+            'post_content' => $html($data['content'] ?? $post->post_content),
+        ]));
+        update_post_meta($viewId, 'frm_form_id', (int) ($data['form_id'] ?? get_post_meta($viewId, 'frm_form_id', true)));
+        $show = (string) ($data['show_count'] ?? 'all');
+        update_post_meta($viewId, 'frm_show_count', in_array($show, ['all', 'one', 'dynamic', 'calendar'], true) ? $show : 'all');
+        if (isset($data['detail'])) {
+            update_post_meta($viewId, 'frm_dyncontent', wp_slash($html($data['detail'])));
+        }
 
-        wp_update_post([
-            'ID'           => $view_id,
-            'post_title'   => $title,
-            'post_content' => $content
-        ]);
-
-        update_post_meta($view_id, 'frm_form_id', $form_id);
-        update_post_meta($view_id, 'frm_show_count', $show_count);
-
-        $options = get_post_meta($view_id, 'frm_options', true);
-        if (!is_array($options)) $options = maybe_unserialize($options) ?: [];
-
-        $options['before_content'] = $data['before_content'] ?? '';
-        $options['after_content']  = $data['after_content'] ?? '';
-        $options['empty_msg']      = sanitize_text_field($data['empty_msg'] ?? 'No Entries Found');
-        $options['page_size']      = (int) ($data['page_size'] ?? 25);
-        $options['where']          = $data['where'] ?? [];
-        $options['where_is']       = $data['where_is'] ?? [];
-        $options['where_val']      = $data['where_val'] ?? [];
-
-        update_post_meta($view_id, 'frm_options', maybe_serialize($options));
+        $options = maybe_unserialize(get_post_meta($viewId, 'frm_options', true));
+        $options = is_array($options) ? $options : [];
+        $options['before_content'] = $html($data['before_content'] ?? ($options['before_content'] ?? ''));
+        $options['after_content'] = $html($data['after_content'] ?? ($options['after_content'] ?? ''));
+        $options['empty_msg'] = $html($data['empty_msg'] ?? ($options['empty_msg'] ?? ''));
+        $options['page_size'] = isset($data['page_size']) && $data['page_size'] !== '' ? absint($data['page_size']) : ($options['page_size'] ?? '');
+        $options['limit'] = isset($data['limit']) && $data['limit'] !== '' ? absint($data['limit']) : ($options['limit'] ?? '');
+        $clean = static fn($list) => array_values(array_map(static fn($v) => sanitize_text_field((string) $v), array_filter((array) $list, 'is_scalar')));
+        foreach (['where', 'where_is', 'where_val', 'order_by', 'order'] as $key) {
+            if (isset($data[$key])) {
+                $options[$key] = $clean($data[$key]);
+            }
+        }
+        update_post_meta($viewId, 'frm_options', $options);
 
         self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'message' => 'View updated successfully'], 200);
+        return new WP_REST_Response(['success' => true, 'message' => __('View updated.', 'scouting-forms')], 200);
     }
 
     public static function createView(WP_REST_Request $request): WP_REST_Response {
-        $data    = $request->get_json_params();
-        $title   = sanitize_text_field($data['title'] ?? 'New View');
-        $form_id = (int) ($data['form_id'] ?? 8);
-
-        $view_id = wp_insert_post([
-            'post_title'   => $title,
-            'post_type'    => 'frm_display',
-            'post_status'  => 'publish',
-            'post_content' => '<tr><td>[id]</td></tr>'
-        ]);
-
-        if (is_wp_error($view_id)) {
-            return new WP_REST_Response(['error' => $view_id->get_error_message()], 500);
+        $data = (array) $request->get_json_params();
+        $formId = (int) ($data['form_id'] ?? 0);
+        if (!FormRepository::find($formId)) {
+            return new WP_REST_Response(['message' => __('Choose a form for the view.', 'scouting-forms')], 400);
         }
-        TestData::markPost((int) $view_id);
-
-        update_post_meta($view_id, 'frm_form_id', $form_id);
-        update_post_meta($view_id, 'frm_show_count', 'all');
-
-        $options = [
+        $viewId = wp_insert_post([
+            'post_title' => sanitize_text_field((string) ($data['title'] ?? __('New View', 'scouting-forms'))),
+            'post_type' => 'frm_display',
+            'post_status' => 'publish',
+            'post_content' => '<tr><td>[id]</td></tr>',
+        ], true);
+        if (is_wp_error($viewId)) {
+            return new WP_REST_Response(['message' => $viewId->get_error_message()], 500);
+        }
+        TestData::markPost((int) $viewId);
+        update_post_meta($viewId, 'frm_form_id', $formId);
+        update_post_meta($viewId, 'frm_show_count', 'all');
+        update_post_meta($viewId, 'frm_options', [
             'before_content' => '<table class="table"><tbody>',
-            'after_content'  => '</tbody></table>',
-            'empty_msg'      => 'No Entries Found',
-            'page_size'      => 25
-        ];
-        update_post_meta($view_id, 'frm_options', maybe_serialize($options));
-
+            'after_content' => '</tbody></table>',
+            'empty_msg' => __('No Entries Found', 'scouting-forms'),
+            'page_size' => 25,
+        ]);
         self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'id' => $view_id], 201);
+        return new WP_REST_Response(['success' => true, 'id' => $viewId], 201);
     }
 
     public static function deleteView(WP_REST_Request $request): WP_REST_Response {
-        $view_id = (int) $request->get_param('id');
-        wp_delete_post($view_id, true);
+        $viewId = (int) $request->get_param('id');
+        $post = get_post($viewId);
+        if (!$post || $post->post_type !== 'frm_display') {
+            return new WP_REST_Response(['message' => __('View not found.', 'scouting-forms')], 404);
+        }
+        // Moved to the trash, so it can be restored
+        wp_trash_post($viewId);
         self::purgeCache();
         return new WP_REST_Response(['success' => true], 200);
     }
 
-    // ==========================================
-    // ENTRIES
-    // ==========================================
+    // ------------------------------------------------------------------ entries
 
+    /**
+     * /entries?form_id=8&page=1&limit=25&search=ohio&orderby=created_at&order=desc
+     * Each entry comes with the display values of the form's first few fields (list columns).
+     */
     public static function getEntries(WP_REST_Request $request): WP_REST_Response {
         global $wpdb;
+        $formId = (int) $request->get_param('form_id');
+        $form = FormRepository::find($formId);
+        if (!$form) {
+            return new WP_REST_Response(['message' => __('Choose a form.', 'scouting-forms')], 400);
+        }
+        $page = max(1, (int) $request->get_param('page'));
+        $limit = min(100, max(10, (int) ($request->get_param('limit') ?: 25)));
+        $search = trim(sanitize_text_field((string) $request->get_param('search')));
+        $orderby = in_array($request->get_param('orderby'), ['id', 'created_at', 'updated_at', 'name'], true) ? (string) $request->get_param('orderby') : 'created_at';
+        $order = strtolower((string) $request->get_param('order')) === 'asc' ? 'ASC' : 'DESC';
 
-        $form_id = (int) $request->get_param('form_id');
-        $page    = max(1, (int) $request->get_param('page'));
-        $limit   = min(50, max(10, (int) ($request->get_param('limit') ?: 25)));
-        $offset  = ($page - 1) * $limit;
+        $where = $wpdb->prepare('i.form_id = %d AND i.is_draft = 0', $formId);
+        if ($search !== '') {
+            $like = '%' . $wpdb->esc_like($search) . '%';
+            $where .= $wpdb->prepare(
+                " AND (i.item_key LIKE %s OR i.name LIKE %s OR i.id = %d OR i.id IN (SELECT item_id FROM {$wpdb->prefix}frm_item_metas WHERE meta_value LIKE %s))",
+                $like,
+                $like,
+                ctype_digit($search) ? (int) $search : 0,
+                $like
+            );
+        }
+        $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}frm_items i WHERE {$where}");
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT i.id, i.item_key, i.name, i.user_id, i.post_id, i.created_at, i.updated_at FROM {$wpdb->prefix}frm_items i WHERE {$where} ORDER BY i.{$orderby} {$order}, i.id {$order} LIMIT %d OFFSET %d",
+            $limit,
+            ($page - 1) * $limit
+        ), ARRAY_A);
 
-        $items_table = $wpdb->prefix . 'frm_items';
-        $metas_table = $wpdb->prefix . 'frm_item_metas';
-
-        $where_sql = $form_id ? $wpdb->prepare("WHERE form_id = %d", $form_id) : "";
-
-        $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$items_table} {$where_sql}");
-
-        $items = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT id, item_key, name, user_id, form_id, created_at FROM {$items_table} {$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d",
-                $limit,
-                $offset
-            ),
-            ARRAY_A
-        );
+        $columns = self::listColumns($formId);
+        $values = new EntryValues($formId);
+        $values->load(array_map(static fn($r) => (int) $r['id'], $rows));
+        foreach ($rows as &$row) {
+            $row['columns'] = [];
+            foreach ($columns as $column) {
+                $row['columns'][(string) $column['id']] = wp_strip_all_tags(html_entity_decode($values->display((int) $row['id'], (int) $column['id']), ENT_QUOTES));
+            }
+            $user = $row['user_id'] ? get_userdata((int) $row['user_id']) : null;
+            $row['user'] = $user ? $user->display_name : '';
+        }
+        unset($row);
 
         return new WP_REST_Response([
-            'entries' => $items ?: [],
-            'total'   => $total,
-            'page'    => $page,
-            'pages'   => ceil($total / $limit)
+            'entries' => $rows,
+            'columns' => $columns,
+            'total' => $total,
+            'page' => $page,
+            'pages' => max(1, (int) ceil($total / $limit)),
         ], 200);
     }
 
     public static function getEntry(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
-
-        $entry_id    = (int) $request->get_param('id');
-        $items_table = $wpdb->prefix . 'frm_items';
-        $metas_table = $wpdb->prefix . 'frm_item_metas';
-        $fields_table= $wpdb->prefix . 'frm_fields';
-
-        $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$items_table} WHERE id = %d", $entry_id), ARRAY_A);
-        if (!$item) {
-            return new WP_REST_Response(['error' => 'Entry not found'], 404);
+        $entry = EntryRepository::find((int) $request->get_param('id'));
+        if (!$entry) {
+            return new WP_REST_Response(['message' => __('Entry not found.', 'scouting-forms')], 404);
         }
-
-        // Metas
-        $metas = $wpdb->get_results(
-            $wpdb->prepare("SELECT field_id, meta_value FROM {$metas_table} WHERE item_id = %d", $entry_id),
-            ARRAY_A
-        );
-
-        $meta_map = [];
-        if ($metas) {
-            foreach ($metas as $m) {
-                $meta_map[$m['field_id']] = $m['meta_value'];
-            }
+        $fields = FormRepository::fields((int) $entry['form_id']);
+        $raw = EntryService::withoutPasswords($fields, EntryRepository::formValues((int) $entry['id'], $fields));
+        $display = new EntryValues((int) $entry['form_id']);
+        $display->load([(int) $entry['id']]);
+        $shown = [];
+        $clientFields = [];
+        foreach ($fields as $field) {
+            $clientFields[] = self::fieldForClient($field, $raw);
+            $shown[(string) $field['id']] = wp_strip_all_tags(html_entity_decode($display->display((int) $entry['id'], (int) $field['id']), ENT_QUOTES));
         }
-
-        // Form fields
-        $fields = $wpdb->get_results(
-            $wpdb->prepare("SELECT id, name, type, field_key, field_order FROM {$fields_table} WHERE form_id = %d ORDER BY field_order ASC", $item['form_id']),
-            ARRAY_A
-        );
-
         return new WP_REST_Response([
-            'entry'  => $item,
-            'metas'  => $meta_map,
-            'fields' => $fields ?: []
+            'entry' => $entry,
+            'metas' => (object) $raw,
+            'display' => (object) $shown,
+            'fields' => $clientFields,
         ], 200);
     }
 
     public static function updateEntry(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
-
-        $entry_id    = (int) $request->get_param('id');
-        $data        = $request->get_json_params();
-        $metas       = $data['metas'] ?? [];
-        $metas_table = $wpdb->prefix . 'frm_item_metas';
-
-        foreach ($metas as $field_id => $val) {
-            $field_id = (int) $field_id;
-            $val_str  = is_array($val) ? maybe_serialize($val) : sanitize_text_field($val);
-
-            $exists = $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$metas_table} WHERE item_id = %d AND field_id = %d",
-                $entry_id,
-                $field_id
-            ));
-
-            if ($exists) {
-                $wpdb->update($metas_table, ['meta_value' => $val_str], ['id' => $exists], ['%s'], ['%d']);
-            } else {
-                $wpdb->insert($metas_table, [
-                    'item_id'    => $entry_id,
-                    'field_id'   => $field_id,
-                    'meta_value' => $val_str,
-                    'created_at' => current_time('mysql', 1)
-                ], ['%d', '%d', '%s', '%s']);
-            }
+        $entry = EntryRepository::find((int) $request->get_param('id'));
+        if (!$entry) {
+            return new WP_REST_Response(['message' => __('Entry not found.', 'scouting-forms')], 404);
         }
-
-        self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'message' => 'Entry updated'], 200);
+        $form = FormRepository::find((int) $entry['form_id']);
+        $data = (array) $request->get_json_params();
+        $result = EntryService::submit($form, self::postedFromClient((array) ($data['metas'] ?? [])), [
+            'entry_id' => (int) $entry['id'], 'admin' => true, 'spam_check' => false, 'uploads' => false,
+        ]);
+        return self::resultResponse($result, 200);
     }
 
     public static function createEntry(WP_REST_Request $request): WP_REST_Response {
-        $data        = $request->get_json_params();
-        $form_id     = (int) ($data['form_id'] ?? 0);
-        $metas       = is_array($data['metas'] ?? null) ? $data['metas'] : [];
-
-        $clean = [];
-        foreach ($metas as $field_id => $val) {
-            $clean[(int) $field_id] = is_array($val) ? map_deep($val, 'sanitize_text_field') : sanitize_text_field((string) $val);
+        $data = (array) $request->get_json_params();
+        $form = FormRepository::find((int) ($data['form_id'] ?? 0));
+        if (!$form) {
+            return new WP_REST_Response(['message' => __('Choose a form.', 'scouting-forms')], 400);
         }
-
-        $item_key = 'sm-' . wp_generate_password(10, false, false);
-        $entry_id = EntryRepository::create($form_id, $clean, [
-            'key' => $item_key,
-            'name' => sanitize_text_field($data['name'] ?? $item_key),
+        $result = EntryService::submit($form, self::postedFromClient((array) ($data['metas'] ?? [])), [
+            'admin' => true, 'spam_check' => false, 'uploads' => false,
         ]);
-        if (!$entry_id) {
-            return new WP_REST_Response(['success' => false, 'message' => __('The entry could not be saved.', 'scouting-forms')], 500);
-        }
-
-        self::purgeCache();
-        return new WP_REST_Response(['success' => true, 'id' => $entry_id], 201);
+        return self::resultResponse($result, 201);
     }
 
     public static function deleteEntry(WP_REST_Request $request): WP_REST_Response {
-        global $wpdb;
-
-        $entry_id    = (int) $request->get_param('id');
-        $items_table = $wpdb->prefix . 'frm_items';
-        $metas_table = $wpdb->prefix . 'frm_item_metas';
-
-        $wpdb->delete($items_table, ['id' => $entry_id], ['%d']);
-        $wpdb->delete($metas_table, ['item_id' => $entry_id], ['%d']);
-
+        $entryId = (int) $request->get_param('id');
+        if (!EntryRepository::find($entryId)) {
+            return new WP_REST_Response(['message' => __('Entry not found.', 'scouting-forms')], 404);
+        }
+        EntryRepository::delete($entryId);
         self::purgeCache();
         return new WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * /entries/export?form_id=8[&search=...]: CSV of the form's entries with display values.
+     */
+    public static function exportEntries(WP_REST_Request $request) {
+        global $wpdb;
+        $formId = (int) $request->get_param('form_id');
+        $form = FormRepository::find($formId);
+        if (!$form) {
+            return new WP_REST_Response(['message' => __('Choose a form.', 'scouting-forms')], 400);
+        }
+        $fields = array_values(array_filter(FormRepository::fields($formId), static function ($f) {
+            return !in_array($f['type'], array_merge(FieldRenderer::NON_INPUT_TYPES, ['password']), true);
+        }));
+        $ids = array_map('intval', $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}frm_items WHERE form_id = %d AND is_draft = 0 ORDER BY created_at ASC, id ASC",
+            $formId
+        )));
+
+        $out = fopen('php://temp', 'w+');
+        fputcsv($out, array_merge(array_map(static fn($f) => $f['name'], $fields), ['Entry ID', 'Entry Key', 'Created', 'Updated', 'User']));
+        $values = new EntryValues($formId);
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $values->load($chunk);
+            foreach ($chunk as $id) {
+                $entry = $values->entry($id);
+                $line = [];
+                foreach ($fields as $field) {
+                    $line[] = self::csvCell(wp_strip_all_tags(html_entity_decode($values->display($id, (int) $field['id']), ENT_QUOTES)));
+                }
+                $user = !empty($entry['user_id']) ? get_userdata((int) $entry['user_id']) : null;
+                fputcsv($out, array_merge($line, [$id, $entry['item_key'] ?? '', $entry['created_at'] ?? '', $entry['updated_at'] ?? '', $user ? $user->user_login : '']));
+            }
+        }
+        rewind($out);
+        $csv = stream_get_contents($out);
+        fclose($out);
+
+        $filename = sanitize_file_name($form['key'] . '-entries-' . gmdate('Y-m-d') . '.csv');
+        $response = new WP_REST_Response(null, 200);
+        // Send the file instead of JSON, for this response only
+        $serve = static function ($served, $result) use (&$serve, $response, $csv, $filename) {
+            if ($result !== $response) {
+                return $served;
+            }
+            remove_filter('rest_pre_serve_request', $serve, 10);
+            header('Content-Type: text/csv; charset=utf-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            echo "\xEF\xBB\xBF" . $csv; // BOM so Excel reads UTF-8
+            return true;
+        };
+        add_filter('rest_pre_serve_request', $serve, 10, 2);
+        return $response;
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    /**
+     * A field as the builder uses it, with its choices when it has any.
+     *
+     * @param array<string, mixed> $field
+     * @param array<int, mixed> $values
+     * @return array<string, mixed>
+     */
+    private static function fieldForClient(array $field, array $values = []): array {
+        $out = [
+            'id' => (int) $field['id'],
+            'name' => $field['name'],
+            'description' => $field['description'],
+            'description_text' => trim(wp_strip_all_tags(html_entity_decode($field['description'], ENT_QUOTES))),
+            'field_key' => $field['key'],
+            'type' => $field['type'],
+            'required' => (bool) $field['required'],
+            'default_value' => is_scalar($field['default_value']) ? (string) $field['default_value'] : '',
+            'options' => $field['options'],
+            'field_options' => array_intersect_key($field['field_options'], array_flip([
+                'classes', 'placeholder', 'label', 'data_type', 'multiple', 'form_select', 'hide_field',
+                'hide_field_cond', 'hide_opt', 'show_hide', 'any_all', 'in_section', 'repeat', 'post_field',
+            ])),
+        ];
+        if (in_array($field['type'], ['select', 'radio', 'checkbox', 'data'], true)) {
+            $choices = [];
+            foreach (FieldRenderer::choiceList($field, $values) as $value => $label) {
+                $choices[] = ['value' => (string) $value, 'label' => $label];
+            }
+            $out['choices'] = $choices;
+        }
+        return $out;
+    }
+
+    /**
+     * The builder sends {field_id: value}; shape it like a posted form (item_meta).
+     *
+     * @param array<int|string, mixed> $metas
+     * @return array<int|string, mixed>
+     */
+    private static function postedFromClient(array $metas): array {
+        $posted = [];
+        foreach ($metas as $key => $value) {
+            if (is_numeric($key) || preg_match('/^conf_\d+$/', (string) $key)) {
+                $posted[is_numeric($key) ? (int) $key : (string) $key] = is_array($value)
+                    ? map_deep($value, static fn($v) => is_scalar($v) ? (string) $v : '')
+                    : (is_scalar($value) ? (string) $value : '');
+            }
+        }
+        return $posted;
+    }
+
+    /**
+     * @param array<string, mixed> $result From EntryService::submit
+     */
+    private static function resultResponse(array $result, int $status): WP_REST_Response {
+        if (!$result['ok']) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => $result['form_error'] !== '' ? $result['form_error'] : __('Please correct the marked fields.', 'scouting-forms'),
+                'errors' => (object) $result['errors'],
+            ], $result['form_error'] !== '' ? 403 : 422);
+        }
+        self::purgeCache();
+        return new WP_REST_Response(['success' => true, 'id' => $result['entry_id']], $status);
+    }
+
+    /**
+     * First few answer fields shown as columns in the entries list.
+     *
+     * @return array<int, array{id:int, name:string}>
+     */
+    private static function listColumns(int $formId): array {
+        $columns = [];
+        foreach (FormRepository::fields($formId) as $field) {
+            if (in_array($field['type'], array_merge(FieldRenderer::NON_INPUT_TYPES, ['password', 'hidden', 'user_id', 'file']), true)) {
+                continue;
+            }
+            $columns[] = ['id' => (int) $field['id'], 'name' => $field['name']];
+            if (count($columns) === 4) {
+                break;
+            }
+        }
+        return $columns;
+    }
+
+    /**
+     * Cells starting with = + - @ are prefixed so spreadsheets do not run them as formulas.
+     */
+    private static function csvCell(string $value): string {
+        return $value !== '' && in_array($value[0], ['=', '+', '-', '@'], true) ? "'" . $value : $value;
+    }
+
+    private static function purgeCache(): void {
+        if (function_exists('wp_cache_flush_group')) {
+            wp_cache_flush_group('frm_entry');
+        }
+        if (class_exists('WpeCommon') && method_exists('WpeCommon', 'purge_memcached')) {
+            \WpeCommon::purge_memcached();
+        }
     }
 }

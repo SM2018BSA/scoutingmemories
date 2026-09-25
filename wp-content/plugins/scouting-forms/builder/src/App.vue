@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import {
   TabsRoot,
   TabsList,
@@ -31,15 +31,31 @@ declare global {
       nonce: string;
       adminUrl: string;
       activeTheme: string;
+      hook?: string;
+      can?: Record<string, boolean>;
     };
   }
 }
 
 const restBase = window.smBuilderConfig?.restUrl || '/wp-json/scouting-forms/v1';
 const nonce = window.smBuilderConfig?.nonce || '';
+const adminUrl = window.smBuilderConfig?.adminUrl || '/wp-admin/';
+const ajaxUrl = adminUrl + 'admin-ajax.php';
 
-// Global State
-const currentTab = ref('forms');
+// What this person may do (the REST API checks the same capabilities)
+const can = {
+  viewForms: true, editForms: true, views: true, viewEntries: true,
+  createEntries: true, editEntries: true, deleteEntries: true,
+  ...(window.smBuilderConfig?.can || {})
+};
+
+// Global State: open the tab of the admin page that was clicked
+const hook = window.smBuilderConfig?.hook || '';
+const currentTab = ref(
+  hook.includes('scouting-forms-entries') && can.viewEntries ? 'entries'
+    : hook.includes('scouting-forms-views') && can.views ? 'views'
+    : can.viewForms ? 'forms' : 'entries'
+);
 const toastMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null);
 
 function showToast(text: string, type: 'success' | 'error' = 'success') {
@@ -64,7 +80,9 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(err.message || 'API error');
+    const error: Error & { errors?: Record<string, string> } = new Error(err.message || 'API error');
+    error.errors = err.errors || undefined;
+    throw error;
   }
 
   return response.json();
@@ -192,7 +210,7 @@ async function createNewView() {
   try {
     const res = await apiFetch('/views', {
       method: 'POST',
-      body: JSON.stringify({ title: 'New Custom View', form_id: 8 })
+      body: JSON.stringify({ title: 'New Custom View', form_id: selectedFormIdForEntries.value || forms.value[0]?.id })
     });
     showToast('Created new view!');
     await loadViews();
@@ -207,16 +225,22 @@ async function createNewView() {
 // ----------------------------------------------------
 const entries = ref<any[]>([]);
 const entriesLoading = ref(false);
-const selectedFormIdForEntries = ref(8);
+const selectedFormIdForEntries = ref(0);
 const entriesTotal = ref(0);
 const entriesPage = ref(1);
 const entriesPages = ref(1);
+const entriesColumns = ref<{ id: number; name: string }[]>([]);
+const entriesSearch = ref('');
+const entriesOrder = ref<'asc' | 'desc'>('desc');
+const exportUrl = computed(() => `${restBase}/entries/export?form_id=${selectedFormIdForEntries.value}&_wpnonce=${encodeURIComponent(nonce)}`);
 
 // Entry Edit Modal
 const isEntryModalOpen = ref(false);
 const editingEntryId = ref<number | null>(null);
 const editingEntryFields = ref<any[]>([]);
-const editingEntryMetas = ref<Record<number, any>>({});
+const editingEntryMetas = ref<Record<string, any>>({});
+const editingEntryDisplay = ref<Record<string, string>>({});
+const editingEntryErrors = ref<Record<string, string>>({});
 const entrySaving = ref(false);
 
 async function loadEntries(formId: number, page: number = 1) {
@@ -225,8 +249,13 @@ async function loadEntries(formId: number, page: number = 1) {
   entriesLoading.value = true;
 
   try {
-    const res = await apiFetch(`/entries?form_id=${formId}&page=${page}&limit=25`);
+    const params = new URLSearchParams({
+      form_id: String(formId), page: String(page), limit: '25',
+      search: entriesSearch.value, orderby: 'created_at', order: entriesOrder.value
+    });
+    const res = await apiFetch(`/entries?${params.toString()}`);
     entries.value = res.entries || [];
+    entriesColumns.value = res.columns || [];
     entriesTotal.value = res.total || 0;
     entriesPages.value = res.pages || 1;
   } catch (err: any) {
@@ -243,6 +272,8 @@ async function openEditEntry(entryId: number) {
     const res = await apiFetch(`/entries/${entryId}`);
     editingEntryFields.value = res.fields || [];
     editingEntryMetas.value = res.metas || {};
+    editingEntryDisplay.value = res.display || {};
+    editingEntryErrors.value = {};
     isEntryModalOpen.value = true;
   } catch (err: any) {
     showToast(`Failed to load entry #${entryId}: ${err.message}`, 'error');
@@ -252,6 +283,8 @@ async function openEditEntry(entryId: number) {
 function openCreateEntry() {
   editingEntryId.value = null;
   editingEntryMetas.value = {};
+  editingEntryDisplay.value = {};
+  editingEntryErrors.value = {};
   // Find fields from active form
   const currentForm = forms.value.find(f => f.id === selectedFormIdForEntries.value);
   if (currentForm) {
@@ -264,7 +297,7 @@ function openCreateEntry() {
   }
 }
 
-async function saveEntryData(payload: { entryId: number | null; formId: number; metas: Record<number, any> }) {
+async function saveEntryData(payload: { entryId: number | null; formId: number; metas: Record<string, any> }) {
   entrySaving.value = true;
   try {
     if (payload.entryId) {
@@ -284,9 +317,12 @@ async function saveEntryData(payload: { entryId: number | null; formId: number; 
       showToast('New entry created!');
     }
     isEntryModalOpen.value = false;
+    editingEntryErrors.value = {};
     await loadEntries(selectedFormIdForEntries.value, entriesPage.value);
   } catch (err: any) {
-    showToast(`Error saving entry: ${err.message}`, 'error');
+    // Field problems stay in the dialog next to the fields
+    editingEntryErrors.value = err.errors || {};
+    showToast(err.errors ? 'Some fields need attention.' : `Error saving entry: ${err.message}`, 'error');
   } finally {
     entrySaving.value = false;
   }
@@ -308,11 +344,24 @@ function switchToEntriesForForm(formId: number) {
   loadEntries(formId, 1);
 }
 
-// Initial Mount
-onMounted(() => {
-  loadForms();
-  loadViews();
-  loadEntries(8, 1);
+function searchEntries(term: string) {
+  entriesSearch.value = term;
+  loadEntries(selectedFormIdForEntries.value, 1);
+}
+
+function toggleEntriesOrder() {
+  entriesOrder.value = entriesOrder.value === 'desc' ? 'asc' : 'desc';
+  loadEntries(selectedFormIdForEntries.value, 1);
+}
+
+// Initial Mount: the first form that has entries opens in the entries manager
+onMounted(async () => {
+  await loadForms();
+  if (can.views) loadViews();
+  if (can.viewEntries) {
+    const first = forms.value.find((f) => !Number(f.parent_form_id) && Number(f.entry_count) > 0) || forms.value[0];
+    if (first) loadEntries(Number(first.id), 1);
+  }
 });
 </script>
 
@@ -339,13 +388,13 @@ onMounted(() => {
           </span>
         </h1>
         <p class="text-xs text-slate-300 mt-1 max-w-2xl">
-          Visual Form Builder & View Template Editor. Directly manages your 23 forms, 266 fields, 14 views, and 15,913 entries with zero data loss.
+          Forms, views and entries of the Scouting Memories site, kept in the same tables Formidable uses.
         </p>
       </div>
 
       <div class="flex items-center gap-2">
         <a
-          :href="window.smBuilderConfig?.adminUrl + 'admin.php?page=scouting-archives'"
+          :href="adminUrl + 'admin.php?page=scouting-archives'"
           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
         >
           <BookOpen class="w-4 h-4" />
@@ -358,6 +407,7 @@ onMounted(() => {
     <TabsRoot v-model="currentTab" class="w-full">
       <TabsList class="flex items-center gap-1 bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs mb-6 select-none">
         <TabsTrigger
+          v-if="can.viewForms"
           value="forms"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all cursor-pointer"
         >
@@ -366,6 +416,7 @@ onMounted(() => {
         </TabsTrigger>
 
         <TabsTrigger
+          v-if="can.views"
           value="views"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all cursor-pointer"
         >
@@ -374,6 +425,7 @@ onMounted(() => {
         </TabsTrigger>
 
         <TabsTrigger
+          v-if="can.viewEntries"
           value="entries"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all cursor-pointer"
         >
@@ -429,12 +481,21 @@ onMounted(() => {
           :forms="forms"
           :selected-form-id="selectedFormIdForEntries"
           :entries="entries"
+          :columns="entriesColumns"
           :total="entriesTotal"
           :page="entriesPage"
           :pages="entriesPages"
           :loading="entriesLoading"
-          @change-form="loadEntries($event, 1)"
+          :search="entriesSearch"
+          :order="entriesOrder"
+          :export-url="exportUrl"
+          :can-create="can.createEntries"
+          :can-edit="can.editEntries"
+          :can-delete="can.deleteEntries"
+          @change-form="entriesSearch = ''; loadEntries($event, 1)"
           @change-page="loadEntries(selectedFormIdForEntries, $event)"
+          @search="searchEntries"
+          @toggle-order="toggleEntriesOrder"
           @edit-entry="openEditEntry"
           @create-entry="openCreateEntry"
           @delete-entry="deleteEntry"
@@ -447,7 +508,10 @@ onMounted(() => {
           :form-id="selectedFormIdForEntries"
           :fields="editingEntryFields"
           :metas="editingEntryMetas"
+          :display="editingEntryDisplay"
+          :errors="editingEntryErrors"
           :saving="entrySaving"
+          :ajax-url="ajaxUrl"
           @save="saveEntryData"
         />
       </TabsContent>
