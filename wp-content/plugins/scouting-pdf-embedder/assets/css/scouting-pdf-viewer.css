@@ -151,7 +151,8 @@
 /* Tall reading area for desktop research; shorter documents shrink to fit */
 [data-pdf-viewer] [data-pdf-role="viewport"] {
     position: relative;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     align-items: flex-start;
     flex: 1 1 auto;
@@ -160,6 +161,10 @@
     justify-content: flex-start;
     max-height: 85vh;
     outline: none;
+}
+
+[data-pdf-viewer].is-enlarged [data-pdf-role="viewport"] {
+    overflow-x: auto;
 }
 
 [data-pdf-viewer][data-pdf-state="loading"] [data-pdf-role="viewport"],
@@ -540,11 +545,32 @@
 [data-pdf-viewer] [data-pdf-role="toasts"] {
     z-index: 1055;
     pointer-events: none;
+    max-width: 100%;
 }
 
 [data-pdf-viewer] [data-pdf-role="toasts"] .toast {
     pointer-events: auto;
-    max-width: 24rem;
+    max-width: min(24rem, calc(100vw - 2rem));
+    background-color: var(--bs-card-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.5rem;
+}
+
+@media (max-width: 576px) {
+    [data-pdf-viewer] [data-pdf-role="toasts"] {
+        padding: 0.5rem !important;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    [data-pdf-viewer] [data-pdf-role="toasts"] .toast {
+        width: 100%;
+        max-width: 100%;
+    }
 }
 
 [data-pdf-viewer] .scouting-pdf-copy-buffer {

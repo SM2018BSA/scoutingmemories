@@ -794,7 +794,7 @@ class Scouting_PDF_Embedder {
                     <div data-pdf-panel="info" role="tabpanel" hidden></div>
                 </aside>
 
-                <div class="position-relative overflow-auto d-flex align-items-start bg-light flex-grow-1" data-pdf-role="viewport">
+                <div class="position-relative d-flex align-items-start bg-light flex-grow-1" data-pdf-role="viewport">
                     <div class="position-absolute top-50 start-50 translate-middle d-flex flex-column align-items-center gap-2 text-muted" data-pdf-role="loading" role="status" aria-live="polite">
                         <div class="spinner-border sm_green_color" aria-hidden="true"></div>
                         <div class="small">Loading document... <span data-pdf-role="progress"></span></div>

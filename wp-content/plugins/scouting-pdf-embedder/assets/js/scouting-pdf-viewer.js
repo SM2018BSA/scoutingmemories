@@ -479,9 +479,20 @@
             setPressed(zoomFitBtn, fitMode === 'width');
             setPressed(zoomPageBtn, fitMode === 'page');
             updateThumbSelection();
+            updateScrollbars();
             // Only once the reader is moving around, so opening a document doesn't
             // overwrite where they were last time
             if (total && api.ready) rememberPage();
+        }
+
+        // Toggles horizontal scrollbar on viewport: hidden when fitting or at/below fit width;
+        // only shown once the reader enlarges the PDF beyond the available viewport width.
+        function updateScrollbars() {
+            var avail = getAvailableSize();
+            var usual = Math.floor(typicalPageWidth() * scale) * (spread ? 2 : 1) + (spread ? PAGE_GAP : 0);
+            var isEnlarged = !fitMode && (usual > avail.width + 2);
+            viewportEl.style.overflowX = isEnlarged ? 'auto' : 'hidden';
+            container.classList.toggle('is-enlarged', isEnlarged);
         }
 
         // Bootstrap's .active shows the selected state in the site green
@@ -502,7 +513,7 @@
             var height = viewportEl.clientHeight;
             var maxH = parseFloat(style.maxHeight);
             if (!isExpanded() && isFinite(maxH) && maxH > 0) height = maxH;
-            return { width: viewportEl.clientWidth - padX, height: height - padY };
+            return { width: Math.max(0, viewportEl.clientWidth - padX), height: Math.max(0, height - padY) };
         }
 
         function measureBase() {
@@ -533,6 +544,7 @@
                     : parseFloat(node.style.width);
                 node.style.alignSelf = w > colW ? 'flex-start' : '';
             });
+            updateScrollbars();
         }
 
         // Pages sharing a row in two-page view: the first page alone (the cover), then pairs
@@ -568,9 +580,9 @@
                 var row = rowOf(currentPage).map(function(n) { return pages[n - 1]; });
                 var rowW = row.reduce(function(sum, p) { return sum + p.baseW; }, 0) + (row.length - 1) * PAGE_GAP;
                 var rowH = Math.max.apply(null, row.map(function(p) { return p.baseH; }));
-                fit = Math.min(avail.width / rowW, avail.height / rowH);
+                fit = Math.min((avail.width - 4) / rowW, (avail.height - 4) / rowH);
             } else {
-                fit = avail.width / width;
+                fit = (avail.width - 4) / width;
             }
             return clamp(fit, MIN_SCALE, MAX_SCALE);
         }
@@ -629,13 +641,14 @@
 
         function applyFit() {
             if (!fitMode || !pages.length) return;
-            // Twice: the first pass can add or remove the scrollbar, which changes the width
-            for (var i = 0; i < 2; i++) {
+            // Settle against the real vertical scrollbar, which changes the available width
+            for (var i = 0; i < 3; i++) {
                 var fit = computeFitScale(fitMode);
                 if (Math.abs(fit - scale) < 0.002) break;
                 setScale(fit);
             }
             if (fitMode === 'page') goToPage(currentPage, true);
+            updateScrollbars();
             updateUI();
         }
 
@@ -1466,24 +1479,27 @@
 
         function toast(message, actionLabel, action, timeout) {
             if (!toasts) return;
-            var t = el('div', 'toast show align-items-center');
+            var t = el('div', 'toast show align-items-center shadow-sm');
             t.setAttribute('role', 'status');
             var row = el('div', 'd-flex align-items-center gap-2 p-2');
-            row.appendChild(el('div', 'toast-body p-1 small', message));
+            row.appendChild(el('div', 'toast-body p-1 small flex-grow-1', message));
             if (actionLabel) {
-                var btn = el('button', 'btn btn-sm btn-sm-green', actionLabel);
+                var btn = el('button', 'btn btn-sm btn-sm-green text-nowrap', actionLabel);
                 btn.type = 'button';
                 btn.addEventListener('click', function() { action(); t.remove(); });
                 row.appendChild(btn);
             }
-            var x = el('button', 'btn-close ms-auto');
+            var x = el('button', 'btn-close ms-auto flex-shrink-0');
             x.type = 'button';
-            x.setAttribute('aria-label', 'Dismiss');
+            x.setAttribute('aria-label', 'Close');
+            x.title = 'Close';
             x.addEventListener('click', function() { t.remove(); });
             row.appendChild(x);
             t.appendChild(row);
             toasts.appendChild(t);
-            setTimeout(function() { t.remove(); }, timeout || 5000);
+            if (timeout) {
+                setTimeout(function() { t.remove(); }, timeout);
+            }
         }
 
         function copyText(text, html) {
@@ -2203,7 +2219,7 @@
             if (!saved || !saved.page || saved.page <= 1 || saved.page > pages.length || pages.length < 3) return;
             if (Date.now() - (saved.t || 0) > RESUME_DAYS * 86400000) return;
             var page = saved.page;
-            toast('You were reading ' + describePage(page) + '.', 'Continue there', function() { goToPage(page, true); }, 10000);
+            toast('You were reading ' + describePage(page) + '.', 'Continue there', function() { goToPage(page, true); });
         }
 
         var handlers = {
