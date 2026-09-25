@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!-- A post as WP Engine's page cache could still serve it right after the v2.0 deploy:
+     v1.4 viewer markup and settings, and a script tag for the removed PDF.js 2.0 file.
+     Test environment only (copied to /test-assets by setup-wordpress.sh). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cached v1.4 page</title>
+<link rel="stylesheet" href="/test-assets/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="/test-assets/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/wp-content/plugins/scouting-pdf-embedder/assets/css/scouting-pdf-viewer.css?ver=1.4.0">
+</head>
+<body>
+<div class="container py-4">
+        <div class="card my-4 shadow-sm overflow-hidden scouting-pdf-container" data-pdf-viewer data-pdf-state="loading" data-pdf-url="/wp-content/uploads/fixtures/leaders-guide.pdf" tabindex="0" role="region" aria-label="PDF viewer: leaders-guide.pdf">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 user-select-none" data-pdf-role="toolbar">
+                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="prev" aria-label="Previous page"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
+                    <span class="d-inline-flex align-items-center gap-1 small text-muted" data-pdf-role="page-display">
+                        <input type="number" class="form-control form-control-sm text-center" data-pdf-control="page-input" value="1" min="1" aria-label="Current page">
+                        <span>of</span>
+                        <span data-pdf-control="total-pages">--</span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="next" aria-label="Next page"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                </div>
+                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="zoom-out" aria-label="Zoom out"><i class="bi bi-zoom-out" aria-hidden="true"></i></button>
+                    <span class="small text-muted text-center" data-pdf-control="zoom-level" tabindex="0">100%</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="zoom-in" aria-label="Zoom in"><i class="bi bi-zoom-in" aria-hidden="true"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary active" data-pdf-control="zoom-fit" aria-label="Fit width" aria-pressed="true"><i class="bi bi-arrow-left-right" aria-hidden="true"></i><span class="ms-1">Fit width</span></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="zoom-page" aria-label="Fit page" aria-pressed="false"><i class="bi bi-file-earmark" aria-hidden="true"></i><span class="ms-1">Fit page</span></button>
+                </div>
+                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="rotate" aria-label="Rotate"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="fullscreen" aria-label="Fullscreen"><i class="bi bi-arrows-fullscreen" aria-hidden="true"></i></button>
+                </div>
+            </div>
+            <div class="position-relative overflow-auto d-flex align-items-start bg-light" data-pdf-role="viewport">
+                <div class="position-absolute top-50 start-50 translate-middle d-flex flex-column align-items-center gap-2 text-muted" data-pdf-role="loading" role="status" aria-live="polite">
+                    <div class="spinner-border sm_green_color" aria-hidden="true"></div>
+                    <div class="small">Loading document... <span data-pdf-role="progress"></span></div>
+                </div>
+                <div data-pdf-role="pages"></div>
+            </div>
+        </div>
+</div>
+<script id="scouting-pdf-viewer-js-extra">
+var ScoutingPdfConfig = {"workerUrl":"http:\/\/localhost:8888\/wp-content\/plugins\/scouting-pdf-embedder\/assets\/vendor\/pdf.worker.min.js","cMapUrl":"http:\/\/localhost:8888\/wp-content\/plugins\/scouting-pdf-embedder\/assets\/vendor\/cmaps\/","restUrl":"http:\/\/localhost:8888\/wp-json\/scouting-pdf\/v1\/stream","ajaxUrl":"http:\/\/localhost:8888\/wp-admin\/admin-ajax.php"};
+</script>
+<script src="/wp-content/plugins/scouting-pdf-embedder/assets/vendor/pdf.min.js?ver=2.16.105" id="scouting-pdfjs-lib-js"></script>
+<script src="/wp-content/plugins/scouting-pdf-embedder/assets/js/scouting-pdf-viewer.js?ver=1.4.0" id="scouting-pdf-viewer-js-js"></script>
+</body>
+</html>
