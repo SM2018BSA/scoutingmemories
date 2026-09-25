@@ -35,6 +35,8 @@ class FormRepository {
             'name' => (string) $row->name,
             'description' => (string) $row->description,
             'status' => (string) $row->status,
+            'editable' => (bool) $row->editable,
+            'parent_form_id' => (int) $row->parent_form_id,
             'options' => is_array($options) ? self::unslashDeep($options) : [],
         ];
     }

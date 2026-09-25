@@ -21,6 +21,20 @@ class DefaultValues {
             return $default;
         }
         $default = (string) $default;
+        // Older forms keep a shortcode default in "dyn_default_value" (Formidable still reads it)
+        if ($default === '' && !empty($field['field_options']['dyn_default_value']) && is_string($field['field_options']['dyn_default_value'])) {
+            $default = $field['field_options']['dyn_default_value'];
+        }
+        $resolved = self::shortcodes($default);
+
+        // A Dynamic field stores entry IDs; a text default (a state name) selects the matching entry
+        if ($field['type'] === 'data' && is_string($resolved)) {
+            return DynamicOptions::idForText($field, $resolved);
+        }
+        return $resolved;
+    }
+
+    private static function shortcodes(string $default): string {
         if ($default === '' || strpos($default, '[') === false) {
             return $default;
         }

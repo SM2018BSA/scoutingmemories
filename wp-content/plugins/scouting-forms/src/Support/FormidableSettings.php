@@ -16,11 +16,31 @@ class FormidableSettings {
      */
     public static function all(): array {
         static $settings = null;
-        if ($settings !== null) {
-            return $settings;
+        if ($settings === null) {
+            $settings = self::read('frm_options');
         }
+        return $settings;
+    }
 
-        $raw = get_option('frm_options');
+    /**
+     * Formidable Pro's settings (`frmpro_options`), e.g. date_format.
+     *
+     * @param mixed $default
+     * @return mixed
+     */
+    public static function pro(string $key, $default = null) {
+        static $settings = null;
+        if ($settings === null) {
+            $settings = self::read('frmpro_options');
+        }
+        return array_key_exists($key, $settings) ? $settings[$key] : $default;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function read(string $option): array {
+        $raw = get_option($option);
         if (is_array($raw)) {
             $settings = $raw;
         } elseif (is_object($raw)) {

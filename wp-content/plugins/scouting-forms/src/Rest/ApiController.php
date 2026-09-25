@@ -306,7 +306,7 @@ class ApiController {
                         'options'       => $options,
                         'field_options' => maybe_serialize($field_options),
                         'field_order'   => $order + 1,
-                        'created_at'    => current_time('mysql')
+                        'created_at'    => current_time('mysql', 1)
                     ],
                     ['%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d', '%s']
                 );
@@ -573,7 +573,7 @@ class ApiController {
                     'item_id'    => $entry_id,
                     'field_id'   => $field_id,
                     'meta_value' => $val_str,
-                    'created_at' => current_time('mysql')
+                    'created_at' => current_time('mysql', 1)
                 ], ['%d', '%d', '%s', '%s']);
             }
         }

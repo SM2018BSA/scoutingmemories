@@ -83,8 +83,9 @@ class FormTemplate {
             $template = preg_replace('/\[if ' . $name . '\](.*?)\[\/if ' . $name . '\]/s', $keep ? '$1' : '', $template);
         }
 
+        // [form_name] outside the [if form_name] block (the screen-reader legend) always shows
         return strtr($template, [
-            '[form_name]' => $showName ? esc_html($form['name']) : '',
+            '[form_name]' => esc_html($form['name']),
             '[form_description]' => $showDesc ? wp_kses_post(do_shortcode($form['description'])) : '',
             '[form_key]' => esc_attr($form['key']),
         ]);

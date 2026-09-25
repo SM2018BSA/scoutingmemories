@@ -149,8 +149,15 @@ class FieldRenderer {
                     esc_textarea(self::scalar($value))
                 );
 
-            case 'select':
             case 'data':
+                // A Dynamic field is shown as its data_type: dropdown, checkboxes or radio buttons
+                $dataType = (string) ($opts['data_type'] ?? 'select');
+                if ($dataType === 'checkbox' || $dataType === 'radio') {
+                    return self::choices($field, $value, $invalidClass);
+                }
+                return self::select($field, $value, $attrs, $invalidClass);
+
+            case 'select':
                 return self::select($field, $value, $attrs, $invalidClass);
 
             case 'checkbox':
@@ -222,6 +229,14 @@ class FieldRenderer {
      * @return array<string, string>
      */
     public static function choiceList(array $field): array {
+        if ($field['type'] === 'data') {
+            $list = [];
+            foreach (DynamicOptions::forField($field) as $id => $label) {
+                $list[(string) $id] = $label;
+            }
+            return $list;
+        }
+
         $list = [];
         $separateValues = !empty($field['field_options']['separate_value']);
         $choices = is_array($field['options']) ? $field['options'] : [];
@@ -271,7 +286,7 @@ class FieldRenderer {
      * @param mixed $value
      */
     private static function choices(array $field, $value, string $invalidClass): string {
-        $type = $field['type'];
+        $type = $field['type'] === 'data' ? (string) $field['field_options']['data_type'] : $field['type'];
         $id = (int) $field['id'];
         $name = $type === 'checkbox' ? "item_meta[{$id}][]" : "item_meta[{$id}]";
         $selected = array_map('strval', (array) $value);

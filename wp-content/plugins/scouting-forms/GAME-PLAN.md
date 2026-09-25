@@ -135,22 +135,30 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       user_id, is_draft, metas), verified with the Compare tool.
 
 ### Phase 2: Views (12 frm_display posts)
-- [ ] 2.1 Read every view's settings: form, show_count (all/one/dynamic/calendar), filters (where),
+- [x] 2.1 (2026-09-25) Read every view's settings: form, show_count (all/one/dynamic/calendar), filters (where),
       order, limit, page size, before/content/after, detail page, empty message, CSS classes.
-- [ ] 2.2 Shortcodes in view content: field tags with options (`show=`, `sep=`, `link_id`), `[id]`,
+- [x] 2.2 (2026-09-25) Shortcodes in view content: field tags with options (`show=`, `sep=`, `link_id`), `[id]`,
       `[key]`, `[created-at]`, `[updated-at]`, `[user_id]`, `[if]`/`[/if]` with conditions,
       `[foreach]`, `[detaillink]`, `[editlink]`, `[deletelink]`, `[get param=]`, `[frm-...]` helpers used on pages.
-- [ ] 2.3 Filters incl. current-user and URL-parameter filters (My Posts, Pending Review, searches),
+      (`[foreach]` and `link_id` are not used by any view on the site, so they are not implemented.)
+- [x] 2.3 (2026-09-25) Filters incl. current-user and URL-parameter filters (My Posts, Pending Review, searches),
       pagination, dynamic detail pages (All Camps).
-- [ ] 2.4 Output parity for all 12 views via the Compare tool (normalised text/HTML).
+- [x] 2.4 (2026-09-25) Output parity for all 12 views via the Compare tool (normalised text/HTML).
 
 ### Phase 3: Index forms (councils, camps, lodges, states, links)
 - [ ] 3.1 Dynamic `data` fields: options from another form's field, dependent (filtered by parent
       Dynamic field), multiple selection, select/checkbox/autocomplete display, saved values = entry IDs.
+      Done in Phase 2: independent options (`Forms\Rendering\DynamicOptions`, alphabetical like
+      Formidable, drafts/blanks skipped, `restrict`), text defaults such as `[get param=state]` select the
+      matching entry, dependent fields start empty like Formidable's. Still to do: loading a dependent
+      field's choices when its parent changes (Formidable does it by AJAX), autocomplete (`autocom`), and
+      server-side validation of dependent choices (today an empty choice list would reject them).
 - [ ] 3.2 Conditional logic engine (client + server): `hide_field`, `hide_field_cond`, `hide_opt`,
       `show_hide`, `any_all`; hidden fields are not validated or saved (Formidable behaviour).
 - [ ] 3.3 Sections (divider/end_divider, collapsible, repeaters if any are configured), page breaks,
       toggle, hidden fields with default-value shortcodes (`[user_id]`, `[get param=]`, etc.), user_id.
+      Found in Phase 2: forms 17 and 39 are multi-page; Formidable shows page 1 only, the plugin shows
+      every page at once. The theme also sets defaults through `frm_setup_new_fields_vars` (Phase 7).
 - [ ] 3.4 Front-end entry editing (edit links, `frm_action=edit`) with Formidable's permission rules.
 - [ ] 3.5 Parity on forms 7, 8, 10, 11, 23, 25, 27 (render, validate, save, actions).
 
@@ -158,6 +166,9 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - [ ] 4.1 All 44 fields incl. 7 conditional rules, file uploads to the media library.
 - [ ] 4.2 `wppost` action exactly as configured: post type, title/content/excerpt mapping, status from
       field 465, 23 custom fields, category; entry `post_id` link; updates when the entry is edited.
+      Note from Phase 2: the Pending Review "Publish" button ([frm-entry-update-field] on field 465)
+      only changes the entry value in plugin mode; Formidable also publishes the linked post. This
+      action must run on that update too.
 - [ ] 4.3 Role rules (who may publish vs pending), redirects/messages, email notifications.
 - [ ] 4.4 Fire `frm_after_create_entry` / `frm_after_update_entry` so the theme's existing hooks run
       (depends on Phase 7 compatibility work).
@@ -201,6 +212,8 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 
 ## Open questions for the owner
 - Submit button colour: Formidable shows light blue (its own style settings); the plugin uses the site green like the PDF viewer. Default: site green, unless the owner prefers matching the old look.
+- Who can edit council/camp/lodge entries (forms 7, 8, 11): their "edit other people's entries" role is `index_contributor`. Formidable (and so the plugin, which copies it exactly) also lets anyone with a built-in WordPress role pass that check. Today that is 29 plain subscribers and 4 historian+subscriber accounts, as well as the 5 regional coordinators (author+historian+regional) who probably should. Suggested fix, in each form's settings, not code: set the role list to administrator, index_contributor and regional. Nothing changes until the owner decides.
+- Search forms 36, 37 and 38 (Search Councils/Camps/Lodges) each have an active email action to the site admin, so every search sends the admin an email on live today. The plugin does the same (locally it only logs). The owner may want those three actions turned off.
 
 ## Progress log
 - 2026-09-24: Plan written. Audit of Formidable usage and plugin coverage recorded above.
@@ -210,3 +223,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-24: 0.5 + 0.6 done. `Tools\CompareTool`: `/?sm_compare=form&id=N`, `view&id=N`, `list`; local copies only; admins, or a signed 1-hour link from `CompareTool::previewUrl()` (no signature/bad signature = 403). `Ui\ThemeClasses` now returns Bootstrap 5.3 classes (same method names); new `assets/css/forms-front.css` scoped to `.sm-forms` (site-green `btn-scout`, required marker, focus colours, grids, thumbnails); all inline Tailwind removed from DynamicFormRenderer/DynamicViewRenderer; Tailwind registered only in wp-admin. Verified on Contact Us: Bootstrap `form-control` fields, forms-front.css loaded, no Tailwind on the public site.
 - 2026-09-24: 0.7 done. 39 plugin PHP files pass `php -l` (PHP 8.2); rendering all 22 forms, 12 views and the 5 dashboard shortcodes as visitor and as admin with E_ALL gives no warnings/notices/deprecations from plugin code. Leftovers noted for Phase 6: hard-coded counts in admin menu labels and the guide notice ("23 forms, 266 fields", "Councils (2,323)"), and `assets/css/tailwindcss.css` duplicating `assets/builder/builder.css`. **Phase 0 complete.**
 - 2026-09-25: **Phase 1 complete (Contact Us).** New pipeline: `Models\FormRepository`, `Forms\Rendering\{FieldRenderer,FormTemplate,DefaultValues}` (fields built from each field's Formidable `custom_html`, form from `before_html`/`submit_html`), `Forms\Submission\{Validator,SpamGuard}`, `Forms\Logic\Conditions`, `Actions\{ActionRunner,EmailAction,EntryShortcodes}`, `Support\FormidableSettings`. `DynamicFormRenderer` rewritten: submissions handled on `template_redirect` (so redirects work), then nonce, spam check, validation, uploads, EntryRepository, actions, and the on_submit message/redirect/page. EntryRepository now saves Formidable's exact shape: 5-char key, name from first filled field, browser/referrer JSON in description, no IP (Formidable `no_ips` is on), `unique_id` meta under field 0. Verified locally: Formidable's own messages (blank, invalid email), honeypot/too-fast/bad-nonce refused, valid entry saved, email logged with To/From/Bcc/subject/body per the action, success message shown and form hidden (show_form off), same labels/IDs/title/description/reCAPTCHA as Formidable in the Compare tool, all 22 forms render with no PHP warnings, test data cleaned (0 left). Not testable locally: reCAPTCHA server verification (Google rejects localhost); added to 9.1. Known gaps left for later phases: sections/page breaks (Phase 3), `wppost`/`register` actions (Phases 4/5), IndexEntityForms still uses its own name-based keys (revisit in Phase 3).
+- 2026-09-25: **Phase 2 complete (views).** New `Views\{ViewRepository,EntryQuery,EntryValues,TemplateTags,EntryActions,ViewRenderer}`, `Models\PostFields`, `Support\Permissions` (rewritten), `Forms\Rendering\DynamicOptions`; `DynamicViewRenderer` now just registers `[sm_view]`, `[sm_show_entry]` and the fallbacks. What it copies from Formidable (read from its source): filters in SQL, including Dynamic-field text turned into linked entry IDs, "=" meaning "contains" for multi-value fields, blank = "is empty", empty `[get param]` filters ignored; fields mapped to a post (title, status, category, custom fields) read from and filtered on the post; `frm_where_filter` offered to the theme, which the camp/lodge search views need; content filter "limited" (curly quotes, paragraphs) over the whole view; `.frm_no_entries`; paging `?frm-page-ID=` with no arrow at the ends; shortcode attributes become `[get param]` values; option-list views output bare `<option>`s. `filter=limited` is Formidable's content switch, not "current user only" (the old renderer showed guests "Please log in" there). Edit/Delete/Publish visibility follows Formidable's per-form rules (editable, editable_role, open_editable_role, own drafts, frm_delete_entries). Delete and Publish are POST forms with a nonce tied to the entry and, for Publish, to the exact field and value; handled on `template_redirect` with a permission re-check, redirect back with a notice. Delete removes child entries and moves a linked post to the trash, as Formidable does. Search forms 36/37/38 now match: Dynamic State dropdown (73 states, alphabetical, URL value pre-selected), screen-reader legend, "do not store entries" honoured (entry exists only while its actions run), redirect `[557 show=113]` gives `?council_state=Alabama`. Also fixed: entry and field timestamps now stored in GMT like Formidable (were local time). Verified: all 12 views give the same text as Formidable with the same rows/options, unfiltered and with URL filters, searches (state names, council names, council slugs through the theme hook) and paging, as admin, logged out, historian, index_contributor, regional, subscriber and a post author (1,326 rows of My Posts); 13/13 button tests (delete, other user's nonce refused, publish, tampered value refused, wrong field refused, non-owner refused, GET ignored, notices); search submissions redirect correctly, store nothing, email only logged; 19 forms sweep: 40/44 Dynamic dropdowns identical, the other 4 are on later pages of multi-page forms (3.3); no PHP warnings from plugin code; test data 0 and mail log cleared.

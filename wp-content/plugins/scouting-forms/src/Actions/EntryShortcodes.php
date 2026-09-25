@@ -7,8 +7,8 @@ use ScoutingMemories\Forms\Forms\Rendering\FieldRenderer;
 /**
  * EntryShortcodes
  *
- * Replaces Formidable's entry shortcodes in email settings and success messages:
- * [123] / [field_key] (field values), [default-message], [id], [key], [form_name], [sitename],
+ * Replaces Formidable's entry shortcodes in email settings, success messages and redirect URLs:
+ * [123] / [field_key] (field values, with show= and sep= options), [default-message], [id], [key], [form_name], [sitename],
  * [siteurl], [admin_email], [date], [time], [ip], [user_id], [created-at].
  */
 class EntryShortcodes {
@@ -44,13 +44,22 @@ class EntryShortcodes {
             '[created-at]' => $out((string) ($entry['created_at'] ?? '')),
         ];
 
-        foreach ($fields as $field) {
-            $value = $out(self::display($field, $values[(int) $field['id']] ?? ''));
-            $map['[' . $field['id'] . ']'] = $value;
-            $map['[' . $field['key'] . ']'] = $value;
-        }
+        $text = strtr($text, $map);
 
-        return strtr($text, $map);
+        // Field values: [123], [field_key], with options like [123 show=113] or [123 sep=" / "]
+        $byTag = [];
+        foreach ($fields as $field) {
+            $byTag[(string) $field['id']] = $field;
+            $byTag[(string) $field['key']] = $field;
+        }
+        return preg_replace_callback('/\[([A-Za-z0-9_\-]+)((?:\s+[^\]\[]*)?)\]/', static function ($m) use ($byTag, $values, $out) {
+            $field = $byTag[$m[1]] ?? null;
+            if (!$field) {
+                return $m[0];
+            }
+            $atts = shortcode_parse_atts(trim($m[2]));
+            return $out(self::display($field, $values[(int) $field['id']] ?? '', is_array($atts) ? $atts : []));
+        }, $text);
     }
 
     /**
@@ -77,16 +86,44 @@ class EntryShortcodes {
     }
 
     /**
-     * Human-readable value: choice labels instead of stored values, lists joined with commas.
+     * Human-readable value: choice labels instead of stored values, a Dynamic field's linked
+     * entry text instead of its ID, lists joined with commas.
      *
      * @param mixed $value
+     * @param array<string, string> $atts show="id" (stored value), show=N (another field of the
+     *                                    linked entry), sep=", "
      */
-    public static function display(array $field, $value): string {
+    public static function display(array $field, $value, array $atts = []): string {
+        $sep = isset($atts['sep']) ? (string) $atts['sep'] : ', ';
         $values = array_map('strval', (array) $value);
-        if (in_array($field['type'], ['select', 'radio', 'checkbox'], true)) {
+        $show = (string) ($atts['show'] ?? '');
+
+        if ($show === 'id' || $show === 'value') {
+            return implode($sep, array_filter($values, 'strlen'));
+        }
+        if ($field['type'] === 'data') {
+            $target = ctype_digit($show) ? (int) $show : (int) ($field['field_options']['form_select'] ?? 0);
+            $values = array_map(static fn($v) => self::linkedValue((int) $v, $target), $values);
+        } elseif (in_array($field['type'], ['select', 'radio', 'checkbox'], true)) {
             $choices = FieldRenderer::choiceList($field);
             $values = array_map(static fn($v) => $choices[$v] ?? $v, $values);
         }
-        return implode(', ', array_filter($values, 'strlen'));
+        return implode($sep, array_filter($values, 'strlen'));
+    }
+
+    /**
+     * One field of a linked entry (what a Dynamic field shows).
+     */
+    private static function linkedValue(int $entryId, int $fieldId): string {
+        global $wpdb;
+        if ($entryId <= 0 || $fieldId <= 0) {
+            return '';
+        }
+        $value = maybe_unserialize($wpdb->get_var($wpdb->prepare(
+            "SELECT meta_value FROM {$wpdb->prefix}frm_item_metas WHERE item_id = %d AND field_id = %d LIMIT 1",
+            $entryId,
+            $fieldId
+        )));
+        return is_array($value) ? implode(', ', array_map('strval', $value)) : (string) $value;
     }
 }

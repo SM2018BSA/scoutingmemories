@@ -59,10 +59,13 @@ class CompareTool {
                 self::formName($id)
             );
         } elseif ($type === 'view' && $id) {
+            // Option-list views are dropdown contents; show them the way the theme does
+            $isOptions = (bool) preg_match('/^\s*<option\b/i', (string) get_post_field('post_content', $id));
             self::renderPair(
                 sprintf('[display-frm-data id=%d]', $id),
                 sprintf('[sm_view id=%d]', $id),
-                get_the_title($id)
+                get_the_title($id),
+                $isOptions
             );
         }
 
@@ -72,7 +75,7 @@ class CompareTool {
         exit;
     }
 
-    private static function renderPair(string $formidableShortcode, string $pluginShortcode, string $title): void {
+    private static function renderPair(string $formidableShortcode, string $pluginShortcode, string $title, bool $asSelect = false): void {
         echo '<h2 class="h5 mb-3">' . esc_html($title) . '</h2>';
         echo '<div class="row g-4 mb-5">';
         foreach ([
@@ -81,7 +84,11 @@ class CompareTool {
         ] as [$label, $shortcode]) {
             echo '<div class="col-lg-6" data-sm-compare="' . esc_attr(sanitize_title($label)) . '">';
             echo '<div class="small text-uppercase text-muted fw-semibold mb-2">' . esc_html($label) . ' <code>' . esc_html($shortcode) . '</code></div>';
-            echo '<div class="border rounded p-3 bg-white">' . do_shortcode($shortcode) . '</div>';
+            $html = do_shortcode($shortcode);
+            if ($asSelect) {
+                $html = '<select class="form-select" size="12" aria-label="' . esc_attr($label) . '">' . $html . '</select>';
+            }
+            echo '<div class="border rounded p-3 bg-white">' . $html . '</div>';
             echo '</div>';
         }
         echo '</div>';

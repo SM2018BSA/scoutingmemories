@@ -26,7 +26,8 @@ class EntryRepository {
         global $wpdb;
 
         $userId = isset($args['user_id']) ? (int) $args['user_id'] : get_current_user_id();
-        $now = current_time('mysql');
+        // Formidable stores entry times in GMT
+        $now = current_time('mysql', 1);
         $baseKey = $args['key'] ?? self::uniqueKey();
 
         // Formidable stores a unique_id under field 0 with every entry
@@ -68,6 +69,75 @@ class EntryRepository {
     }
 
     /**
+     * Set one field of an entry (Formidable's "update field" link), and stamp who/when.
+     *
+     * @param mixed $value
+     */
+    public static function updateField(int $entryId, int $fieldId, $value): bool {
+        global $wpdb;
+        $entry = self::find($entryId);
+        if (!$entry || $fieldId <= 0) {
+            return false;
+        }
+
+        $stored = is_array($value) ? maybe_serialize($value) : (string) $value;
+        $metas = $wpdb->prefix . 'frm_item_metas';
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$metas} WHERE item_id = %d AND field_id = %d LIMIT 1",
+            $entryId,
+            $fieldId
+        ));
+        if ($existing) {
+            $ok = $wpdb->update($metas, ['meta_value' => $stored], ['id' => (int) $existing], ['%s'], ['%d']) !== false;
+        } else {
+            $ok = (bool) $wpdb->insert($metas, [
+                'meta_value' => $stored,
+                'field_id' => $fieldId,
+                'item_id' => $entryId,
+                'created_at' => current_time('mysql', 1),
+            ], ['%s', '%d', '%d', '%s']);
+        }
+
+        $wpdb->update($wpdb->prefix . 'frm_items', [
+            'updated_at' => current_time('mysql', 1),
+            'updated_by' => get_current_user_id(),
+        ], ['id' => $entryId], ['%s', '%d'], ['%d']);
+
+        self::purgeCaches((int) $entry['form_id']);
+        return $ok;
+    }
+
+    /**
+     * Delete an entry, its values and its child (repeater) entries. A post created from the entry
+     * goes to the trash, as Formidable does, so it can still be restored.
+     */
+    public static function delete(int $entryId): bool {
+        global $wpdb;
+        $entry = self::find($entryId);
+        if (!$entry) {
+            return false;
+        }
+
+        $children = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}frm_items WHERE parent_item_id = %d",
+            $entryId
+        ));
+        foreach ($children as $childId) {
+            self::delete((int) $childId);
+        }
+
+        if ((int) $entry['post_id'] > 0) {
+            wp_trash_post((int) $entry['post_id']);
+        }
+
+        $wpdb->delete($wpdb->prefix . 'frm_item_metas', ['item_id' => $entryId], ['%d']);
+        $deleted = (bool) $wpdb->delete($wpdb->prefix . 'frm_items', ['id' => $entryId], ['%d']);
+
+        self::purgeCaches((int) $entry['form_id']);
+        return $deleted;
+    }
+
+    /**
      * Basic entry details (for shortcodes like [id], [key], [ip], [created-at]).
      *
      * @return array<string, mixed>
@@ -75,7 +145,7 @@ class EntryRepository {
     public static function find(int $entryId): array {
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, item_key, form_id, user_id, post_id, ip, created_at, updated_at FROM {$wpdb->prefix}frm_items WHERE id = %d",
+            "SELECT id, item_key, name, form_id, user_id, post_id, parent_item_id, is_draft, ip, created_at, updated_at FROM {$wpdb->prefix}frm_items WHERE id = %d",
             $entryId
         ), ARRAY_A);
         if (!$row) {

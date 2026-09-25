@@ -130,6 +130,11 @@ class DynamicFormRenderer extends FormHandler {
         ];
         $actions = ActionRunner::run('create', $context);
 
+        // "Do not store entries": like Formidable, the entry exists only while its actions run
+        if (!empty($form['options']['no_save'])) {
+            EntryRepository::delete($entryId);
+        }
+
         return self::afterSubmit($form, $context, $actions['on_submit']);
     }
 
