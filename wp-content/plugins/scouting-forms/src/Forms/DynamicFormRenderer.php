@@ -28,6 +28,9 @@ class DynamicFormRenderer extends FormHandler {
     /** @var array<int, array<string, mixed>> Submission results by form ID for this request */
     private static array $results = [];
 
+    /** A submission bigger than the server accepts arrived (shown on the next form rendered) */
+    private static bool $tooLarge = false;
+
     public static function registerHooks(): void {
         add_shortcode('sm_form', [__CLASS__, 'renderShortcode']);
         add_action('template_redirect', [__CLASS__, 'processSubmission'], 5);
@@ -73,6 +76,14 @@ class DynamicFormRenderer extends FormHandler {
 
         $fields = FormRepository::fields($form['id']);
         $state = self::$results[$form['id']] ?? null;
+        if ($state === null && self::$tooLarge) {
+            self::$tooLarge = false;
+            $state = ['values' => [], 'errors' => [], 'form_error' => sprintf(
+                /* translators: %s: size limit, e.g. 8 MB */
+                __('The submission was too large (files may be up to %s in total). Please choose a smaller file and try again.', 'scouting-forms'),
+                size_format(wp_max_upload_size())
+            )];
+        }
         if ($state === null) {
             $state = ['values' => [], 'errors' => []];
             // An Edit link (?frm_action=edit&entry=ID) opens the entry for someone allowed to edit it
@@ -104,7 +115,15 @@ class DynamicFormRenderer extends FormHandler {
      * Handle a POST from a plugin-rendered form (runs on template_redirect).
      */
     public static function processSubmission(): void {
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || empty($_POST['sm_form_id'])) {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            return;
+        }
+        if (empty($_POST) && empty($_FILES) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+            // More than the server accepts in one submission: PHP dropped all of it
+            self::$tooLarge = true;
+            return;
+        }
+        if (empty($_POST['sm_form_id'])) {
             return;
         }
         $form = FormRepository::find(absint($_POST['sm_form_id']));

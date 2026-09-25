@@ -339,6 +339,11 @@ class EntryService {
                 }
                 continue;
             }
+            if (in_array((int) ($file['error'] ?? 0), [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+                /* translators: %s: size limit, e.g. 2 MB */
+                $errors[$id] = sprintf(__('This file is too large. The limit is %s.', 'scouting-forms'), size_format(wp_max_upload_size()));
+                continue;
+            }
             if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string) $file['tmp_name'])) {
                 $errors[$id] = __('The file could not be uploaded. Please try again.', 'scouting-forms');
                 continue;
@@ -387,23 +392,47 @@ class EntryService {
             if (!empty($opts['restrict']) && !empty($opts['ftypes']) && is_array($opts['ftypes'])) {
                 $overrides['mimes'] = $opts['ftypes'];
             }
+            $size = (int) ($opts['new_size'] ?? 0);
+            if (!empty($opts['resize']) && $size > 0) {
+                self::resizeUpload($key, $size);
+            }
             $attachId = media_handle_upload($key, 0, [], $overrides);
             if (is_wp_error($attachId)) {
                 continue;
             }
             TestData::markPost((int) $attachId);
-
-            $size = (int) ($opts['new_size'] ?? 0);
-            if (!empty($opts['resize']) && $size > 0 && wp_attachment_is_image((int) $attachId)) {
-                $path = get_attached_file((int) $attachId);
-                $editor = $path ? wp_get_image_editor($path) : null;
-                if ($editor && !is_wp_error($editor) && !is_wp_error($editor->resize($size, $size, false))) {
-                    $editor->save($path);
-                    wp_update_attachment_metadata((int) $attachId, wp_generate_attachment_metadata((int) $attachId, $path));
-                }
-            }
             $saved[(int) $field['id']] = (int) $attachId;
         }
         return $saved;
+    }
+
+    /**
+     * Shrink an uploaded image to fit $size pixels before WordPress stores it, so its thumbnail
+     * sizes are made from the resized image (resizing afterwards left the first set of sizes on
+     * disk, no longer tracked).
+     */
+    private static function resizeUpload(string $key, int $size): void {
+        $tmp = (string) ($_FILES[$key]['tmp_name'] ?? '');
+        $type = wp_check_filetype_and_ext($tmp, (string) ($_FILES[$key]['name'] ?? ''));
+        if ($tmp === '' || !is_uploaded_file($tmp) || empty($type['type']) || strpos((string) $type['type'], 'image/') !== 0) {
+            return;
+        }
+        $editor = wp_get_image_editor($tmp);
+        if (is_wp_error($editor)) {
+            return;
+        }
+        $current = $editor->get_size();
+        if (max((int) ($current['width'] ?? 0), (int) ($current['height'] ?? 0)) <= $size || is_wp_error($editor->resize($size, $size, false))) {
+            return;
+        }
+        $out = $editor->save($tmp . '.' . $type['ext'], $type['type']);
+        if (is_wp_error($out) || empty($out['path']) || !file_exists($out['path'])) {
+            return;
+        }
+        // The uploaded file keeps its path (PHP only moves files it received), with the new image
+        if (@rename($out['path'], $tmp)) {
+            clearstatcache(true, $tmp);
+            $_FILES[$key]['size'] = (int) filesize($tmp);
+        }
     }
 }

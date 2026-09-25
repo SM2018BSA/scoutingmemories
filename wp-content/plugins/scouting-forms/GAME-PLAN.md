@@ -343,7 +343,16 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       standalone (security 26, theme hooks 34, REST 21, edit 19, camp 16, entry actions 13, field
       value 11, post action 22, registration 25, account pages 20, index forms 4/4, search forms) and
       the views match Formidable's saved output (97 same, 8 differ only by the custom-role rule).
-- [ ] 8.3 Browser pass of the remaining screens (entries admin, builder) with Formidable off.
+- [x] 8.3 (2026-09-25) Browser pass with Formidable off: Add a Post (member defaults, council numbers,
+      rich text editor with Add Media, help modal with the Support form), wp-admin Forms (23), Views
+      (14), Entries (list, counts, search, CSV link, editor opened and cancelled). The console error
+      from wp-admin/js/svg-painter.js appears on every admin page (also WordPress's own Profile), not
+      from the plugin.
+- [x] 8.4 (2026-09-25) Real HTTP uploads (registration form, as a visitor): JPEG/PNG saved and resized to
+      300 px before WordPress makes its sizes (resizing afterwards left untracked 300/768 px copies on
+      disk; fixed); refused with a message: PHP code named .jpg, .php, SVG with script, PDF, a file over
+      the upload limit, a submission over the server limit (PHP drops it; the form now says so).
+      Nothing left in uploads after cleanup (14/14).
 
 ### Phase 9: Handoff (the owner decides; Claude does not publish)
 - [ ] 9.1 Release notes + a go-live checklist (must include: submit Contact Us on live once to confirm the reCAPTCHA server check, which cannot run on localhost) (what to verify on live, how to roll back:
@@ -374,3 +383,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-25: **Phase 6: 6.1-6.3 done (6.4 next).** New `Support\Capabilities`, `Forms\EntryService` (shared save pipeline; DynamicFormRenderer now only checks the nonce and shows confirmations), rewritten `Rest\ApiController`, new Vue components `UiCombobox`, `EntryField`, rewritten `EntriesList` and `EntryEditorModal`, App.vue permissions/search/sort/CSV; builder rebuilt with Vite (dependencies unchanged; npm audit 0). Verified: REST 21/21 (historian can list/search entries but not edit forms or open views; a plain subscriber is refused on every route; create with missing fields gives field errors; valid create with a repeating row; detail with display values and dependent choices; update through the same rules; rows kept when the section is not sent; CSV with headers and formula cells neutralised; delete removes child entries; serialized input ignored; another form's field cannot be changed). Builder UI checked in a browser against real API responses captured as a historian (Views tab hidden, entries tab opens, columns, search, editor sections/fields/chips, server error under the field, State -> Council reload, save keeps the repeating row). All earlier suites still pass; test data 0.
 - 2026-09-25: Owner: working with Formidable no longer matters; test every feature; close security gaps. **6.5 done** (see Phase 6): FormAccess, ShortcodeTrust, custom-role tightening, upload checks, rate limit. Formidable snapshot for standalone comparison saved (100 view cases x 5 users, 5 field-value cases). Next: Phase 7 with Formidable deactivated locally.
 - 2026-09-25: **Phase 7 done, 8.1-8.2 done.** Formidable is off on the local site. New: `src/Compat/{Compat,Data,EntryArray,Api,Hooks,EditUsers}.php`, `compat/Frm*.php`, `src/Forms/Modal.php`; rich text editor; ACF-aware custom fields; stored slug values survive edits. Checks: 752/757 theme calls identical to Formidable; theme hooks suite 34/34; every earlier suite passes standalone; crawl clean. Incident: one crashed test run (my test overwrote ACF's global) left three ACF field definitions changed locally; restored byte-for-byte from E:/WEB/wp_live_backup.sql (rows 604-606 only) and verified; tests now back up ACF rows to a file and restore on shutdown.
+- 2026-09-25: 8.3/8.4 done (see Phase 8). Local leftovers removed: 5 crawl login sessions, one dashboard auto-draft, WordPress's recovery-mode timestamp from the first Formidable-off crash, 8 untracked image sizes from the upload tests. Formidable stays off locally.
