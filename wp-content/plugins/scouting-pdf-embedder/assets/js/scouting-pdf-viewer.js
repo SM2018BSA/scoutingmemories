@@ -391,7 +391,7 @@
         var rotation = 0;
         var fitMode = 'width';   // 'width' | 'page' | null (manual zoom)
         var spread = false;
-        var textSelect = storageGet('scouting-pdf:text-select') === '1';
+        var textSelect = false;
         var renderQueue = [];
         var rendering = false;
         var renderTimer = null;

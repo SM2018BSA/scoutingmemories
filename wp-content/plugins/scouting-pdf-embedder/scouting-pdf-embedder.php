@@ -749,9 +749,7 @@ class Scouting_PDF_Embedder {
                 </div>
 
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('search', 'bi-search', 'Search', 'Find words in this document (Ctrl+F)', ' aria-pressed="false"'); ?>
                     <?php echo $this->button('adjust', 'bi-sliders', 'Adjust', 'Brighten, darken or invert faded scans', ' aria-pressed="false"'); ?>
-                    <?php echo $this->button('text-select', 'bi-cursor-text', 'Select text', 'Select and copy text to quote it ( T ). Turn off to drag pages around', ' aria-pressed="false"'); ?>
                     <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Get a citation for this page (Chicago, MLA, APA, or for Zotero)'); ?>
                     <?php echo $this->button('download', 'bi-download', 'Download', 'Save the original PDF file', $hidden_if_no_download); ?>
                     <div class="position-relative" data-pdf-role="menu-wrap">
@@ -774,15 +772,6 @@ class Scouting_PDF_Embedder {
                 </div>
             </div>
 
-            <form class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom bg-body-tertiary" data-pdf-role="findbar" role="search" hidden>
-                <input type="search" class="form-control form-control-sm" data-pdf-control="find-input" placeholder="Find in document" aria-label="Find in document" autocomplete="off">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="find-prev" aria-label="Previous match"><i class="bi bi-chevron-up" aria-hidden="true"></i></button>
-                <button type="submit" class="btn btn-sm btn-outline-secondary" data-pdf-control="find-next" aria-label="Next match"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
-                <span class="small text-muted" data-pdf-role="find-status" role="status" aria-live="polite"></span>
-                <button type="button" class="btn btn-sm btn-link ms-auto" data-pdf-control="find-list">List all matches</button>
-                <button type="button" class="btn-close" data-pdf-control="find-close" aria-label="Close search"></button>
-            </form>
-
             <div class="d-flex flex-wrap align-items-center gap-3 px-3 py-2 border-bottom bg-body-tertiary small" data-pdf-role="adjustbar" hidden>
                 <label class="d-flex align-items-center gap-2 mb-0">Brightness <input type="range" class="form-range" min="50" max="200" step="5" value="100" data-pdf-control="brightness"></label>
                 <label class="d-flex align-items-center gap-2 mb-0">Contrast <input type="range" class="form-range" min="50" max="300" step="5" value="100" data-pdf-control="contrast"></label>
@@ -797,13 +786,11 @@ class Scouting_PDF_Embedder {
                     <div class="nav nav-tabs nav-fill small px-1 pt-1" role="tablist" data-pdf-role="tabs">
                         <button type="button" class="nav-link active" role="tab" aria-selected="true" data-pdf-tab="thumbs">Pages</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="outline" hidden>Contents</button>
-                        <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="results">Matches</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="info">Details</button>
                         <button type="button" class="btn btn-sm btn-link text-muted p-1 px-2 border-0 align-self-center ms-auto" data-pdf-control="sidebar-close" aria-label="Close sidebar" title="Close sidebar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                     </div>
                     <div data-pdf-panel="thumbs" role="tabpanel"></div>
                     <div data-pdf-panel="outline" role="tabpanel" hidden></div>
-                    <div data-pdf-panel="results" role="tabpanel" hidden><p class="small text-muted p-3 mb-0">Search the document to list every match here.</p></div>
                     <div data-pdf-panel="info" role="tabpanel" hidden></div>
                 </aside>
 
