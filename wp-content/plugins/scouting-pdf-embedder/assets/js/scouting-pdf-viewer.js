@@ -2011,7 +2011,6 @@
 
                 return canvasToBlob(out).then(function(blob) {
                     var name = fileNameFromUrl(pdfUrl).replace(/\.pdf$/i, '') + '-p' + labelFor(num) + '.png';
-                    saveBlob(blob, name);
                     openSnapshotDialog(blob, out, num, rect, info, name);
                 });
             });
