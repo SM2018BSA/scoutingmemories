@@ -306,7 +306,11 @@ class AdminMenu {
             wp_die(__('Permission denied.', 'scouting-forms'));
         }
 
-        $year = sanitize_text_field($_POST['target_year'] ?? date('Y'));
+        // Written into every active council, camp and lodge: only a real year is accepted
+        $year = sanitize_text_field(wp_unslash($_POST['target_year'] ?? date('Y')));
+        if (!preg_match('/^\d{4}$/', $year) || (int) $year < 1900 || (int) $year > (int) date('Y') + 1) {
+            wp_die(esc_html__('Please enter a year such as 2026.', 'scouting-forms'), '', ['back_link' => true]);
+        }
         $counts = ArchiveRepository::updateActiveEndDates($year);
 
         wp_safe_redirect(add_query_arg([
