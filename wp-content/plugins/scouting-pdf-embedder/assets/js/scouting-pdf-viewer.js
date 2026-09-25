@@ -113,11 +113,11 @@
         return name.replace(/[\\/:*?"<>|\x00-\x1f]+/g, '-');
     }
 
-    function canvasToBlob(canvas, type) {
+    function canvasToBlob(canvas, type, quality) {
         return new Promise(function(resolve, reject) {
             canvas.toBlob(function(blob) {
                 if (blob) resolve(blob); else reject(new Error('Could not create image'));
-            }, type || 'image/png');
+            }, type || 'image/png', quality);
         });
     }
 
@@ -2009,8 +2009,8 @@
                 ctx.font = '500 ' + Math.max(12, Math.round(fontSize * 0.88)) + 'px monospace, sans-serif';
                 ctx.fillText(linkText, pad, curY);
 
-                return canvasToBlob(out).then(function(blob) {
-                    var name = fileNameFromUrl(pdfUrl).replace(/\.pdf$/i, '') + '-p' + labelFor(num) + '.png';
+                return canvasToBlob(out, 'image/jpeg', 0.88).then(function(blob) {
+                    var name = fileNameFromUrl(pdfUrl).replace(/\.pdf$/i, '') + '-p' + labelFor(num) + '.jpg';
                     openSnapshotDialog(blob, out, num, rect, info, name);
                 });
             });
@@ -2040,7 +2040,7 @@
                 shareBtn.type = 'button';
                 shareBtn.innerHTML = '<i class="bi bi-share" aria-hidden="true"></i> Share image…';
                 shareBtn.addEventListener('click', function() {
-                    var file = new File([blob], name, { type: 'image/png' });
+                    var file = new File([blob], name, { type: 'image/jpeg' });
                     var shareData = {
                         title: info.title + ' (' + describePage(num) + ')',
                         text: info.title + ', ' + describePage(num) + ' — Scouting Memories: ' + info.url,
@@ -2059,10 +2059,18 @@
             copyImgBtn.innerHTML = '<i class="bi bi-clipboard" aria-hidden="true"></i> Copy image';
             copyImgBtn.addEventListener('click', function() {
                 if (navigator.clipboard && window.ClipboardItem) {
-                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function() {
+                    var item = {};
+                    item[blob.type || 'image/jpeg'] = blob;
+                    navigator.clipboard.write([new ClipboardItem(item)]).then(function() {
                         toast('Image copied to clipboard! (Link: ' + info.url + ')');
                     }).catch(function() {
-                        toast('Direct clipboard image copying not permitted by browser. Use Download instead.');
+                        canvasToBlob(canvas, 'image/png').then(function(pngBlob) {
+                            return navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+                        }).then(function() {
+                            toast('Image copied to clipboard! (Link: ' + info.url + ')');
+                        }).catch(function() {
+                            toast('Direct clipboard image copying not permitted by browser. Use Download instead.');
+                        });
                     });
                 } else {
                     toast('Clipboard image copying is not supported in this browser. Use Download instead.');
@@ -2080,7 +2088,7 @@
 
             var downloadBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
             downloadBtn.type = 'button';
-            downloadBtn.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> Download PNG';
+            downloadBtn.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> Download JPG';
             downloadBtn.addEventListener('click', function() {
                 saveBlob(blob, name);
                 toast('Picture saved with embedded citation and link');
