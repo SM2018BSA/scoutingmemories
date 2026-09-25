@@ -106,7 +106,7 @@ compatibility layer for the theme, Bootstrap front-end styling.
 Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 
 ### Phase 0: Foundation and safety
-- [ ] 0.1 Baseline: generate `docs/formidable-usage.json` (read-only export of forms, fields,
+- [x] 0.1 (2026-09-24) Baseline: generate `docs/formidable-usage.json` (read-only export of forms, fields,
       field options, actions, views, placements) with a plugin CLI/admin tool, so later phases can
       check behaviour against it without re-querying by hand.
 - [ ] 0.2 Coexistence audit: while Formidable is active the plugin must not change any Formidable
@@ -203,3 +203,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 
 ## Progress log
 - 2026-09-24: Plan written. Audit of Formidable usage and plugin coverage recorded above.
+- 2026-09-24: 0.1 done. `src/Tools/FormidableAudit.php` writes `docs/formidable-usage.json` (git-ignored via the plugin's own `.gitignore`): 22 forms, 263 fields, 36 actions, 14 views, 10 placements, 139 theme call sites; emails redacted, no entries.
