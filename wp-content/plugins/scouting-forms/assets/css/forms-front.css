@@ -150,3 +150,156 @@
     height: 1px;
     overflow: hidden;
 }
+
+/* ---- Layout: Formidable's 12-column field grid (frm_half, frm_third, frm_first, frm2..frm12) ---- */
+
+.sm-forms .frm_fields_container,
+.sm-forms .frm_grid_container,
+.sm-forms .frm_section_heading {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: max-content;
+    column-gap: 2%;
+}
+
+.sm-forms .frm_fields_container > *,
+.sm-forms .frm_grid_container > *,
+.sm-forms .frm_section_heading > * {
+    grid-column: span 12 / span 12;
+}
+
+.sm-forms .frm_grid_container > [hidden],
+.sm-forms .frm_fields_container > [hidden],
+.sm-forms .frm_section_heading > [hidden] {
+    display: none !important;
+}
+
+@media (min-width: 600px) {
+    .sm-forms .frm_half { grid-column: span 6 / span 6; }
+    .sm-forms .frm_third { grid-column: span 4 / span 4; }
+    .sm-forms .frm_two_thirds { grid-column: span 8 / span 8; }
+    .sm-forms .frm_fourth { grid-column: span 3 / span 3; }
+    .sm-forms .frm_three_fourths { grid-column: span 9 / span 9; }
+    .sm-forms .frm_sixth { grid-column: span 2 / span 2; }
+    .sm-forms .frm2 { grid-column: span 2 / span 2; }
+    .sm-forms .frm3 { grid-column: span 3 / span 3; }
+    .sm-forms .frm4 { grid-column: span 4 / span 4; }
+    .sm-forms .frm6 { grid-column: span 6 / span 6; }
+    .sm-forms .frm8 { grid-column: span 8 / span 8; }
+    .sm-forms .frm9 { grid-column: span 9 / span 9; }
+    .sm-forms .frm10 { grid-column: span 10 / span 10; }
+    .sm-forms .frm_first { grid-column-start: 1; }
+}
+
+.sm-forms .frm_full { grid-column: span 12 / span 12; }
+
+/* The theme hides some Formidable fields with its "hidden" layout class */
+.sm-forms .frm_form_field.hidden { display: none; }
+
+/* ---- Sections ---- */
+
+.sm-forms .frm_section_heading > h3 {
+    margin: 1.5rem 0 0.75rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    font-size: 1.25rem;
+}
+
+.sm-forms .sm-trigger {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sm-forms .sm-trigger:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(var(--sm-green-rgb), 0.25);
+}
+
+.sm-forms .sm-toggle-icon {
+    transition: transform 0.2s ease;
+}
+
+.sm-forms .sm-trigger[aria-expanded="true"] .sm-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* Repeating sections: one row per entry, add/remove at the end of each row */
+.sm-forms .frm_repeat_grid {
+    padding: 0.75rem 0;
+    border-bottom: 1px dashed var(--bs-border-color, #dee2e6);
+}
+
+.sm-forms .frm_repeat_buttons {
+    display: flex;
+    align-items: end;
+    gap: 0.25rem;
+}
+
+.sm-forms .frm_repeat_buttons .btn-link {
+    color: var(--sm-green);
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    line-height: 1;
+}
+
+.sm-forms .frm_show_it {
+    min-height: 1.5rem;
+    margin: 0;
+}
+
+/* ---- Searchable dropdowns (forms-front.js) ---- */
+
+.sm-forms .sm-ac-native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.sm-forms .sm-ac-list {
+    z-index: 1060;
+    top: 100%;
+    left: 0;
+    max-height: 16rem;
+    overflow-y: auto;
+    margin: 0.125rem 0 0;
+    padding: 0;
+}
+
+.sm-forms .sm-ac-option {
+    cursor: pointer;
+    padding: 0.375rem 0.75rem;
+}
+
+.sm-forms .sm-ac-option.sm-ac-focus,
+.sm-forms .sm-ac-option:hover {
+    background-color: var(--bs-secondary-bg, #e9ecef);
+}
+
+.sm-forms .sm-ac-option.active {
+    color: #fff;
+    background-color: var(--sm-green);
+    border-color: var(--sm-green);
+}
+
+.sm-forms .sm-ac-chip {
+    font-weight: 500;
+    font-size: 0.875rem;
+    padding: 0.35em 0.5em;
+}
+
+.sm-forms .btn-close-sm {
+    width: 0.6em;
+    height: 0.6em;
+    background-size: 0.6em;
+}
+
+/* ---- Multi-page forms ---- */
+
+.sm-forms .sm-page-nav {
+    display: flex;
+    gap: 0.5rem;
+}

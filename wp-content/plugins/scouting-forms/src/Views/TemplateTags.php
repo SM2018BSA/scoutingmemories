@@ -70,8 +70,8 @@ class TemplateTags {
      */
     public static function ownShortcodes(string $html): string {
         return preg_replace(
-            ['/\[display-frm-data(?=[\s\]])/', '/\[formidable(?=[\s\]])/', '/\[frm-show-entry(?=[\s\]])/'],
-            ['[sm_view', '[sm_form', '[sm_show_entry'],
+            ['/\[display-frm-data(?=[\s\]])/', '/\[formidable(?=[\s\]])/', '/\[frm-show-entry(?=[\s\]])/', '/\[frm-field-value(?=[\s\]])/'],
+            ['[sm_view', '[sm_form', '[sm_show_entry', '[sm_field_value'],
             $html
         );
     }

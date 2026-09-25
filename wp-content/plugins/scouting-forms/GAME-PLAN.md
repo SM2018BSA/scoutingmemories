@@ -146,21 +146,42 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - [x] 2.4 (2026-09-25) Output parity for all 12 views via the Compare tool (normalised text/HTML).
 
 ### Phase 3: Index forms (councils, camps, lodges, states, links)
-- [ ] 3.1 Dynamic `data` fields: options from another form's field, dependent (filtered by parent
+- [x] 3.1 (2026-09-25) Dynamic `data` fields: options from another form's field, dependent (filtered by parent
       Dynamic field), multiple selection, select/checkbox/autocomplete display, saved values = entry IDs.
-      Done in Phase 2: independent options (`Forms\Rendering\DynamicOptions`, alphabetical like
-      Formidable, drafts/blanks skipped, `restrict`), text defaults such as `[get param=state]` select the
-      matching entry, dependent fields start empty like Formidable's. Still to do: loading a dependent
-      field's choices when its parent changes (Formidable does it by AJAX), autocomplete (`autocom`), and
-      server-side validation of dependent choices (today an empty choice list would reject them).
-- [ ] 3.2 Conditional logic engine (client + server): `hide_field`, `hide_field_cond`, `hide_opt`,
+      `Forms\Rendering\DynamicOptions` ports Formidable's rules (independent lists alphabetical; dependent
+      lists via meta_through_join, incl. serialized multi-values and repeater child entries; "just show it"
+      fields show and save the parent entry's linked value, computed on the server). The browser loads
+      dependent choices from `admin-ajax.php?action=sm_forms_dynamic` (`Ajax\DynamicFields`: public and
+      read-only like Formidable's, no nonce because pages are cached; answers only for real dependent
+      fields of published forms, numeric values, visible fields). Autocomplete is the plugin's own
+      searchable dropdown (no library): type to filter, arrow keys, chips for multi-select, labelled
+      remove buttons. Server only accepts entry IDs the field actually offers for the parent's choice.
+- [x] 3.2 (2026-09-25) Conditional logic engine (client + server): `hide_field`, `hide_field_cond`, `hide_opt`,
       `show_hide`, `any_all`; hidden fields are not validated or saved (Formidable behaviour).
-- [ ] 3.3 Sections (divider/end_divider, collapsible, repeaters if any are configured), page breaks,
+      `Forms\Logic\FieldLogic` (server) and `assets/js/forms-front.js` (browser) apply the same rules,
+      including "Dynamic field is anything", list values, hidden sections and field visibility roles.
+- [x] 3.3 (2026-09-25) Sections (divider/end_divider, collapsible, repeaters if any are configured), page breaks,
       toggle, hidden fields with default-value shortcodes (`[user_id]`, `[get param=]`, etc.), user_id.
-      Found in Phase 2: forms 17 and 39 are multi-page; Formidable shows page 1 only, the plugin shows
-      every page at once. The theme also sets defaults through `frm_setup_new_fields_vars` (Phase 7).
-- [ ] 3.4 Front-end entry editing (edit links, `frm_action=edit`) with Formidable's permission rules.
-- [ ] 3.5 Parity on forms 7, 8, 10, 11, 23, 25, 27 (render, validate, save, actions).
+      Sections wrap their fields; collapsible ones open/close by click or keyboard (start open when they
+      hold an error; open without JavaScript); repeating sections (7, 8, 11 -> child forms 27, 23, 25) use
+      Formidable's names, add/remove rows, and save one child entry per non-blank row plus the list of child
+      IDs on the section field. Page breaks (forms 17, 39) become in-browser pages with Previous/Next and a
+      required-field check; the server checks everything on submit and reopens the page with the first
+      error (Formidable instead posts each page to the server; the result is the same). Layout classes
+      (frm_half, frm_first, frm2 ...) have their own 12-column grid in forms-front.css, so they keep working
+      without Formidable's stylesheet. Error messages follow Formidable exactly (519/519 identical).
+- [x] 3.4 (2026-09-25) Front-end entry editing (edit links, `frm_action=edit`) with Formidable's permission rules.
+      `?frm_action=edit&entry=ID|key` opens the entry only if the form is editable and
+      `Permissions::canEditEntry` allows it; otherwise the page shows a new empty form (as Formidable).
+      One-entry-per-user forms open the user's own entry. The update is nonce-tied to the entry and
+      re-checked on submit; values follow Formidable's update rules (blank or hidden values removed), the
+      owner in the User ID field is kept, fields the editor may not see are left alone, rows are updated /
+      added / removed, "update" actions run, and the form's edit_* confirmation shows ("Update" button).
+- [x] 3.5 (2026-09-25) Parity on forms 7, 8, 10, 11, 23, 25, 27 (render, validate, save, actions).
+      `[frm-field-value]` (used by the index forms' emails to reach the submitter) has a plugin version,
+      `[sm_field_value]`, identical in output. Found and fixed on the way: text typed into a form could
+      run shortcodes in confirmation messages and emails (values were inserted before do_shortcode);
+      values now have their brackets encoded first, so only shortcodes written in the settings run.
 
 ### Phase 4: Add a Post (form #6)
 - [ ] 4.1 All 44 fields incl. 7 conditional rules, file uploads to the media library.
@@ -168,7 +189,8 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       field 465, 23 custom fields, category; entry `post_id` link; updates when the entry is edited.
       Note from Phase 2: the Pending Review "Publish" button ([frm-entry-update-field] on field 465)
       only changes the entry value in plugin mode; Formidable also publishes the linked post. This
-      action must run on that update too.
+      action must run on that update too. Note from Phase 3: when an entry with a post is edited,
+      post-mapped fields are left untouched by the entry update; this action must write them to the post.
 - [ ] 4.3 Role rules (who may publish vs pending), redirects/messages, email notifications.
 - [ ] 4.4 Fire `frm_after_create_entry` / `frm_after_update_entry` so the theme's existing hooks run
       (depends on Phase 7 compatibility work).
@@ -195,6 +217,9 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - [ ] 7.3 Fire the Formidable hooks the theme listens to (`frm_after_create_entry`,
       `frm_setup_new_fields_vars`, `frm_where_filter`, `frm_no_entries`, `frm_include_meta_keys`,
       `frm_get_default_value`, `frm_rte_options`, ...) at the equivalent points.
+      Already done: `frm_where_filter` (Phase 2, camp/lodge searches). Depends on this: the council slug
+      fields (556 on lodges, 560 on camps) are filled by the theme's frm_after_create/update_entry hooks;
+      Add a Post / registration defaults come from the theme's frm_setup_new_fields_vars.
 - [ ] 7.4 Automated check: every theme call site exercised with Formidable active vs. plugin shim.
 
 ### Phase 8: Local cutover rehearsal (local only, needs the owner's OK to deactivate Formidable locally)
@@ -224,3 +249,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-24: 0.7 done. 39 plugin PHP files pass `php -l` (PHP 8.2); rendering all 22 forms, 12 views and the 5 dashboard shortcodes as visitor and as admin with E_ALL gives no warnings/notices/deprecations from plugin code. Leftovers noted for Phase 6: hard-coded counts in admin menu labels and the guide notice ("23 forms, 266 fields", "Councils (2,323)"), and `assets/css/tailwindcss.css` duplicating `assets/builder/builder.css`. **Phase 0 complete.**
 - 2026-09-25: **Phase 1 complete (Contact Us).** New pipeline: `Models\FormRepository`, `Forms\Rendering\{FieldRenderer,FormTemplate,DefaultValues}` (fields built from each field's Formidable `custom_html`, form from `before_html`/`submit_html`), `Forms\Submission\{Validator,SpamGuard}`, `Forms\Logic\Conditions`, `Actions\{ActionRunner,EmailAction,EntryShortcodes}`, `Support\FormidableSettings`. `DynamicFormRenderer` rewritten: submissions handled on `template_redirect` (so redirects work), then nonce, spam check, validation, uploads, EntryRepository, actions, and the on_submit message/redirect/page. EntryRepository now saves Formidable's exact shape: 5-char key, name from first filled field, browser/referrer JSON in description, no IP (Formidable `no_ips` is on), `unique_id` meta under field 0. Verified locally: Formidable's own messages (blank, invalid email), honeypot/too-fast/bad-nonce refused, valid entry saved, email logged with To/From/Bcc/subject/body per the action, success message shown and form hidden (show_form off), same labels/IDs/title/description/reCAPTCHA as Formidable in the Compare tool, all 22 forms render with no PHP warnings, test data cleaned (0 left). Not testable locally: reCAPTCHA server verification (Google rejects localhost); added to 9.1. Known gaps left for later phases: sections/page breaks (Phase 3), `wppost`/`register` actions (Phases 4/5), IndexEntityForms still uses its own name-based keys (revisit in Phase 3).
 - 2026-09-25: **Phase 2 complete (views).** New `Views\{ViewRepository,EntryQuery,EntryValues,TemplateTags,EntryActions,ViewRenderer}`, `Models\PostFields`, `Support\Permissions` (rewritten), `Forms\Rendering\DynamicOptions`; `DynamicViewRenderer` now just registers `[sm_view]`, `[sm_show_entry]` and the fallbacks. What it copies from Formidable (read from its source): filters in SQL, including Dynamic-field text turned into linked entry IDs, "=" meaning "contains" for multi-value fields, blank = "is empty", empty `[get param]` filters ignored; fields mapped to a post (title, status, category, custom fields) read from and filtered on the post; `frm_where_filter` offered to the theme, which the camp/lodge search views need; content filter "limited" (curly quotes, paragraphs) over the whole view; `.frm_no_entries`; paging `?frm-page-ID=` with no arrow at the ends; shortcode attributes become `[get param]` values; option-list views output bare `<option>`s. `filter=limited` is Formidable's content switch, not "current user only" (the old renderer showed guests "Please log in" there). Edit/Delete/Publish visibility follows Formidable's per-form rules (editable, editable_role, open_editable_role, own drafts, frm_delete_entries). Delete and Publish are POST forms with a nonce tied to the entry and, for Publish, to the exact field and value; handled on `template_redirect` with a permission re-check, redirect back with a notice. Delete removes child entries and moves a linked post to the trash, as Formidable does. Search forms 36/37/38 now match: Dynamic State dropdown (73 states, alphabetical, URL value pre-selected), screen-reader legend, "do not store entries" honoured (entry exists only while its actions run), redirect `[557 show=113]` gives `?council_state=Alabama`. Also fixed: entry and field timestamps now stored in GMT like Formidable (were local time). Verified: all 12 views give the same text as Formidable with the same rows/options, unfiltered and with URL filters, searches (state names, council names, council slugs through the theme hook) and paging, as admin, logged out, historian, index_contributor, regional, subscriber and a post author (1,326 rows of My Posts); 13/13 button tests (delete, other user's nonce refused, publish, tampered value refused, wrong field refused, non-owner refused, GET ignored, notices); search submissions redirect correctly, store nothing, email only logged; 19 forms sweep: 40/44 Dynamic dropdowns identical, the other 4 are on later pages of multi-page forms (3.3); no PHP warnings from plugin code; test data 0 and mail log cleared.
+- 2026-09-25: **Phase 3 complete (index forms).** New: `Forms\Logic\FieldLogic`, `Ajax\DynamicFields`, `Views\FieldValue`, `assets/js/forms-front.js` (no dependencies); `DynamicOptions`, `FieldRenderer`, `FormTemplate`, `Validator`, `DynamicFormRenderer`, `EntryRepository` (update, formValues), `EntryShortcodes` and forms-front.css extended. Plugin-owned class names for section toggles and row buttons (`sm-trigger`, `sm-toggle-container`, `sm-add-row`, `sm-remove-row`) so Formidable's global click handlers can never act on plugin forms while both are installed. Verified locally: dependent choices identical to Formidable's meta_through_join in 12 cases (incl. repeaters and the same-form case that has none); in the browser (Compare tool, form 11 and 17): State -> Council list loads (110 Ohio councils), searchable dropdown by keyboard, collapsible sections by mouse and keyboard with aria-expanded, rows add/remove/rename/clear, pages with Previous/Next and required check, role-based logic (Historian / Regional Coordinator); server tests: Add a Camp 16/16 (entry, council IDs, child row with server-computed slug and years, blank row skipped, wrong-state council refused, hidden field not required, row errors), editing 19/19 (prefill, Update, rename, swap rows, owner kept, rows cleared, no-permission blank form, forged/cross-entry updates refused), forms 7/8/10/11 save with the same stored fields as Formidable's own entries (differences explained: slug 556 set by the theme hook, toggles, optional repeater), [sm_field_value] = [frm-field-value] in 7 cases, camp email reaches the submitter, typed shortcodes stay text; all earlier suites still pass (12 views, 13 buttons, search forms, 519 messages). No PHP warnings; test data 0; mail log empty. Known differences kept on purpose: pages are stepped in the browser; `unique_id` (field 0) is stored on every top-level entry (Formidable only stores it when its script adds one; nothing reads it).

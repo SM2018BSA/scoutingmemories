@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Views\EntryActions;
+use ScoutingMemories\Forms\Views\FieldValue;
 use ScoutingMemories\Forms\Views\ViewRenderer;
 
 /**
@@ -16,6 +17,7 @@ class DynamicViewRenderer extends FormHandler {
     public static function registerHooks(): void {
         add_shortcode('sm_view', [__CLASS__, 'renderShortcode']);
         add_shortcode('sm_show_entry', [ViewRenderer::class, 'showEntry']);
+        add_shortcode('sm_field_value', [FieldValue::class, 'render']);
         EntryActions::registerHooks();
 
         // Fallbacks for existing Formidable view shortcodes, only when Formidable Views is not
@@ -27,6 +29,9 @@ class DynamicViewRenderer extends FormHandler {
                 }
                 if (!shortcode_exists('frm-show-entry')) {
                     add_shortcode('frm-show-entry', [ViewRenderer::class, 'showEntry']);
+                }
+                if (!shortcode_exists('frm-field-value')) {
+                    add_shortcode('frm-field-value', [FieldValue::class, 'render']);
                 }
             }
         }, 999);

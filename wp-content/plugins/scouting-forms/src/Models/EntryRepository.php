@@ -30,8 +30,8 @@ class EntryRepository {
         $now = current_time('mysql', 1);
         $baseKey = $args['key'] ?? self::uniqueKey();
 
-        // Formidable stores a unique_id under field 0 with every entry
-        if (!array_key_exists(0, $metas)) {
+        // Formidable stores a unique_id under field 0 with every entry (not with repeater rows)
+        if (!array_key_exists(0, $metas) && empty($args['parent_item_id'])) {
             $metas[0] = ['unique_id' => wp_generate_password(20, false, false)];
         }
 
@@ -66,6 +66,121 @@ class EntryRepository {
 
         self::purgeCaches($formId);
         return $entryId;
+    }
+
+    /**
+     * Save an edited entry the way Formidable's FrmEntryMeta::update_entry_metas does: submitted
+     * values are added or updated, and any other stored value (blank now, or from a field that
+     * was hidden) is removed. Fields listed in $keep are left as they are (fields this user may
+     * not see). The unique_id under field 0 is never touched.
+     *
+     * @param array<int, mixed> $metas field_id => value
+     * @param int[] $keep
+     */
+    public static function update(int $entryId, array $metas, array $keep = []): bool {
+        global $wpdb;
+        $entry = self::find($entryId);
+        if (!$entry) {
+            return false;
+        }
+        $table = $wpdb->prefix . 'frm_item_metas';
+        $previous = array_map('intval', $wpdb->get_col($wpdb->prepare(
+            "SELECT field_id FROM {$table} WHERE item_id = %d AND field_id <> 0",
+            $entryId
+        )));
+
+        $kept = array_map('intval', $keep);
+        foreach ($metas as $fieldId => $value) {
+            $fieldId = (int) $fieldId;
+            if ($fieldId <= 0) {
+                continue;
+            }
+            $blank = is_array($value) ? $value === [] : trim((string) $value) === '';
+            if ($blank) {
+                continue;
+            }
+            $kept[] = $fieldId;
+            $stored = is_array($value) ? maybe_serialize($value) : (string) $value;
+            if (in_array($fieldId, $previous, true)) {
+                $wpdb->update($table, ['meta_value' => $stored], ['item_id' => $entryId, 'field_id' => $fieldId], ['%s'], ['%d', '%d']);
+            } else {
+                $wpdb->insert($table, [
+                    'meta_value' => $stored,
+                    'field_id' => $fieldId,
+                    'item_id' => $entryId,
+                    'created_at' => current_time('mysql', 1),
+                ], ['%s', '%d', '%d', '%s']);
+            }
+        }
+
+        $remove = array_diff($previous, $kept);
+        if ($remove) {
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$table} WHERE item_id = %d AND field_id IN (" . implode(',', array_map('intval', $remove)) . ')',
+                $entryId
+            ));
+        }
+
+        $wpdb->update($wpdb->prefix . 'frm_items', [
+            'updated_at' => current_time('mysql', 1),
+            'updated_by' => get_current_user_id(),
+        ], ['id' => $entryId], ['%s', '%d'], ['%d']);
+
+        self::purgeCaches((int) $entry['form_id']);
+        return true;
+    }
+
+    /**
+     * An entry's values as the form expects them: stored values, post-mapped fields read from
+     * the entry's post, and repeating sections as rows keyed by child entry ID.
+     *
+     * @param array<int, array<string, mixed>> $fields The form's fields
+     * @return array<int, mixed>
+     */
+    public static function formValues(int $entryId, array $fields): array {
+        global $wpdb;
+        $entry = self::find($entryId);
+        if (!$entry) {
+            return [];
+        }
+        $values = self::storedValues($entryId);
+
+        foreach ($fields as $field) {
+            $id = (int) $field['id'];
+            $map = PostFields::mapping($field);
+            if ($map && (int) $entry['post_id'] > 0) {
+                $values[$id] = PostFields::value((int) $entry['post_id'], $map, $field);
+            }
+            if ($field['type'] === 'divider' && !empty($field['field_options']['repeat'])) {
+                $childForm = (int) ($field['field_options']['form_select'] ?? 0);
+                $children = $wpdb->get_col($wpdb->prepare(
+                    "SELECT id FROM {$wpdb->prefix}frm_items WHERE parent_item_id = %d AND form_id = %d ORDER BY id",
+                    $entryId,
+                    $childForm
+                ));
+                $section = ['form' => $childForm, 'row_ids' => array_map('strval', $children)];
+                foreach ($children as $childId) {
+                    $section[(string) $childId] = self::storedValues((int) $childId);
+                }
+                $values[$id] = $section;
+            }
+        }
+        return $values;
+    }
+
+    /**
+     * @return array<int, mixed> field_id => value (unserialized), without the unique_id
+     */
+    private static function storedValues(int $entryId): array {
+        global $wpdb;
+        $values = [];
+        foreach ($wpdb->get_results($wpdb->prepare(
+            "SELECT field_id, meta_value FROM {$wpdb->prefix}frm_item_metas WHERE item_id = %d AND field_id <> 0",
+            $entryId
+        )) as $row) {
+            $values[(int) $row->field_id] = maybe_unserialize($row->meta_value);
+        }
+        return $values;
     }
 
     /**

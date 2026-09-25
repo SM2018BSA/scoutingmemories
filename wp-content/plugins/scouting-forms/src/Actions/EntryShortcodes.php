@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Actions;
 
 use ScoutingMemories\Forms\Forms\Rendering\FieldRenderer;
+use ScoutingMemories\Forms\Views\TemplateTags;
 
 /**
  * EntryShortcodes
@@ -25,12 +26,14 @@ class EntryShortcodes {
             return $text;
         }
 
+        // Values from the entry have their brackets encoded, so text someone typed into the form
+        // can never run as a shortcode below; only shortcodes written in the settings do
         $out = static function (string $value) use ($html): string {
-            return $html ? esc_html($value) : $value;
+            return self::inert($html ? esc_html($value) : $value);
         };
 
         $map = [
-            '[default-message]' => self::defaultMessage($fields, $values, $html),
+            '[default-message]' => self::inert(self::defaultMessage($fields, $values, $html)),
             '[id]' => (string) ($entry['id'] ?? ''),
             '[key]' => $out((string) ($entry['key'] ?? '')),
             '[form_name]' => $out($form['name']),
@@ -52,7 +55,7 @@ class EntryShortcodes {
             $byTag[(string) $field['id']] = $field;
             $byTag[(string) $field['key']] = $field;
         }
-        return preg_replace_callback('/\[([A-Za-z0-9_\-]+)((?:\s+[^\]\[]*)?)\]/', static function ($m) use ($byTag, $values, $out) {
+        $text = preg_replace_callback('/\[([A-Za-z0-9_\-]+)((?:\s+[^\]\[]*)?)\]/', static function ($m) use ($byTag, $values, $out) {
             $field = $byTag[$m[1]] ?? null;
             if (!$field) {
                 return $m[0];
@@ -60,6 +63,17 @@ class EntryShortcodes {
             $atts = shortcode_parse_atts(trim($m[2]));
             return $out(self::display($field, $values[(int) $field['id']] ?? '', is_array($atts) ? $atts : []));
         }, $text);
+
+        // Shortcodes written in the settings, e.g. [frm-field-value field_id=163 user_id=current]
+        // to email the person who submitted the form (the plugin's own version is used)
+        if (strpos($text, '[') !== false) {
+            $text = do_shortcode(TemplateTags::ownShortcodes($text));
+        }
+        return $html ? $text : str_replace(['&#91;', '&#93;'], ['[', ']'], $text);
+    }
+
+    private static function inert(string $value): string {
+        return str_replace(['[', ']'], ['&#91;', '&#93;'], $value);
     }
 
     /**

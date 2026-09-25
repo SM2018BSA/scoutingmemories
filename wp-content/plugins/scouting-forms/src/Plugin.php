@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms;
 
 use ScoutingMemories\Forms\Admin\AdminMenu;
 use ScoutingMemories\Forms\Ajax\CascadingSearch;
+use ScoutingMemories\Forms\Ajax\DynamicFields;
 use ScoutingMemories\Forms\Forms\AccountProfileForm;
 use ScoutingMemories\Forms\Forms\DynamicFormRenderer;
 use ScoutingMemories\Forms\Forms\DynamicViewRenderer;
@@ -49,6 +50,7 @@ class Plugin {
 
         // 3. AJAX Services
         CascadingSearch::registerHooks();
+        DynamicFields::registerHooks();
 
         // 4. Frontend Forms & Shortcodes
         DynamicFormRenderer::registerHooks();
@@ -81,6 +83,16 @@ class Plugin {
             SM_FORMS_PLUGIN_URL . 'assets/css/forms-front.css',
             [],
             file_exists($front_css) ? (string) filemtime($front_css) : SM_FORMS_VERSION
+        );
+
+        // Front end: field logic, dependent Dynamic fields, sections, repeaters, pages
+        $front_js = SM_FORMS_PLUGIN_DIR . 'assets/js/forms-front.js';
+        wp_register_script(
+            'sm-forms-front',
+            SM_FORMS_PLUGIN_URL . 'assets/js/forms-front.js',
+            [],
+            file_exists($front_js) ? (string) filemtime($front_js) : SM_FORMS_VERSION,
+            true
         );
 
         // Tailwind is only for the wp-admin builder screens, never the public site

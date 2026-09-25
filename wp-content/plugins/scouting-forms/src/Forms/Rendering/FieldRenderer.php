@@ -29,12 +29,15 @@ class FieldRenderer {
      * @param array<string, mixed> $field From FormRepository
      * @param mixed $value Current value (posted or default)
      * @param string $error Validation message, if any
+     * @param array<string, mixed> $ctx See context(); FormTemplate passes the form's values,
+     *                                  repeater names/IDs, section content and logic state
      */
-    public static function render(array $field, $value, string $error = ''): string {
+    public static function render(array $field, $value, string $error = '', array $ctx = []): string {
         $type = $field['type'];
+        $ctx = self::context($field, $ctx);
 
         if ($type === 'hidden' || $type === 'user_id') {
-            return self::input($field, $value, $error);
+            return self::input($field, $value, $error, $ctx);
         }
         if ($type === 'end_divider') {
             return '';
@@ -51,21 +54,22 @@ class FieldRenderer {
         $required = $field['required'] && !in_array($type, self::NON_INPUT_TYPES, true);
         $indicator = array_key_exists('required_indicator', $opts) ? (string) $opts['required_indicator'] : '*';
 
+        $collapsible = $type === 'divider' && !empty($opts['slide']);
         $replacements = [
-            '[id]' => (string) $field['id'],
-            '[key]' => esc_attr($field['key']),
+            '[id]' => esc_attr($ctx['id']),
+            '[key]' => esc_attr($ctx['key']),
             '[field_name]' => esc_html($field['name']),
             '[required_label]' => $required ? esc_html($indicator) : '',
             '[required_class]' => $required ? ' frm_required_field' : '',
             '[error_class]' => $error !== '' ? ' frm_blank_field' : '',
             '[label_position]' => $labelPosition,
-            '[collapse_class]' => '',
-            '[collapse_this]' => '',
+            '[collapse_class]' => $type === 'divider' ? ($collapsible ? ' sm-trigger' : ' frm_section_spacing') : '',
+            '[collapse_this]' => (string) ($ctx['inner'] ?? ''),
             '[entry_key]' => '',
             '[help]' => '',
             '[description]' => wp_kses_post($field['description']),
             '[error]' => esc_html($error),
-            '[input]' => self::input($field, $value, $error),
+            '[input]' => $type === 'divider' ? '' : self::input($field, $value, $error, $ctx),
         ];
 
         $html = self::conditionalBlocks($template, [
@@ -77,8 +81,18 @@ class FieldRenderer {
 
         // Formidable adds its layout classes (frm_first, frm_full, ...) and the label position
         // to the container; do the same so layouts and CSS hooks match
-        $extra = trim(sprintf('frm_%s_container %s', $labelPosition, (string) ($opts['classes'] ?? '')));
+        $extra = trim(sprintf('frm_%s_container %s %s', $labelPosition, (string) ($opts['classes'] ?? ''), (string) ($ctx['class'] ?? '')));
         $html = preg_replace('/class="frm_form_field /', 'class="frm_form_field ' . esc_attr($extra) . ' ', $html, 1);
+
+        // The browser finds fields by data-sm-field; fields hidden by logic start hidden
+        $marker = ' data-sm-field="' . (int) $field['id'] . '"' . (!empty($ctx['hidden']) ? ' hidden' : '');
+        $html = preg_replace('/<div id="frm_field_' . preg_quote(esc_attr($ctx['id']), '/') . '_container"/', '$0' . $marker, $html, 1);
+
+        if ($collapsible) {
+            // A collapsible section heading opens and closes its fields (forms-front.js)
+            $icon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon sm-toggle-icon"><path d="M5 6l5 5 5-5 2 1-7 7-7-7 2-1z"></path></svg>';
+            $html = preg_replace('/<h3 class="([^"]*sm-trigger[^"]*)">(.*?)<\/h3>/s', '<h3 class="$1" tabindex="0" role="button" aria-expanded="false">$2 ' . $icon . '</h3>', $html, 1);
+        }
 
         // Formidable template placeholders we don't use render as nothing rather than raw text.
         // Only known placeholder names are removed, so bracketed text in labels stays intact.
@@ -105,11 +119,12 @@ class FieldRenderer {
      *
      * @param mixed $value
      */
-    public static function input(array $field, $value, string $error = ''): string {
+    public static function input(array $field, $value, string $error = '', array $ctx = []): string {
+        $ctx = self::context($field, $ctx);
         $opts = $field['field_options'];
         $id = (int) $field['id'];
-        $name = "item_meta[{$id}]";
-        $domId = 'field_' . $field['key'];
+        $name = (string) $ctx['name'];
+        $domId = 'field_' . $ctx['key'];
         $type = $field['type'];
         $required = $field['required'];
         $invalidClass = $error !== '' ? ' is-invalid' : '';
@@ -128,6 +143,10 @@ class FieldRenderer {
         }
         if (!empty($opts['read_only'])) {
             $attrs .= ' readonly';
+        }
+        if (!empty($opts['autocom'])) {
+            // Searchable dropdown (forms-front.js), like Formidable's autocomplete setting
+            $attrs .= ' data-sm-autocomplete="1"';
         }
 
         switch ($type) {
@@ -150,19 +169,30 @@ class FieldRenderer {
                 );
 
             case 'data':
-                // A Dynamic field is shown as its data_type: dropdown, checkboxes or radio buttons
+                // A Dynamic field is shown as its data_type: dropdown, checkboxes, radio buttons, or
+                // "just show it" (the linked value as text, sent in a hidden input)
                 $dataType = (string) ($opts['data_type'] ?? 'select');
-                if ($dataType === 'checkbox' || $dataType === 'radio') {
-                    return self::choices($field, $value, $invalidClass);
+                if ($dataType === 'data') {
+                    $shown = isset($ctx['values']) ? DynamicOptions::displayValue($field, (array) $ctx['values']) : self::scalar($value);
+                    return sprintf(
+                        '<p class="frm_show_it">%s</p><input type="hidden" id="%s" name="%s" value="%s" />',
+                        esc_html($shown),
+                        esc_attr($domId),
+                        esc_attr($name),
+                        esc_attr($shown)
+                    );
                 }
-                return self::select($field, $value, $attrs, $invalidClass);
+                if ($dataType === 'checkbox' || $dataType === 'radio') {
+                    return self::choices($field, $value, $invalidClass, $ctx);
+                }
+                return self::select($field, $value, $attrs, $invalidClass, $ctx);
 
             case 'select':
-                return self::select($field, $value, $attrs, $invalidClass);
+                return self::select($field, $value, $attrs, $invalidClass, $ctx);
 
             case 'checkbox':
             case 'radio':
-                return self::choices($field, $value, $invalidClass);
+                return self::choices($field, $value, $invalidClass, $ctx);
 
             case 'toggle':
                 $checkedValue = (string) ($opts['toggle_on'] ?? '1');
@@ -228,10 +258,10 @@ class FieldRenderer {
      *
      * @return array<string, string>
      */
-    public static function choiceList(array $field): array {
+    public static function choiceList(array $field, array $values = []): array {
         if ($field['type'] === 'data') {
             $list = [];
-            foreach (DynamicOptions::forField($field) as $id => $label) {
+            foreach (DynamicOptions::forField($field, $values) as $id => $label) {
                 $list[(string) $id] = $label;
             }
             return $list;
@@ -260,18 +290,19 @@ class FieldRenderer {
     /**
      * @param mixed $value
      */
-    private static function select(array $field, $value, string $attrs, string $invalidClass): string {
+    private static function select(array $field, $value, string $attrs, string $invalidClass, array $ctx = []): string {
+        $ctx = self::context($field, $ctx);
         $multiple = !empty($field['field_options']['multiple']);
         $selected = array_map('strval', (array) $value);
         if ($multiple) {
-            $attrs = str_replace(sprintf('name="item_meta[%d]"', $field['id']), sprintf('name="item_meta[%d][]"', $field['id']), $attrs) . ' multiple';
+            $attrs = str_replace('name="' . esc_attr($ctx['name']) . '"', 'name="' . esc_attr($ctx['name'] . '[]') . '"', $attrs) . ' multiple';
         }
 
         $html = sprintf('<select%s class="%s">', $attrs, esc_attr(ThemeClasses::select() . $invalidClass));
         if (!$multiple) {
             $html .= '<option value="">' . esc_html((string) ($field['field_options']['placeholder'] ?? '')) . '</option>';
         }
-        foreach (self::choiceList($field) as $optValue => $label) {
+        foreach (self::choiceList($field, (array) ($ctx['values'] ?? [])) as $optValue => $label) {
             $html .= sprintf(
                 '<option value="%s"%s>%s</option>',
                 esc_attr($optValue),
@@ -285,18 +316,18 @@ class FieldRenderer {
     /**
      * @param mixed $value
      */
-    private static function choices(array $field, $value, string $invalidClass): string {
+    private static function choices(array $field, $value, string $invalidClass, array $ctx = []): string {
+        $ctx = self::context($field, $ctx);
         $type = $field['type'] === 'data' ? (string) $field['field_options']['data_type'] : $field['type'];
-        $id = (int) $field['id'];
-        $name = $type === 'checkbox' ? "item_meta[{$id}][]" : "item_meta[{$id}]";
+        $name = $type === 'checkbox' ? $ctx['name'] . '[]' : $ctx['name'];
         $selected = array_map('strval', (array) $value);
         $inline = !empty($field['field_options']['align']) && $field['field_options']['align'] === 'inline';
 
         $html = '<div class="frm_opt_container" role="' . ($type === 'radio' ? 'radiogroup' : 'group') . '"'
-            . ' aria-labelledby="' . esc_attr('field_' . $field['key'] . '_label') . '">';
+            . ' aria-labelledby="' . esc_attr('field_' . $ctx['key'] . '_label') . '">';
         $i = 0;
-        foreach (self::choiceList($field) as $optValue => $label) {
-            $optId = 'field_' . $field['key'] . '-' . $i++;
+        foreach (self::choiceList($field, (array) ($ctx['values'] ?? [])) as $optValue => $label) {
+            $optId = 'field_' . $ctx['key'] . '-' . $i++;
             $html .= sprintf(
                 '<div class="form-check%s frm_%s"><input type="%s" id="%s" name="%s" value="%s" class="%s"%s /><label class="form-check-label" for="%s">%s</label></div>',
                 $inline ? ' form-check-inline' : '',
@@ -328,6 +359,22 @@ class FieldRenderer {
             esc_attr((string) ($opts['captcha_size'] ?? 'normal')),
             esc_attr((string) ($opts['captcha_theme'] ?? 'light'))
         );
+    }
+
+    /**
+     * Where a field is being drawn: its input name, the key used in HTML IDs, the container ID,
+     * and optionally the form's values (dependent choices), extra classes, section content and
+     * whether logic hides it. Defaults are the plain top-level field (item_meta[ID], field_KEY).
+     *
+     * @param array<string, mixed> $ctx
+     * @return array<string, mixed>
+     */
+    private static function context(array $field, array $ctx): array {
+        return $ctx + [
+            'name' => 'item_meta[' . (int) $field['id'] . ']',
+            'key' => (string) $field['key'],
+            'id' => (string) $field['id'],
+        ];
     }
 
     /**

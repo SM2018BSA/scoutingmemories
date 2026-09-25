@@ -2,7 +2,12 @@
 
 namespace ScoutingMemories\Forms\Forms\Submission;
 
+use ScoutingMemories\Forms\Forms\Logic\FieldLogic;
+use ScoutingMemories\Forms\Forms\Rendering\DynamicOptions;
 use ScoutingMemories\Forms\Forms\Rendering\FieldRenderer;
+use ScoutingMemories\Forms\Forms\Rendering\FormTemplate;
+use ScoutingMemories\Forms\Models\FormRepository;
+use ScoutingMemories\Forms\Support\FormidableSettings;
 
 /**
  * Validator
@@ -16,44 +21,124 @@ class Validator {
     /**
      * @param array<int, array<string, mixed>> $fields From FormRepository::fields()
      * @param array<int|string, mixed> $posted Raw $_POST['item_meta'] (already unslashed)
-     * @return array{values: array<int, mixed>, errors: array<int, string>}
+     * @return array{values: array<int, mixed>, errors: array<int|string, string>, rows: array<int, array<string, array<int, mixed>>>}
+     *         values: field ID => value to save (fields hidden by logic are left out);
+     *         errors: field ID, or "FIELD-SECTION-ROW" for a repeating row, => message;
+     *         rows: repeating section ID => row key => child field values (blank rows dropped)
      */
     public static function validate(array $fields, array $posted): array {
         $values = [];
         $errors = [];
+        $rows = [];
+        $byId = [];
+        $raw = [];
+
+        // First read every value, so field logic can look at the whole submission
+        foreach ($fields as $field) {
+            $id = (int) $field['id'];
+            $byId[$id] = $field;
+            $type = $field['type'];
+            if ($type === 'user_id') {
+                $values[$id] = get_current_user_id();
+                continue;
+            }
+            if (in_array($type, FieldRenderer::NON_INPUT_TYPES, true) || $type === 'file' || self::isDisplayOnly($field)) {
+                continue;
+            }
+            $raw[$id] = $posted[$id] ?? ($posted[(string) $id] ?? '');
+            $values[$id] = self::sanitize($field, $raw[$id]);
+        }
+
+        // "Just show it" Dynamic fields take their value from the parent's choice, not the browser
+        foreach ($fields as $field) {
+            if (self::isDisplayOnly($field)) {
+                $values[(int) $field['id']] = DynamicOptions::displayValue($field, $values);
+            }
+        }
 
         foreach ($fields as $field) {
             $id = (int) $field['id'];
             $type = $field['type'];
 
-            if (in_array($type, FieldRenderer::NON_INPUT_TYPES, true) || $type === 'file') {
-                continue;
-            }
-            if ($type === 'user_id') {
-                $values[$id] = get_current_user_id();
+            // Formidable neither checks nor saves fields its logic hides
+            if (!FieldLogic::isShown($field, $values, $byId)) {
+                unset($values[$id]);
                 continue;
             }
 
-            $raw = $posted[$id] ?? ($posted[(string) $id] ?? '');
+            if ($type === 'divider' && !empty($field['field_options']['repeat'])) {
+                [$sectionRows, $rowErrors] = self::repeater($field, $posted[$id] ?? []);
+                $rows[$id] = $sectionRows;
+                $values[$id] = ['form' => (int) ($field['field_options']['form_select'] ?? 0), 'row_ids' => array_keys($sectionRows)] + $sectionRows;
+                $errors += $rowErrors;
+                continue;
+            }
+            if (!array_key_exists($id, $values) || $type === 'user_id' || self::isDisplayOnly($field)) {
+                continue;
+            }
 
             // sanitize_email() turns an invalid address into '', which would read as "blank";
             // check what was typed and keep it in the field so the person can correct it
-            if ($type === 'email' && !is_array($raw) && trim((string) $raw) !== '' && !is_email(trim((string) $raw))) {
-                $values[$id] = sanitize_text_field((string) $raw);
+            $typed = $raw[$id] ?? '';
+            if ($type === 'email' && !is_array($typed) && trim((string) $typed) !== '' && !is_email(trim((string) $typed))) {
+                $values[$id] = sanitize_text_field((string) $typed);
                 $errors[$id] = self::message($field, 'invalid', 'Please enter a valid email address');
                 continue;
             }
 
-            $value = self::sanitize($field, $raw);
-            $values[$id] = $value;
-
-            $error = self::check($field, $value);
+            $error = self::check($field, $values[$id], $values);
             if ($error !== '') {
                 $errors[$id] = $error;
             }
         }
 
-        return ['values' => $values, 'errors' => $errors];
+        return ['values' => $values, 'errors' => $errors, 'rows' => $rows];
+    }
+
+    /**
+     * Rows of a repeating section, each checked against the section's child form. Rows left
+     * completely blank are dropped, as Formidable does.
+     *
+     * @param array<string, mixed> $section
+     * @param mixed $posted item_meta[SECTION]
+     * @return array{0: array<string, array<int, mixed>>, 1: array<string, string>}
+     */
+    private static function repeater(array $section, $posted): array {
+        $sectionId = (int) $section['id'];
+        $childFields = FormRepository::fields((int) ($section['field_options']['form_select'] ?? 0));
+        $rows = [];
+        $errors = [];
+        foreach (FormTemplate::repeaterRows($posted) as $key => $row) {
+            $result = self::validate($childFields, $row);
+            if (self::rowIsBlank($result['values'], $childFields)) {
+                continue;
+            }
+            $rows[$key] = $result['values'];
+            foreach ($result['errors'] as $childId => $message) {
+                $errors[$childId . '-' . $sectionId . '-' . $key] = $message;
+            }
+        }
+        return [$rows, $errors];
+    }
+
+    /**
+     * @param array<int, mixed> $values
+     * @param array<int, array<string, mixed>> $fields
+     */
+    private static function rowIsBlank(array $values, array $fields): bool {
+        foreach ($fields as $field) {
+            if ($field['type'] === 'user_id' || self::isDisplayOnly($field)) {
+                continue;
+            }
+            if (!FieldLogic::isBlank($values[(int) $field['id']] ?? '')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static function isDisplayOnly(array $field): bool {
+        return $field['type'] === 'data' && ($field['field_options']['data_type'] ?? '') === 'data';
     }
 
     /**
@@ -90,7 +175,7 @@ class Validator {
     /**
      * @param mixed $value
      */
-    private static function check(array $field, $value): string {
+    private static function check(array $field, $value, array $values = []): string {
         $opts = $field['field_options'];
         $isEmpty = is_array($value) ? count($value) === 0 : trim((string) $value) === '';
 
@@ -138,6 +223,14 @@ class Validator {
                     }
                 }
                 break;
+            case 'data':
+                // A Dynamic field only accepts the entries it offers (for a dependent field, the
+                // ones that match its parent's choice), so no other entry IDs can be saved
+                $allowed = array_map('strval', array_keys(FieldRenderer::choiceList($field, $values)));
+                if (array_diff(array_map('strval', (array) $value), $allowed)) {
+                    return self::message($field, 'invalid', '[field_name] is invalid');
+                }
+                break;
         }
 
         if (!empty($opts['unique']) && self::isDuplicate($field, $value)) {
@@ -160,11 +253,22 @@ class Validator {
         ));
     }
 
+    /**
+     * The field's own message (or Formidable's default), with "[field_name]", "This field" and
+     * "This value" replaced by the field's name, as Formidable does ("Camp Name cannot be blank.").
+     */
     private static function message(array $field, string $key, string $fallback): string {
         $message = (string) ($field['field_options'][$key] ?? '');
+        if ($message === '' && $key === 'blank') {
+            $message = (string) FormidableSettings::get('blank_msg', '');
+        }
         if ($message === '') {
             $message = $fallback;
         }
-        return str_replace('[field_name]', $field['name'], $message);
+        $name = (string) $field['name'];
+        if ($name === '') {
+            return str_replace('[field_name]', $key === 'unique_msg' ? 'This value' : 'This field', $message);
+        }
+        return str_replace(['[field_name]', 'This value', 'This field'], $name, $message);
     }
 }
