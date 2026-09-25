@@ -112,7 +112,7 @@ class DynamicViewRenderer extends FormHandler {
         ));
 
         if (empty($entries)) {
-            return '<div class="sm-view-empty p-4 text-slate-500 text-sm">' . wp_kses_post($emptyMsg) . '</div>';
+            return '<div class="' . ThemeClasses::SCOPE . ' sm-view-empty p-3 text-muted small">' . wp_kses_post($emptyMsg) . '</div>';
         }
 
         // Preload metas for all entries in one batch
@@ -183,8 +183,10 @@ class DynamicViewRenderer extends FormHandler {
 
         $fullHtml = $beforeContent . $rowsHtml . $afterContent;
 
-        // Process any nested shortcodes in before/after content (e.g. form search shortcodes)
-        return do_shortcode($fullHtml);
+        // Process any nested shortcodes in before/after content (e.g. form search shortcodes).
+        // The wrapper scopes the plugin's front-end CSS without changing the view's own markup.
+        wp_enqueue_style('sm-forms-front');
+        return '<div class="' . ThemeClasses::SCOPE . ' sm-view">' . do_shortcode($fullHtml) . '</div>';
     }
 
     /**
@@ -204,7 +206,7 @@ class DynamicViewRenderer extends FormHandler {
         if ($type === 'file' && is_numeric($val) && (int)$val > 0) {
             $imgUrl = wp_get_attachment_image_url((int)$val, 'thumbnail');
             if ($imgUrl) {
-                return '<img src="' . esc_url($imgUrl) . '" class="w-12 h-12 object-cover rounded shadow-sm inline-block" alt="" />';
+                return '<img src="' . esc_url($imgUrl) . '" class="sm-thumb rounded shadow-sm" alt="" />';
             }
         }
 

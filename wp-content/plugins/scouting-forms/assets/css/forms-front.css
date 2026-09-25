@@ -1,0 +1,78 @@
+/**
+ * Scouting Forms: front-end rules the site's Bootstrap 5.3 doesn't provide.
+ * Everything is scoped to .sm-forms so nothing here affects the rest of the site.
+ * Colours match the theme: site green #025600 (.sm_green_bkg_color), dark green #155507.
+ */
+
+.sm-forms {
+    --sm-green: #025600;
+    --sm-green-dark: #155507;
+    --sm-green-rgb: 2, 86, 0;
+}
+
+/* Site-green action button, built on Bootstrap's own button variables */
+.sm-forms .btn-scout {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--sm-green);
+    --bs-btn-border-color: var(--sm-green);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--sm-green-dark);
+    --bs-btn-hover-border-color: var(--sm-green-dark);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--sm-green-dark);
+    --bs-btn-active-border-color: var(--sm-green-dark);
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: var(--sm-green);
+    --bs-btn-disabled-border-color: var(--sm-green);
+    --bs-btn-focus-shadow-rgb: var(--sm-green-rgb);
+}
+
+/* Required-field marker after the label text */
+.sm-forms .sm-required::after {
+    content: " *";
+    color: var(--bs-danger, #dc3545);
+}
+
+.sm-forms .form-control:focus,
+.sm-forms .form-select:focus,
+.sm-forms .form-check-input:focus {
+    border-color: var(--sm-green);
+    box-shadow: 0 0 0 0.25rem rgba(var(--sm-green-rgb), 0.25);
+}
+
+.sm-forms .form-check-input:checked {
+    background-color: var(--sm-green);
+    border-color: var(--sm-green);
+}
+
+.sm-forms .sm-badge-scout {
+    color: var(--sm-green);
+    background-color: rgba(var(--sm-green-rgb), 0.1);
+    border: 1px solid rgba(var(--sm-green-rgb), 0.2);
+}
+
+/* Simple responsive grids (ThemeClasses::grid) */
+.sm-forms .sm-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+    .sm-forms .sm-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sm-forms .sm-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 576px) {
+    .sm-forms .sm-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 992px) {
+    .sm-forms .sm-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Small square image thumbnails in views */
+.sm-forms .sm-thumb {
+    width: 3rem;
+    height: 3rem;
+    object-fit: cover;
+}

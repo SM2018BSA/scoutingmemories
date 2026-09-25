@@ -13,6 +13,7 @@ use ScoutingMemories\Forms\Forms\MemoryForm;
 use ScoutingMemories\Forms\Forms\UserDefaultsForm;
 use ScoutingMemories\Forms\Forms\UserPostsView;
 use ScoutingMemories\Forms\Rest\ApiController;
+use ScoutingMemories\Forms\Tools\CompareTool;
 
 /**
  * Plugin
@@ -63,6 +64,9 @@ class Plugin {
         if (is_admin()) {
             AdminMenu::registerHooks();
         }
+
+        // 6. Local development: side-by-side comparison with Formidable (does nothing on live)
+        CompareTool::registerHooks();
     }
 
     /**
@@ -70,6 +74,20 @@ class Plugin {
      * Accessible by theme, pdf-embedder, forms, and builder
      */
     public static function registerUnifiedStyles(): void {
+        // Front end: small add-on sheet for the site's Bootstrap (enqueued by forms/views as they render)
+        $front_css = SM_FORMS_PLUGIN_DIR . 'assets/css/forms-front.css';
+        wp_register_style(
+            'sm-forms-front',
+            SM_FORMS_PLUGIN_URL . 'assets/css/forms-front.css',
+            [],
+            file_exists($front_css) ? (string) filemtime($front_css) : SM_FORMS_VERSION
+        );
+
+        // Tailwind is only for the wp-admin builder screens, never the public site
+        if (!is_admin()) {
+            return;
+        }
+
         $css_file = SM_FORMS_PLUGIN_DIR . 'assets/css/tailwindcss.css';
         $ver = file_exists($css_file) ? (string) filemtime($css_file) : SM_FORMS_VERSION;
 

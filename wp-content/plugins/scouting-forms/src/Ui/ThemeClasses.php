@@ -5,33 +5,39 @@ namespace ScoutingMemories\Forms\Ui;
 /**
  * ThemeClasses
  *
- * Object-Oriented Encapsulation Layer for Tailwind CSS v4 Selectors.
- * Provides clean, consistent, typed methods for UI components across the site,
- * ensuring templates never scatter raw utility strings.
+ * The one place front-end markup gets its CSS classes. It uses the site theme's Bootstrap 5.3
+ * classes, so forms and views look like the rest of Scouting Memories. The few rules Bootstrap
+ * doesn't have (site-green button, required-field marker, grid helpers, thumbnails) live in
+ * assets/css/forms-front.css, scoped to `.sm-forms`. Tailwind is used only in the wp-admin builder.
  */
 class ThemeClasses {
+
+    /**
+     * Wrapper class for everything the plugin renders on the front end (scopes forms-front.css).
+     */
+    public const SCOPE = 'sm-forms';
 
     /**
      * Card Containers
      */
     public static function card(string $extra = ''): string {
-        return trim("bg-white border border-slate-200 rounded-xl shadow-sm p-6 text-slate-800 transition-all {$extra}");
+        return trim("card shadow-sm p-4 {$extra}");
     }
 
     public static function cardHeader(string $extra = ''): string {
-        return trim("border-b border-slate-100 pb-4 mb-4 flex items-center justify-between {$extra}");
+        return trim("d-flex align-items-center justify-content-between border-bottom pb-3 mb-3 {$extra}");
     }
 
     public static function cardTitle(string $extra = ''): string {
-        return trim("text-lg font-bold text-slate-900 tracking-tight {$extra}");
+        return trim("h5 mb-0 {$extra}");
     }
 
     public static function cardBody(string $extra = ''): string {
-        return trim("space-y-4 {$extra}");
+        return trim("d-grid gap-3 {$extra}");
     }
 
     public static function cardFooter(string $extra = ''): string {
-        return trim("border-t border-slate-100 pt-4 mt-6 flex items-center justify-end gap-3 {$extra}");
+        return trim("d-flex align-items-center justify-content-end gap-2 border-top pt-3 mt-4 {$extra}");
     }
 
     /**
@@ -39,68 +45,66 @@ class ThemeClasses {
      *
      * @param string $variant 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'scout'
      * @param string $size    'xs' | 'sm' | 'md' | 'lg' | 'icon'
-     * @param string $extra   Additional utility overrides
+     * @param string $extra   Additional classes
      */
     public static function button(string $variant = 'primary', string $size = 'md', string $extra = ''): string {
-        $base = "inline-flex items-center justify-center font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer";
-
         $sizes = [
-            'xs'   => "px-2 py-1 text-xs gap-1",
-            'sm'   => "px-3 py-1.5 text-xs gap-1.5",
-            'md'   => "px-4 py-2 text-sm gap-2",
-            'lg'   => "px-5 py-2.5 text-base gap-2.5",
-            'icon' => "p-2 text-sm w-9 h-9"
+            'xs'   => 'btn-sm',
+            'sm'   => 'btn-sm',
+            'md'   => '',
+            'lg'   => 'btn-lg',
+            'icon' => 'btn-sm',
         ];
 
         $variants = [
-            'primary'   => "bg-blue-600 text-white hover:bg-blue-700 shadow-sm focus:ring-blue-500",
-            'scout'     => "bg-[#025600] text-white hover:bg-[#013e00] shadow-sm focus:ring-[#025600]",
-            'secondary' => "bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-400 border border-slate-200",
-            'danger'    => "bg-red-600 text-white hover:bg-red-700 shadow-sm focus:ring-red-500",
-            'outline'   => "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm focus:ring-slate-400",
-            'ghost'     => "text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:ring-slate-300"
+            'primary'   => 'btn-primary',
+            'scout'     => 'btn-scout',
+            'secondary' => 'btn-secondary',
+            'danger'    => 'btn-danger',
+            'outline'   => 'btn-outline-secondary',
+            'ghost'     => 'btn-link',
         ];
 
-        $sz = $sizes[$size] ?? $sizes['md'];
+        $sz = $sizes[$size] ?? '';
         $vr = $variants[$variant] ?? $variants['primary'];
 
-        return trim("{$base} {$sz} {$vr} {$extra}");
+        return trim(preg_replace('/\s+/', ' ', "btn {$vr} {$sz} {$extra}"));
     }
 
     /**
      * Form Control Elements
      */
     public static function input(string $extra = ''): string {
-        return trim("w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:bg-slate-50 disabled:text-slate-400 {$extra}");
+        return trim("form-control {$extra}");
     }
 
     public static function textarea(string $extra = ''): string {
-        return trim("w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:bg-slate-50 {$extra}");
+        return trim("form-control {$extra}");
     }
 
     public static function select(string $extra = ''): string {
-        return trim("w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all disabled:bg-slate-50 {$extra}");
+        return trim("form-select {$extra}");
     }
 
     public static function checkbox(string $extra = ''): string {
-        return trim("w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500 focus:ring-offset-0 transition-all cursor-pointer {$extra}");
+        return trim("form-check-input {$extra}");
     }
 
     public static function radio(string $extra = ''): string {
-        return trim("w-4 h-4 text-blue-600 bg-white border-slate-300 focus:ring-blue-500 focus:ring-offset-0 transition-all cursor-pointer {$extra}");
+        return trim("form-check-input {$extra}");
     }
 
     public static function label(bool $required = false, string $extra = ''): string {
-        $req = $required ? "after:content-['*'] after:ml-0.5 after:text-red-500" : "";
-        return trim("block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 {$req} {$extra}");
+        $req = $required ? 'sm-required' : '';
+        return trim(preg_replace('/\s+/', ' ', "form-label {$req} {$extra}"));
     }
 
     public static function helperText(string $extra = ''): string {
-        return trim("text-xs text-slate-500 mt-1 {$extra}");
+        return trim("form-text {$extra}");
     }
 
     public static function errorText(string $extra = ''): string {
-        return trim("text-xs text-red-600 font-medium mt-1 {$extra}");
+        return trim("invalid-feedback d-block {$extra}");
     }
 
     /**
@@ -109,63 +113,64 @@ class ThemeClasses {
      * @param string $variant 'success' | 'info' | 'warning' | 'danger' | 'neutral' | 'scout'
      */
     public static function badge(string $variant = 'info', string $extra = ''): string {
-        $base = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border";
-
         $variants = [
-            'success' => "bg-emerald-50 text-emerald-700 border-emerald-200",
-            'info'    => "bg-blue-50 text-blue-700 border-blue-200",
-            'warning' => "bg-amber-50 text-amber-700 border-amber-200",
-            'danger'  => "bg-red-50 text-red-700 border-red-200",
-            'neutral' => "bg-slate-100 text-slate-600 border-slate-200",
-            'scout'   => "bg-[#025600]/10 text-[#025600] border-[#025600]/20"
+            'success' => 'text-bg-success',
+            'info'    => 'text-bg-info',
+            'warning' => 'text-bg-warning',
+            'danger'  => 'text-bg-danger',
+            'neutral' => 'text-bg-light border',
+            'scout'   => 'sm-badge-scout',
         ];
 
         $vr = $variants[$variant] ?? $variants['neutral'];
-        return trim("{$base} {$vr} {$extra}");
+        return trim("badge {$vr} {$extra}");
     }
 
     /**
      * Data Tables
      */
     public static function table(string $extra = ''): string {
-        return trim("min-w-full divide-y divide-slate-200 text-sm text-left {$extra}");
+        return trim("table table-hover align-middle {$extra}");
     }
 
     public static function thead(string $extra = ''): string {
-        return trim("bg-slate-50 text-slate-500 uppercase text-xs font-semibold tracking-wider {$extra}");
+        return trim("table-light {$extra}");
     }
 
     public static function th(string $extra = ''): string {
-        return trim("px-4 py-3 text-slate-600 font-semibold {$extra}");
+        return trim($extra);
     }
 
     public static function tbody(string $extra = ''): string {
-        return trim("divide-y divide-slate-100 bg-white {$extra}");
+        return trim($extra);
     }
 
     public static function tr(string $extra = ''): string {
-        return trim("hover:bg-slate-50/80 transition-colors {$extra}");
+        return trim($extra);
     }
 
     public static function td(string $extra = ''): string {
-        return trim("px-4 py-3 text-slate-800 whitespace-nowrap {$extra}");
+        return trim($extra);
     }
 
     /**
      * Layout Utilities
      */
-    public static function grid(int $cols = 2, string $gap = '6', string $extra = ''): string {
-        $colClass = [
-            1 => "grid-cols-1",
-            2 => "grid-cols-1 md:grid-cols-2",
-            3 => "grid-cols-1 md:grid-cols-3",
-            4 => "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-        ][$cols] ?? "grid-cols-1 md:grid-cols-{$cols}";
-
-        return trim("grid {$colClass} gap-{$gap} {$extra}");
+    public static function grid(int $cols = 2, string $gap = '3', string $extra = ''): string {
+        $cols = max(1, min(4, $cols));
+        return trim("sm-grid sm-grid-{$cols} gap-{$gap} {$extra}");
     }
 
     public static function flexBetween(string $extra = ''): string {
-        return trim("flex items-center justify-between gap-4 {$extra}");
+        return trim("d-flex align-items-center justify-content-between gap-3 {$extra}");
+    }
+
+    /**
+     * Status messages shown after a submission
+     *
+     * @param string $variant 'success' | 'danger' | 'warning' | 'info'
+     */
+    public static function alert(string $variant = 'info', string $extra = ''): string {
+        return trim("alert alert-{$variant} {$extra}");
     }
 }

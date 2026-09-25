@@ -115,13 +115,14 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
       plugin is logged (wp-admin > Scouting Forms > Test Mail Log) instead of sent.
 - [x] 0.4 (2026-09-24) Test-data tools: "test mode" marks entries (`smtest-` item_key prefix) and an admin action
       deletes all test entries/metas (and test posts/users created from them).
-- [ ] 0.5 Compare tool (admin only): pick a form or view, see Formidable's output and the plugin's
+- [x] 0.5 (2026-09-24) Compare tool (admin only): pick a form or view, see Formidable's output and the plugin's
       output side by side, plus a field-by-field comparison of what each would save.
-- [ ] 0.6 Front-end styling to Bootstrap 5.3: rewrite `src/Ui/ThemeClasses.php` to Bootstrap classes,
+- [x] 0.6 (2026-09-24) Front-end styling to Bootstrap 5.3: rewrite `src/Ui/ThemeClasses.php` to Bootstrap classes,
       stop loading Tailwind on the front end (keep it for the admin builder), site green highlights.
 - [ ] 0.7 Health: PHP 8.2 lint of all plugin files, no notices with WP_DEBUG, remove leftovers.
 
 ### Phase 1: Contact Us (form #2): the pattern for everything else
+- Findings from the Compare tool (2026-09-24), to fix in 1.1–1.3: description HTML is escaped (shows `<p>` as text); captcha field renders as a plain text input; no honeypot field (Formidable renders one: "If you are human, leave this field blank."); plugin wraps the form in a card with a small title, Formidable shows a large heading and no card; plugin marks 4 fields required while Formidable shows no markers (check field `required` + style settings); Formidable submit is `btn btn-secondary` coloured by its frm_style (light blue), plugin uses site green `btn-scout` (see Open questions).
 - [ ] 1.1 Render text, email, textarea, captcha, submit exactly like Formidable (labels, order,
       required marks, descriptions, placeholders, default values).
 - [ ] 1.2 Validation parity (required, email format, max length) with Formidable's messages.
@@ -199,10 +200,11 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 ---
 
 ## Open questions for the owner
-- (none yet)
+- Submit button colour: Formidable shows light blue (its own style settings); the plugin uses the site green like the PDF viewer. Default: site green, unless the owner prefers matching the old look.
 
 ## Progress log
 - 2026-09-24: Plan written. Audit of Formidable usage and plugin coverage recorded above.
 - 2026-09-24: 0.1 done. `src/Tools/FormidableAudit.php` writes `docs/formidable-usage.json` (git-ignored via the plugin's own `.gitignore`): 22 forms, 263 fields, 36 actions, 14 views, 10 placements, 139 theme call sites; emails redacted, no entries.
 - 2026-09-24: 0.2 done. Every init handler is guarded by its own `sm_action` + nonce; admin assets load only on plugin pages. Fixed: (a) `[formidable]`/`[display-frm-data]` fallbacks now register late on `init` and only if Formidable's classes are absent; (b) the guide notice shows only on Dashboard/Plugins screens; (c) the indexing "update end dates" action used the theme's own `smp_action=update_end_dates` (the plugin hijacked the theme's My Account tool) and had no nonce. It is now `sm_indexing_action` + nonce `sm_update_end_dates`. Verified: Formidable owns its shortcodes, Contact Us renders Formidable's form, plugin action without nonce returns 403, no PHP warnings.
 - 2026-09-24: 0.3 + 0.4 done. New `Support\Environment` (local detection), `Support\Mailer` (all plugin mail goes through it; logged, never sent, on local), `Support\TestData` (smtest- keys, `_sm_test_data` flag, cleanup) and `Models\EntryRepository` (single entry-creation path; the 3 old copies in DynamicFormRenderer, IndexEntityForms and ApiController now use it). Admin page Scouting Forms > Test Tools (local only). Also fixed: hard-coded `wp_` table prefix and unescaped shortcode attributes in DynamicFormRenderer. Verified: a real `[sm_form id=2]` submission saved as `smtest-contact-form-…` with 4 metas; mail logged not sent; cleanup removed 2 entries + 1 post; DB back to 0 test rows.
+- 2026-09-24: 0.5 + 0.6 done. `Tools\CompareTool`: `/?sm_compare=form&id=N`, `view&id=N`, `list`; local copies only; admins, or a signed 1-hour link from `CompareTool::previewUrl()` (no signature/bad signature = 403). `Ui\ThemeClasses` now returns Bootstrap 5.3 classes (same method names); new `assets/css/forms-front.css` scoped to `.sm-forms` (site-green `btn-scout`, required marker, focus colours, grids, thumbnails); all inline Tailwind removed from DynamicFormRenderer/DynamicViewRenderer; Tailwind registered only in wp-admin. Verified on Contact Us: Bootstrap `form-control` fields, forms-front.css loaded, no Tailwind on the public site.

@@ -95,7 +95,8 @@ class DynamicFormRenderer extends FormHandler {
         $showTitle = in_array(strtolower($atts['title']), ['1', 'true', 'yes'], true);
         $showDesc = in_array(strtolower($atts['description']), ['1', 'true', 'yes'], true);
 
-        $html = '<div class="sm-form-container ' . ThemeClasses::card() . '">';
+        wp_enqueue_style('sm-forms-front');
+        $html = '<div class="' . ThemeClasses::SCOPE . ' sm-form-container ' . ThemeClasses::card() . '">';
 
         if ($showTitle && !empty($form->name)) {
             $html .= '<div class="' . ThemeClasses::cardHeader() . '">';
@@ -104,14 +105,14 @@ class DynamicFormRenderer extends FormHandler {
         }
 
         if ($showDesc && !empty($form->description)) {
-            $html .= '<p class="text-sm text-slate-600 mb-6">' . esc_html($form->description) . '</p>';
+            $html .= '<p class="text-muted mb-4">' . esc_html($form->description) . '</p>';
         }
 
         if (!empty($submitNotice)) {
             $html .= $submitNotice;
         }
 
-        $html .= '<form method="POST" action="" enctype="multipart/form-data" class="space-y-5">';
+        $html .= '<form method="POST" action="" enctype="multipart/form-data" class="sm-form">';
         $html .= wp_nonce_field('sm_submit_form_' . $form->id, '_sm_form_nonce', true, false);
         $html .= '<input type="hidden" name="sm_form_id" value="' . esc_attr($form->id) . '" />';
 
@@ -168,15 +169,15 @@ class DynamicFormRenderer extends FormHandler {
 
         // Section Dividers
         if ($field->type === 'divider') {
-            return '<div class="pt-4 pb-2 border-b border-slate-200"><h4 class="text-base font-bold text-slate-800">' . esc_html($field->name) . '</h4></div>';
+            return '<div class="pt-3 pb-2 border-bottom mb-3"><h4 class="h6 mb-0">' . esc_html($field->name) . '</h4></div>';
         }
 
         if ($field->type === 'end_divider' || $field->type === 'break') {
-            return '<div class="my-4"></div>';
+            return '<div class="my-3"></div>';
         }
 
         if ($field->type === 'html') {
-            return '<div class="text-sm text-slate-600">' . wp_kses_post($field->description ?: $defaultValue) . '</div>';
+            return '<div class="small text-muted mb-3">' . wp_kses_post($field->description ?: $defaultValue) . '</div>';
         }
 
         if ($field->type === 'submit') {
@@ -185,7 +186,7 @@ class DynamicFormRenderer extends FormHandler {
         }
 
         // Standard Field Wrapper
-        $html = '<div class="form-group mb-4">';
+        $html = '<div class="mb-3">';
         $html .= '<label class="' . ThemeClasses::label($isRequired) . '" for="field_' . esc_attr($fieldId) . '">';
         $html .= esc_html($field->name);
         $html .= '</label>';
@@ -219,7 +220,7 @@ class DynamicFormRenderer extends FormHandler {
 
             case 'checkbox':
                 $choices = maybe_unserialize($field->options);
-                $html .= '<div class="space-y-2 mt-1">';
+                $html .= '<div class="mt-1">';
                 if (is_array($choices)) {
                     foreach ($choices as $choiceVal => $choiceLabel) {
                         if (is_array($choiceLabel)) {
@@ -229,9 +230,9 @@ class DynamicFormRenderer extends FormHandler {
                             $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
                             $cText = (string)$choiceLabel;
                         }
-                        $html .= '<label class="inline-flex items-center gap-2 mr-4 cursor-pointer">';
+                        $html .= '<label class="form-check form-check-inline">';
                         $html .= '<input type="checkbox" name="' . esc_attr($fieldName) . '[]" value="' . esc_attr($cVal) . '" class="' . ThemeClasses::checkbox() . '" />';
-                        $html .= '<span class="text-sm text-slate-700">' . esc_html($cText) . '</span>';
+                        $html .= '<span class="form-check-label">' . esc_html($cText) . '</span>';
                         $html .= '</label>';
                     }
                 }
@@ -240,7 +241,7 @@ class DynamicFormRenderer extends FormHandler {
 
             case 'radio':
                 $choices = maybe_unserialize($field->options);
-                $html .= '<div class="space-y-2 mt-1">';
+                $html .= '<div class="mt-1">';
                 if (is_array($choices)) {
                     foreach ($choices as $choiceVal => $choiceLabel) {
                         if (is_array($choiceLabel)) {
@@ -250,9 +251,9 @@ class DynamicFormRenderer extends FormHandler {
                             $cVal = is_int($choiceVal) ? (string)$choiceLabel : (string)$choiceVal;
                             $cText = (string)$choiceLabel;
                         }
-                        $html .= '<label class="inline-flex items-center gap-2 mr-4 cursor-pointer">';
+                        $html .= '<label class="form-check form-check-inline">';
                         $html .= '<input type="radio" name="' . esc_attr($fieldName) . '" value="' . esc_attr($cVal) . '" class="' . ThemeClasses::radio() . '"' . ($isRequired ? ' required' : '') . ' />';
-                        $html .= '<span class="text-sm text-slate-700">' . esc_html($cText) . '</span>';
+                        $html .= '<span class="form-check-label">' . esc_html($cText) . '</span>';
                         $html .= '</label>';
                     }
                 }
@@ -260,7 +261,7 @@ class DynamicFormRenderer extends FormHandler {
                 break;
 
             case 'file':
-                $html .= '<input type="file" id="field_' . esc_attr($fieldId) . '" name="file_' . esc_attr($fieldId) . '" class="' . ThemeClasses::input('file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200') . '"' . ($isRequired ? ' required' : '') . ' />';
+                $html .= '<input type="file" id="field_' . esc_attr($fieldId) . '" name="file_' . esc_attr($fieldId) . '" class="' . ThemeClasses::input() . '"' . ($isRequired ? ' required' : '') . ' />';
                 break;
 
             case 'email':
@@ -293,7 +294,7 @@ class DynamicFormRenderer extends FormHandler {
      */
     private static function handleFormSubmission(object $form): string {
         if (!isset($_POST['_sm_form_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_sm_form_nonce'])), 'sm_submit_form_' . $form->id)) {
-            return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Security check failed. Please refresh and try again.', 'scouting-forms') . '</div>';
+            return '<div class="' . ThemeClasses::alert('danger') . '">' . esc_html__('Security check failed. Please refresh and try again.', 'scouting-forms') . '</div>';
         }
 
         $userId = get_current_user_id();
@@ -331,11 +332,11 @@ class DynamicFormRenderer extends FormHandler {
         ]);
 
         if (!$itemId) {
-            return '<div class="p-4 mb-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">' . esc_html__('Failed to save entry. Please try again.', 'scouting-forms') . '</div>';
+            return '<div class="' . ThemeClasses::alert('danger') . '">' . esc_html__('Failed to save entry. Please try again.', 'scouting-forms') . '</div>';
         }
 
-        return '<div class="p-4 mb-4 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">' .
-               '<svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' .
+        return '<div class="' . ThemeClasses::alert('success', 'd-flex align-items-center gap-2') . '">' .
+               '<i class="bi bi-check-circle-fill" aria-hidden="true"></i>' .
                esc_html__('Your entry was saved successfully!', 'scouting-forms') .
                '</div>';
     }
