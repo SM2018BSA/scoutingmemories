@@ -771,6 +771,7 @@
                     }
                     pagesEl.style.visibility = '';
                     setState('ready');
+                    if (sidebar && !sidebar.hidden) showTab(sidebarTab);
                     // The column is final now; settle the fit against the real scrollbar,
                     // then open at the requested page (or the top of page 1)
                     applyFit();
@@ -1368,6 +1369,7 @@
         }
 
         if (sidebar) {
+            setPressed(sidebarBtn, !sidebar.hidden);
             var tabButtons = sidebar.querySelectorAll('[data-pdf-tab]');
             for (var t = 0; t < tabButtons.length; t++) {
                 (function(btn) {

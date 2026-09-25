@@ -737,7 +737,7 @@ class Scouting_PDF_Embedder {
         <div class="card my-4 shadow-sm scouting-pdf-container" id="scouting-pdf-<?php echo (int) $this->viewer_count; ?>" data-pdf-viewer data-pdf-index="<?php echo (int) $this->viewer_count; ?>" data-pdf-state="loading" data-pdf-url="<?php echo esc_url($url); ?>" data-pdf-title="<?php echo esc_attr($raw_title); ?>" data-pdf-start-page="<?php echo (int) $start_page; ?>" data-pdf-download="<?php echo $allow_download ? '1' : '0'; ?>" data-pdf-cite="<?php echo esc_attr(wp_json_encode($cite)); ?>" tabindex="0" role="region" aria-label="<?php echo esc_attr(sprintf(__('PDF viewer: %s', 'scouting-pdf-embedder'), $raw_title)); ?>">
             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 user-select-none" data-pdf-role="toolbar">
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('sidebar', 'bi-layout-sidebar', 'Pages', 'Show page thumbnails, contents, search results and document details', ' aria-pressed="false"'); ?>
+                    <?php echo $this->button('sidebar', 'bi-layout-sidebar', 'Pages', 'Show page thumbnails, contents, search results and document details', ' aria-pressed="true"'); ?>
                 </div>
 
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">
@@ -782,7 +782,7 @@ class Scouting_PDF_Embedder {
             </div>
 
             <div class="d-flex position-relative" data-pdf-role="body">
-                <aside class="border-end bg-body" data-pdf-role="sidebar" hidden aria-label="Document navigation">
+                <aside class="border-end bg-body" data-pdf-role="sidebar" aria-label="Document navigation">
                     <div class="nav nav-tabs nav-fill small px-1 pt-1" role="tablist" data-pdf-role="tabs">
                         <button type="button" class="nav-link active" role="tab" aria-selected="true" data-pdf-tab="thumbs">Pages</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="outline" hidden>Contents</button>
