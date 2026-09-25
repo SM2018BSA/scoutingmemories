@@ -367,6 +367,19 @@
         var dialog = q('[data-pdf-role="dialog"]');
         var toasts = q('[data-pdf-role="toasts"]');
 
+        var bottomPageNumEl = control('bottom-page-input');
+        var bottomTotalPagesEl = control('bottom-total-pages');
+        var bottomPageLabelEl = control('bottom-page-label');
+        var bottomZoomLevelEl = control('bottom-zoom-level');
+        var bottomPrevBtn = control('bottom-prev');
+        var bottomNextBtn = control('bottom-next');
+        var bottomZoomInBtn = control('bottom-zoom-in');
+        var bottomZoomOutBtn = control('bottom-zoom-out');
+        var bottomZoomFitBtn = control('bottom-zoom-fit');
+        var bottomZoomPageBtn = control('bottom-zoom-page');
+        var bottomScrollTopBtn = control('bottom-scroll-top');
+        var bottomCiteBtn = control('bottom-cite');
+
         if (!viewportEl) return null;
 
         initTooltips(container);
@@ -466,18 +479,34 @@
                 if (document.activeElement !== pageNumEl) pageNumEl.value = currentPage;
                 if (total) pageNumEl.max = total;
             }
+            if (bottomPageNumEl) {
+                if (document.activeElement !== bottomPageNumEl) bottomPageNumEl.value = currentPage;
+                if (total) bottomPageNumEl.max = total;
+            }
             if (totalPagesEl && total) totalPagesEl.textContent = total;
+            if (bottomTotalPagesEl && total) bottomTotalPagesEl.textContent = total;
             if (pageLabelEl) {
                 pageLabelEl.hidden = !hasDistinctLabel(currentPage);
                 pageLabelEl.textContent = 'p. ' + labelFor(currentPage);
             }
+            if (bottomPageLabelEl) {
+                bottomPageLabelEl.hidden = !hasDistinctLabel(currentPage);
+                bottomPageLabelEl.textContent = 'p. ' + labelFor(currentPage);
+            }
             if (zoomLevelEl) zoomLevelEl.textContent = Math.round(scale * 100) + '%';
+            if (bottomZoomLevelEl) bottomZoomLevelEl.textContent = Math.round(scale * 100) + '%';
             if (prevBtn) prevBtn.disabled = (currentPage <= 1);
+            if (bottomPrevBtn) bottomPrevBtn.disabled = (currentPage <= 1);
             if (nextBtn) nextBtn.disabled = (!total || currentPage >= total);
+            if (bottomNextBtn) bottomNextBtn.disabled = (!total || currentPage >= total);
             if (zoomInBtn) zoomInBtn.disabled = (scale >= MAX_SCALE - 0.001);
+            if (bottomZoomInBtn) bottomZoomInBtn.disabled = (scale >= MAX_SCALE - 0.001);
             if (zoomOutBtn) zoomOutBtn.disabled = (scale <= MIN_SCALE + 0.001);
+            if (bottomZoomOutBtn) bottomZoomOutBtn.disabled = (scale <= MIN_SCALE + 0.001);
             setPressed(zoomFitBtn, fitMode === 'width');
+            setPressed(bottomZoomFitBtn, fitMode === 'width');
             setPressed(zoomPageBtn, fitMode === 'page');
+            setPressed(bottomZoomPageBtn, fitMode === 'page');
             updateThumbSelection();
             // Only once the reader is moving around, so opening a document doesn't
             // overwrite where they were last time
@@ -1507,6 +1536,8 @@
             };
         }
 
+        var currentCiteStyle = storageGet('scouting-pdf-cite-style') || 'chicago';
+
         function openCite() {
             var num = currentPage;
             var body = el('div');
@@ -1527,6 +1558,29 @@
             pageSwitch.appendChild(lab);
             body.appendChild(pageSwitch);
 
+            var styleWrap = el('div', 'mb-3');
+            var selectLabel = el('label', 'form-label small fw-bold text-muted mb-1', 'Citation style');
+            selectLabel.htmlFor = container.id + '-cite-style';
+            var styleSelect = el('select', 'form-select form-select-sm');
+            styleSelect.id = container.id + '-cite-style';
+            styleSelect.setAttribute('data-pdf-control', 'cite-style-select');
+
+            var styles = [
+                ['chicago', 'Chicago (Notes & Bibliography) — Most Popular'],
+                ['mla', 'MLA (Modern Language Association)'],
+                ['apa', 'APA (American Psychological Association)']
+            ];
+
+            styles.forEach(function(s) {
+                var opt = el('option', '', s[1]);
+                opt.value = s[0];
+                if (s[0] === currentCiteStyle) opt.selected = true;
+                styleSelect.appendChild(opt);
+            });
+            styleWrap.appendChild(selectLabel);
+            styleWrap.appendChild(styleSelect);
+            body.appendChild(styleWrap);
+
             var list = el('div', 'd-flex flex-column gap-3');
             body.appendChild(list);
 
@@ -1534,16 +1588,21 @@
                 var info = citationInfo(num, cb.checked);
                 var cites = buildCitations(info, new Date());
                 list.textContent = '';
-                [['chicago', 'Chicago'], ['mla', 'MLA'], ['apa', 'APA']].forEach(function(style) {
-                    var c = cites[style[0]];
+                styles.forEach(function(s) {
+                    var styleKey = s[0];
+                    var styleLabel = s[1].split(' —')[0];
+                    var c = cites[styleKey];
                     var box = el('div', 'scouting-pdf-citation');
-                    box.setAttribute('data-pdf-citation', style[0]);
+                    box.setAttribute('data-pdf-citation', styleKey);
+                    if (styleKey !== currentCiteStyle) {
+                        box.hidden = true;
+                    }
                     var head = el('div', 'd-flex align-items-center justify-content-between mb-1');
-                    head.appendChild(el('strong', '', style[1]));
+                    head.appendChild(el('strong', '', styleLabel));
                     var copy = el('button', 'btn btn-sm btn-outline-secondary', 'Copy');
                     copy.type = 'button';
-                    copy.setAttribute('aria-label', 'Copy ' + style[1] + ' citation');
-                    copy.addEventListener('click', function() { copyWithFeedback(c.text, c.html, style[1] + ' citation'); });
+                    copy.setAttribute('aria-label', 'Copy ' + styleLabel + ' citation');
+                    copy.addEventListener('click', function() { copyWithFeedback(c.text, c.html, styleLabel + ' citation'); });
                     head.appendChild(copy);
                     box.appendChild(head);
                     var text = el('div', 'border rounded p-2 bg-body-tertiary user-select-all');
@@ -1553,7 +1612,7 @@
                     list.appendChild(box);
                 });
 
-                var actions = el('div', 'd-flex flex-wrap gap-2');
+                var actions = el('div', 'd-flex flex-wrap gap-2 pt-2 border-top');
                 var ris = el('button', 'btn btn-sm btn-outline-secondary', 'Download for Zotero / EndNote (.ris)');
                 ris.type = 'button';
                 ris.setAttribute('data-pdf-control', 'cite-ris');
@@ -1564,10 +1623,32 @@
                 var link = el('button', 'btn btn-sm btn-outline-secondary', 'Copy link to this page');
                 link.type = 'button';
                 link.addEventListener('click', function() { copyWithFeedback(pageLink(num), null, 'Link'); });
+
+                var areaBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+                areaBtn.type = 'button';
+                areaBtn.innerHTML = '<i class="bi bi-camera" aria-hidden="true"></i> Select area to cite & share';
+                areaBtn.setAttribute('data-bs-toggle', 'tooltip');
+                areaBtn.setAttribute('data-bs-title', 'Select an area of this page to share as an image with embedded link and citation');
+                areaBtn.addEventListener('click', function() {
+                    closeDialog();
+                    startSnapshot();
+                });
+
                 actions.appendChild(ris);
                 actions.appendChild(link);
+                actions.appendChild(areaBtn);
                 list.appendChild(actions);
             };
+
+            styleSelect.addEventListener('change', function() {
+                currentCiteStyle = styleSelect.value;
+                storageSet('scouting-pdf-cite-style', currentCiteStyle);
+                var boxes = list.querySelectorAll('[data-pdf-citation]');
+                Array.prototype.forEach.call(boxes, function(box) {
+                    box.hidden = (box.getAttribute('data-pdf-citation') !== currentCiteStyle);
+                });
+            });
+
             cb.addEventListener('change', draw);
             draw();
             openDialog('Cite this document', body);
@@ -1848,7 +1929,7 @@
             });
         }
 
-        // Render just the chosen area at high resolution with the citation underneath
+        // Render just the chosen area at high resolution with the citation and embedded link underneath
         function saveSnapshot(num, rect) {
             var p = pages[num - 1];
             var target = SNAPSHOT_DPI / 72;
@@ -1872,15 +1953,18 @@
             }).promise.then(function() {
                 var img = applyFilterToCanvas(area, filterValue());
                 var info = citationInfo(num, true);
-                var caption = info.title + ', ' + describePage(num) + '. ' + info.site + ', ' + info.url;
-                var fontSize = Math.max(14, Math.round(img.width / 60));
-                var pad = Math.round(fontSize * 0.8);
+                var fontSize = Math.max(14, Math.round(img.width / 52));
+                var pad = Math.round(fontSize * 0.9);
                 var measure = document.createElement('canvas').getContext('2d');
                 measure.font = fontSize + 'px sans-serif';
-                // Wrap the caption to the picture width
+
+                var titleText = info.title + ' — ' + describePage(num) + ' (' + info.site + ')';
+                var linkText = '🔗 ' + info.url;
+
+                // Wrap title text if wider than image
                 var lines = [];
                 var line = '';
-                caption.split(' ').forEach(function(word) {
+                titleText.split(' ').forEach(function(word) {
                     var test = line ? line + ' ' + word : word;
                     if (line && measure.measureText(test).width > img.width - pad * 2) {
                         lines.push(line);
@@ -1890,26 +1974,144 @@
                     }
                 });
                 if (line) lines.push(line);
-                var capH = lines.length * Math.round(fontSize * 1.35) + pad * 2;
+
+                var capH = (lines.length + 1) * Math.round(fontSize * 1.4) + pad * 2.2;
                 var out = document.createElement('canvas');
                 out.width = img.width;
                 out.height = img.height + capH;
                 var ctx = out.getContext('2d');
-                ctx.fillStyle = '#fff';
+
+                // White footer background
+                ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, out.width, out.height);
+
+                // Draw clipped page region
                 ctx.drawImage(img, 0, 0);
-                ctx.fillStyle = '#333';
-                ctx.font = fontSize + 'px sans-serif';
+
+                // Divider line in Scouting Green
+                ctx.fillStyle = '#025600';
+                ctx.fillRect(0, img.height, out.width, Math.max(3, Math.round(fontSize * 0.2)));
+
+                // Document attribution lines
+                ctx.fillStyle = '#1c1e21';
+                ctx.font = 'bold ' + fontSize + 'px sans-serif';
                 ctx.textBaseline = 'top';
-                lines.forEach(function(l, i) {
-                    ctx.fillText(l, pad, img.height + pad + i * Math.round(fontSize * 1.35));
+                var curY = img.height + pad;
+                lines.forEach(function(l) {
+                    ctx.fillText(l, pad, curY);
+                    curY += Math.round(fontSize * 1.4);
                 });
+
+                // Embedded link visibly on the image
+                ctx.fillStyle = '#025600';
+                ctx.font = '500 ' + Math.max(12, Math.round(fontSize * 0.88)) + 'px monospace, sans-serif';
+                ctx.fillText(linkText, pad, curY);
+
                 return canvasToBlob(out).then(function(blob) {
                     var name = fileNameFromUrl(pdfUrl).replace(/\.pdf$/i, '') + '-p' + labelFor(num) + '.png';
                     saveBlob(blob, name);
-                    toast('Picture saved with its citation underneath');
+                    openSnapshotDialog(blob, out, num, rect, info, name);
                 });
             });
+        }
+
+        function openSnapshotDialog(blob, canvas, num, rect, info, name) {
+            var body = el('div', 'scouting-pdf-snapshot-dialog');
+            
+            var previewWrap = el('div', 'text-center p-2 mb-3 bg-light border rounded overflow-hidden');
+            var previewImg = el('img', 'img-fluid rounded shadow-sm');
+            previewImg.style.maxHeight = '240px';
+            previewImg.style.objectFit = 'contain';
+            var blobUrl = URL.createObjectURL(blob);
+            previewImg.src = blobUrl;
+            previewImg.alt = info.title + ' — ' + describePage(num);
+            previewWrap.appendChild(previewImg);
+            body.appendChild(previewWrap);
+
+            var note = el('p', 'small text-muted mb-3');
+            note.innerHTML = 'Image captured from <strong>' + escHtml(describePage(num)) + '</strong> with the citation and link embedded directly on the image.';
+            body.appendChild(note);
+
+            var actionsRow = el('div', 'd-flex flex-wrap gap-2 mb-3');
+
+            if (navigator.share) {
+                var shareBtn = el('button', 'btn btn-sm btn-sm-green d-flex align-items-center gap-1');
+                shareBtn.type = 'button';
+                shareBtn.innerHTML = '<i class="bi bi-share" aria-hidden="true"></i> Share image…';
+                shareBtn.addEventListener('click', function() {
+                    var file = new File([blob], name, { type: 'image/png' });
+                    var shareData = {
+                        title: info.title + ' (' + describePage(num) + ')',
+                        text: info.title + ', ' + describePage(num) + ' — Scouting Memories: ' + info.url,
+                        url: info.url
+                    };
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        shareData.files = [file];
+                    }
+                    navigator.share(shareData).catch(function() {});
+                });
+                actionsRow.appendChild(shareBtn);
+            }
+
+            var copyImgBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            copyImgBtn.type = 'button';
+            copyImgBtn.innerHTML = '<i class="bi bi-clipboard" aria-hidden="true"></i> Copy image';
+            copyImgBtn.addEventListener('click', function() {
+                if (navigator.clipboard && window.ClipboardItem) {
+                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function() {
+                        toast('Image copied to clipboard! (Link: ' + info.url + ')');
+                    }).catch(function() {
+                        toast('Direct clipboard image copying not permitted by browser. Use Download instead.');
+                    });
+                } else {
+                    toast('Clipboard image copying is not supported in this browser. Use Download instead.');
+                }
+            });
+            actionsRow.appendChild(copyImgBtn);
+
+            var copyLinkBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            copyLinkBtn.type = 'button';
+            copyLinkBtn.innerHTML = '<i class="bi bi-link-45deg" aria-hidden="true"></i> Copy link';
+            copyLinkBtn.addEventListener('click', function() {
+                copyWithFeedback(info.url, null, 'Link');
+            });
+            actionsRow.appendChild(copyLinkBtn);
+
+            var downloadBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            downloadBtn.type = 'button';
+            downloadBtn.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> Download PNG';
+            downloadBtn.addEventListener('click', function() {
+                saveBlob(blob, name);
+                toast('Picture saved with embedded citation and link');
+            });
+            actionsRow.appendChild(downloadBtn);
+
+            body.appendChild(actionsRow);
+
+            var embedBox = el('div', 'card bg-body-tertiary border mb-2');
+            var embedHeader = el('div', 'card-header py-1 px-3 d-flex align-items-center justify-content-between');
+            embedHeader.appendChild(el('span', 'small fw-bold text-muted', 'Embed code (HTML link with image)'));
+            
+            var copyEmbedBtn = el('button', 'btn btn-sm btn-link p-0 text-decoration-none small', 'Copy HTML');
+            embedHeader.appendChild(copyEmbedBtn);
+            embedBox.appendChild(embedHeader);
+
+            var embedBody = el('div', 'card-body p-2');
+            var htmlCode = '<a href="' + escHtml(info.url) + '" target="_blank" rel="noopener">\n  <img src="' + escHtml(name) + '" alt="' + escHtml(info.title + ' - ' + describePage(num)) + '">\n</a>';
+            var codePre = el('pre', 'bg-body p-2 border rounded small user-select-all mb-0', htmlCode);
+            codePre.style.whiteSpace = 'pre-wrap';
+            codePre.style.wordBreak = 'break-all';
+            codePre.style.fontSize = '0.8rem';
+            embedBody.appendChild(codePre);
+            embedBox.appendChild(embedBody);
+
+            copyEmbedBtn.addEventListener('click', function() {
+                copyWithFeedback(htmlCode, null, 'Embed HTML code');
+            });
+
+            body.appendChild(embedBox);
+
+            openDialog('Share & Cite Clipped Image', body);
         }
 
         // ---- Other controls ---------------------------------------------------------
@@ -2021,10 +2223,16 @@
         var handlers = {
             prev: function() { stepPage(-1); },
             next: function() { stepPage(1); },
+            'bottom-prev': function() { stepPage(-1); },
+            'bottom-next': function() { stepPage(1); },
             'zoom-in': function() { zoomBy(ZOOM_STEP); },
             'zoom-out': function() { zoomBy(1 / ZOOM_STEP); },
+            'bottom-zoom-in': function() { zoomBy(ZOOM_STEP); },
+            'bottom-zoom-out': function() { zoomBy(1 / ZOOM_STEP); },
             'zoom-fit': function() { setFitMode('width'); },
             'zoom-page': function() { setFitMode('page'); },
+            'bottom-zoom-fit': function() { setFitMode('width'); },
+            'bottom-zoom-page': function() { setFitMode('page'); },
             rotate: rotate,
             fullscreen: toggleFullscreen,
             sidebar: function() { if (sidebar && sidebar.hidden) openSidebar(); else closeSidebar(); },
@@ -2032,6 +2240,8 @@
             adjust: function() { toggleAdjust(adjustbar && adjustbar.hidden); },
             'text-select': function() { setTextSelect(!textSelect); },
             cite: openCite,
+            'bottom-cite': openCite,
+            'bottom-scroll-top': function() { viewportEl.scrollTo({ top: 0, behavior: 'smooth' }); },
             download: downloadPdf,
             'copy-link': copyPageLink,
             'comment-page': commentOnPage,
@@ -2054,6 +2264,12 @@
         if (pageNumEl) {
             pageNumEl.addEventListener('change', onPageInput);
             pageNumEl.addEventListener('keyup', function(e) {
+                if (e.key === 'Enter') onPageInput(e);
+            });
+        }
+        if (bottomPageNumEl) {
+            bottomPageNumEl.addEventListener('change', onPageInput);
+            bottomPageNumEl.addEventListener('keyup', function(e) {
                 if (e.key === 'Enter') onPageInput(e);
             });
         }

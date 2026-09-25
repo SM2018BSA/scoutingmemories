@@ -828,6 +828,32 @@ class Scouting_PDF_Embedder {
 
                 <div class="toast-container position-absolute bottom-0 end-0 p-3" data-pdf-role="toasts" aria-live="polite"></div>
             </div>
+
+            <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 user-select-none bg-body" data-pdf-role="bottom-toolbar">
+                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
+                    <?php echo $this->button('bottom-prev', 'bi-chevron-left', 'Previous', 'Go to the previous page (Left arrow)', '', ''); ?>
+                    <span class="d-inline-flex align-items-center gap-1 small text-muted" data-pdf-role="bottom-page-display">
+                        <input type="number" class="form-control form-control-sm text-center" data-pdf-control="bottom-page-input" value="1" min="1" aria-label="Current page" data-bs-toggle="tooltip" data-bs-title="Type a page number and press Enter to jump to it">
+                        <span>of</span>
+                        <span data-pdf-control="bottom-total-pages">--</span>
+                        <span class="badge text-bg-light border" data-pdf-control="bottom-page-label" hidden data-bs-toggle="tooltip" data-bs-title="The page number printed on this page. Use it in citations"></span>
+                    </span>
+                    <?php echo $this->button('bottom-next', 'bi-chevron-right', 'Next', 'Go to the next page (Right arrow)', '', ''); ?>
+                </div>
+
+                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
+                    <?php echo $this->button('bottom-zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller ( - )', '', ''); ?>
+                    <span class="small text-muted text-center" data-pdf-control="bottom-zoom-level" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Current zoom">100%</span>
+                    <?php echo $this->button('bottom-zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print ( + )', '', ''); ?>
+                    <?php echo $this->button('bottom-zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="true"', 'd-none d-md-inline ms-1'); ?>
+                    <?php echo $this->button('bottom-zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="false"', 'd-none d-md-inline ms-1'); ?>
+                </div>
+
+                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
+                    <?php echo $this->button('bottom-scroll-top', 'bi-arrow-up', 'Top', 'Scroll to top of document'); ?>
+                    <?php echo $this->button('bottom-cite', 'bi-quote', 'Cite', 'Get a citation for this page'); ?>
+                </div>
+            </div>
         </div>
         <?php
         return ob_get_clean();
