@@ -744,8 +744,8 @@ class Scouting_PDF_Embedder {
                     <?php echo $this->button('zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller ( - )'); ?>
                     <span class="small text-muted text-center" data-pdf-control="zoom-level" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Current zoom. Hold Ctrl and scroll the mouse wheel to zoom in on a spot">100%</span>
                     <?php echo $this->button('zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print ( + )'); ?>
-                    <?php echo $this->button('zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="true"'); ?>
-                    <?php echo $this->button('zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="false"'); ?>
+                    <?php echo $this->button('zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="false"'); ?>
+                    <?php echo $this->button('zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="true"'); ?>
                 </div>
 
                 <div class="d-flex align-items-center gap-1" data-pdf-role="group">

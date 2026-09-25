@@ -389,7 +389,7 @@
         var currentPage = 1;
         var scale = 1.0;
         var rotation = 0;
-        var fitMode = 'width';   // 'width' | 'page' | null (manual zoom)
+        var fitMode = 'page';    // 'width' | 'page' | null (manual zoom)
         var spread = false;
         var textSelect = false;
         var renderQueue = [];
@@ -479,20 +479,9 @@
             setPressed(zoomFitBtn, fitMode === 'width');
             setPressed(zoomPageBtn, fitMode === 'page');
             updateThumbSelection();
-            updateScrollbars();
             // Only once the reader is moving around, so opening a document doesn't
             // overwrite where they were last time
             if (total && api.ready) rememberPage();
-        }
-
-        // Toggles horizontal scrollbar on viewport: hidden when fitting or at/below fit width;
-        // only shown once the reader enlarges the PDF beyond the available viewport width.
-        function updateScrollbars() {
-            var avail = getAvailableSize();
-            var usual = Math.floor(typicalPageWidth() * scale) * (spread ? 2 : 1) + (spread ? PAGE_GAP : 0);
-            var isEnlarged = !fitMode && (usual > avail.width + 2);
-            viewportEl.style.overflowX = isEnlarged ? 'auto' : 'hidden';
-            container.classList.toggle('is-enlarged', isEnlarged);
         }
 
         // Bootstrap's .active shows the selected state in the site green
@@ -544,7 +533,6 @@
                     : parseFloat(node.style.width);
                 node.style.alignSelf = w > colW ? 'flex-start' : '';
             });
-            updateScrollbars();
         }
 
         // Pages sharing a row in two-page view: the first page alone (the cover), then pairs
@@ -647,8 +635,10 @@
                 if (Math.abs(fit - scale) < 0.002) break;
                 setScale(fit);
             }
-            if (fitMode === 'page') goToPage(currentPage, true);
-            updateScrollbars();
+            if (fitMode === 'page') {
+                viewportEl.scrollLeft = 0;
+                goToPage(currentPage, true);
+            }
             updateUI();
         }
 
@@ -659,6 +649,16 @@
             num = clamp(num, 1, pages.length);
             if (num === currentPage && !force) return;
             currentPage = num;
+            if (fitMode === 'page') {
+                var fit = computeFitScale('page');
+                if (Math.abs(fit - scale) >= 0.002) {
+                    scale = fit;
+                    layout();
+                }
+                viewportEl.scrollLeft = 0;
+            } else if (fitMode === 'width') {
+                viewportEl.scrollLeft = 0;
+            }
             var top = pages[num - 1].el.offsetTop;
             viewportEl.scrollTop = Math.max(0, offsetY !== undefined ? top + offsetY : top - PAGE_GAP / 2);
             updateUI();

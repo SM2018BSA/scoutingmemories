@@ -151,8 +151,7 @@
 /* Tall reading area for desktop research; shorter documents shrink to fit */
 [data-pdf-viewer] [data-pdf-role="viewport"] {
     position: relative;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: auto;
     display: flex;
     align-items: flex-start;
     flex: 1 1 auto;
@@ -161,10 +160,6 @@
     justify-content: flex-start;
     max-height: 85vh;
     outline: none;
-}
-
-[data-pdf-viewer].is-enlarged [data-pdf-role="viewport"] {
-    overflow-x: auto;
 }
 
 [data-pdf-viewer][data-pdf-state="loading"] [data-pdf-role="viewport"],
