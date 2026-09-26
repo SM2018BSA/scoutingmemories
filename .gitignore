@@ -11,7 +11,10 @@
 /*
 !/.gitignore
 
-# ...except wp-content, where only our folders are allowed
+# ...except our tests
+!/tests/
+
+# ...and wp-content, where only our folders are allowed
 !/wp-content/
 /wp-content/*
 
@@ -31,6 +34,8 @@
 
 # Never commit, even inside our folders
 node_modules/
+test-results/
+playwright-report/
 .env
 .env.*
 *.log
