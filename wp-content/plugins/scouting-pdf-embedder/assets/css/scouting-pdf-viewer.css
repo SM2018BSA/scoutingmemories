@@ -519,13 +519,82 @@
 
 [data-pdf-viewer] [data-pdf-role="dialog"] {
     position: absolute;
-    top: 1rem;
+    top: 1.25rem;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1050;
-    width: min(42rem, calc(100% - 2rem));
-    max-height: calc(100% - 2rem);
+    width: min(54rem, calc(100% - 2rem));
+    max-height: calc(100% - 2.5rem);
     overflow-y: auto;
+    border-radius: 0.75rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.28) !important;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+[data-pdf-viewer] [data-pdf-role="dialog"] .card-header {
+    background-color: #fff;
+    border-bottom: 2px solid rgba(var(--sm-green-rgb), 0.15);
+    padding: 0.9rem 1.25rem;
+}
+
+[data-pdf-viewer] [data-pdf-role="dialog-title"] {
+    font-family: 'Roboto Slab', Georgia, serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1c1e21;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+[data-pdf-viewer] [data-pdf-role="dialog-title"]::before {
+    content: "\f517"; /* bi-quote */
+    font-family: bootstrap-icons;
+    color: var(--sm-green);
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+[data-pdf-viewer] [data-pdf-role="dialog-body"] {
+    padding: 1.25rem;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    background-color: #fff;
+}
+
+[data-pdf-viewer] .scouting-pdf-cite-card {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 0.65rem;
+    background-color: #fcfdfe;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+[data-pdf-viewer] .scouting-pdf-cite-card:hover {
+    border-color: rgba(var(--sm-green-rgb), 0.35);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-pdf-viewer] .scouting-pdf-cite-text {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.975rem;
+    line-height: 1.6;
+    color: #212529;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 0.85rem 1rem;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-pdf-viewer] .scouting-pdf-cite-link-input {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.85rem;
+    background-color: #f8f9fa !important;
+    color: #495057;
+}
+
+[data-pdf-viewer] [data-pdf-control="cite-style-select"] {
+    font-weight: 600;
 }
 
 [data-pdf-viewer] [data-pdf-control="cite-style-select"]:focus {

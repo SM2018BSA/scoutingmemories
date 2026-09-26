@@ -1719,25 +1719,82 @@
 
         function openCite() {
             var num = currentPage;
-            var body = el('div');
-            var intro = el('p', 'mb-2');
-            intro.appendChild(document.createTextNode('Citing '));
-            intro.appendChild(el('strong', '', describePage(num)));
-            intro.appendChild(document.createTextNode('. Check the details against your style guide before you publish.'));
+            var body = el('div', 'scouting-pdf-cite-dialog-body');
+
+            // 1. Context subheader
+            var intro = el('div', 'mb-3 pb-2 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2');
+            var introLeft = el('div', 'd-flex align-items-center gap-2');
+            introLeft.innerHTML = '<span class="badge sm_green_bkg_color text-white px-2 py-1 fs-6 fw-semibold"><i class="bi bi-file-earmark-text me-1" aria-hidden="true"></i> Citing ' + escHtml(describePage(num)) + '</span>';
+            var docTitle = cite.title || cite.postTitle || container.getAttribute('data-pdf-title') || fileNameFromUrl(pdfUrl);
+            var titleEl = el('span', 'text-muted small fw-medium text-truncate', docTitle);
+            titleEl.style.maxWidth = '360px';
+            introLeft.appendChild(titleEl);
+            intro.appendChild(introLeft);
+
+            var note = el('div', 'small text-muted fst-italic', 'Academic reference & link generator');
+            intro.appendChild(note);
             body.appendChild(intro);
 
-            var pageSwitch = el('div', 'form-check mb-2');
+            // 2. Academic Citation Section ("Notes & Bibliography")
+            var citeCard = el('div', 'scouting-pdf-cite-card p-3 mb-3');
+            var citeHead = el('div', 'd-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom');
+            
+            var styleWrap = el('div', 'd-flex align-items-center gap-2');
+            var styleLabel = el('label', 'form-label mb-0 fw-bold small text-uppercase text-muted', 'Style:');
+            styleLabel.htmlFor = container.id + '-cite-style';
+            var styleSelect = el('select', 'form-select form-select-sm fw-semibold');
+            styleSelect.id = container.id + '-cite-style';
+            styleSelect.setAttribute('data-pdf-control', 'cite-style-select');
+            styleSelect.style.width = 'auto';
+
+            var styles = [
+                ['chicago', 'Chicago (Notes & Bibliography)'],
+                ['mla', 'MLA (Modern Language Association)'],
+                ['apa', 'APA (American Psychological Association)']
+            ];
+            styles.forEach(function(s) {
+                var opt = el('option', '', s[1]);
+                opt.value = s[0];
+                if (s[0] === currentCiteStyle) opt.selected = true;
+                styleSelect.appendChild(opt);
+            });
+            styleWrap.appendChild(styleLabel);
+            styleWrap.appendChild(styleSelect);
+            citeHead.appendChild(styleWrap);
+
+            var copyCiteBtn = el('button', 'btn btn-sm btn-sm-green fw-semibold px-3 d-flex align-items-center gap-1 shadow-sm');
+            copyCiteBtn.type = 'button';
+            copyCiteBtn.innerHTML = '<i class="bi bi-clipboard-check" aria-hidden="true"></i> Copy Citation';
+            citeHead.appendChild(copyCiteBtn);
+            citeCard.appendChild(citeHead);
+
+            var list = el('div', 'd-flex flex-column mb-2');
+            citeCard.appendChild(list);
+
+            var citeHelp = el('div', 'small text-muted fst-italic', 'Check details, punctuation, and italics against your publisher or style guide before publishing.');
+            citeCard.appendChild(citeHelp);
+            body.appendChild(citeCard);
+
+            // 3. Direct Page Link Section (Checkboxes + Call to Action together!)
+            var linkCard = el('div', 'scouting-pdf-cite-card p-3 mb-3');
+            var linkTitle = el('div', 'fw-bold text-dark mb-2 d-flex align-items-center gap-1');
+            linkTitle.innerHTML = '<i class="bi bi-link-45deg sm_green_color fs-5" aria-hidden="true"></i> Direct Page Link & Settings';
+            linkCard.appendChild(linkTitle);
+
+            var checksWrap = el('div', 'd-flex flex-column gap-2 mb-3');
+
+            var pageSwitch = el('div', 'form-check');
             var cb = el('input', 'form-check-input');
             cb.type = 'checkbox';
             cb.checked = true;
             cb.id = container.id + '-cite-page';
-            var lab = el('label', 'form-check-label', 'Include the page number and a link straight to this page');
+            var lab = el('label', 'form-check-label fw-medium', 'Include page number in link (open straight to ' + describePage(num) + ')');
             lab.htmlFor = cb.id;
             pageSwitch.appendChild(cb);
             pageSwitch.appendChild(lab);
-            body.appendChild(pageSwitch);
+            checksWrap.appendChild(pageSwitch);
 
-            var settingsSwitch = el('div', 'form-check mb-3');
+            var settingsSwitch = el('div', 'form-check');
             var cbSettings = el('input', 'form-check-input');
             cbSettings.type = 'checkbox';
             cbSettings.checked = false;
@@ -1746,90 +1803,100 @@
             labSettings.htmlFor = cbSettings.id;
             settingsSwitch.appendChild(cbSettings);
             settingsSwitch.appendChild(labSettings);
-            body.appendChild(settingsSwitch);
+            checksWrap.appendChild(settingsSwitch);
+            linkCard.appendChild(checksWrap);
 
-            var styleWrap = el('div', 'mb-3');
-            var selectLabel = el('label', 'form-label small fw-bold text-muted mb-1', 'Citation style');
-            selectLabel.htmlFor = container.id + '-cite-style';
-            var styleSelect = el('select', 'form-select form-select-sm');
-            styleSelect.id = container.id + '-cite-style';
-            styleSelect.setAttribute('data-pdf-control', 'cite-style-select');
+            // Live URL preview + Copy Link Button (co-located with checkboxes!)
+            var urlGroup = el('div', 'input-group');
+            var urlIcon = el('span', 'input-group-text bg-light text-muted');
+            urlIcon.innerHTML = '<i class="bi bi-link" aria-hidden="true"></i>';
+            var urlInput = el('input', 'form-control form-control-sm scouting-pdf-cite-link-input');
+            urlInput.type = 'text';
+            urlInput.readOnly = true;
+            urlInput.setAttribute('aria-label', 'Direct link to this page');
 
-            var styles = [
-                ['chicago', 'Chicago (Notes & Bibliography)'],
-                ['mla', 'MLA (Modern Language Association)'],
-                ['apa', 'APA (American Psychological Association)']
-            ];
+            var copyLinkBtn = el('button', 'btn btn-sm btn-sm-green fw-semibold px-3 d-flex align-items-center gap-1 text-nowrap shadow-sm');
+            copyLinkBtn.type = 'button';
+            copyLinkBtn.innerHTML = '<i class="bi bi-link-45deg" aria-hidden="true"></i> Copy Link';
 
-            styles.forEach(function(s) {
-                var opt = el('option', '', s[1]);
-                opt.value = s[0];
-                if (s[0] === currentCiteStyle) opt.selected = true;
-                styleSelect.appendChild(opt);
-            });
-            styleWrap.appendChild(selectLabel);
-            styleWrap.appendChild(styleSelect);
-            body.appendChild(styleWrap);
+            urlGroup.appendChild(urlIcon);
+            urlGroup.appendChild(urlInput);
+            urlGroup.appendChild(copyLinkBtn);
+            linkCard.appendChild(urlGroup);
+            body.appendChild(linkCard);
 
-            var list = el('div', 'd-flex flex-column gap-3');
-            body.appendChild(list);
+            // 4. Secondary Researcher Tools Footer
+            var toolsRow = el('div', 'd-flex flex-wrap align-items-center justify-content-between pt-2 border-top gap-2 text-muted');
+            var toolsLeft = el('div', 'small fw-medium text-muted');
+            toolsLeft.innerHTML = '<i class="bi bi-tools me-1" aria-hidden="true"></i> Other researcher tools:';
+            toolsRow.appendChild(toolsLeft);
+
+            var toolsBtns = el('div', 'd-flex flex-wrap gap-2');
+            var ris = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            ris.type = 'button';
+            ris.setAttribute('data-pdf-control', 'cite-ris');
+            ris.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> Download .ris (Zotero / EndNote)';
+
+            var areaBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            areaBtn.type = 'button';
+            areaBtn.innerHTML = '<i class="bi bi-camera" aria-hidden="true"></i> Select area to cite & share';
+            areaBtn.setAttribute('data-bs-toggle', 'tooltip');
+            areaBtn.setAttribute('data-bs-title', 'Select an area of this page to share as an image with embedded link and citation');
+
+            toolsBtns.appendChild(ris);
+            toolsBtns.appendChild(areaBtn);
+            toolsRow.appendChild(toolsBtns);
+            body.appendChild(toolsRow);
 
             var draw = function() {
                 var withSettings = cb.checked && cbSettings.checked;
+                var currentUrl = pageLink(num, withSettings);
+                urlInput.value = currentUrl;
+
                 var info = citationInfo(num, cb.checked, withSettings);
                 var cites = buildCitations(info, new Date());
                 list.textContent = '';
+
                 styles.forEach(function(s) {
                     var styleKey = s[0];
-                    var styleLabel = s[1].split(' —')[0];
                     var c = cites[styleKey];
                     var box = el('div', 'scouting-pdf-citation');
                     box.setAttribute('data-pdf-citation', styleKey);
                     if (styleKey !== currentCiteStyle) {
                         box.hidden = true;
                     }
-                    var head = el('div', 'd-flex align-items-center justify-content-between mb-1');
-                    head.appendChild(el('strong', '', styleLabel));
-                    var copy = el('button', 'btn btn-sm btn-outline-secondary', 'Copy');
-                    copy.type = 'button';
-                    copy.setAttribute('aria-label', 'Copy ' + styleLabel + ' citation');
-                    copy.addEventListener('click', function() { copyWithFeedback(c.text, c.html, styleLabel + ' citation'); });
-                    head.appendChild(copy);
-                    box.appendChild(head);
-                    var text = el('div', 'border rounded p-2 bg-body-tertiary user-select-all');
-                    // Built from escaped pieces in buildCitations; only <i> tags are markup
+                    var text = el('div', 'scouting-pdf-cite-text user-select-all');
                     text.innerHTML = c.html;
                     box.appendChild(text);
                     list.appendChild(box);
                 });
-
-                var actions = el('div', 'd-flex flex-wrap gap-2 pt-2 border-top');
-                var ris = el('button', 'btn btn-sm btn-outline-secondary', 'Download for Zotero / EndNote (.ris)');
-                ris.type = 'button';
-                ris.setAttribute('data-pdf-control', 'cite-ris');
-                ris.addEventListener('click', function() {
-                    var name = fileNameFromUrl(pdfUrl).replace(/\.pdf$/i, '') + (info.page ? '-p' + info.page : '') + '.ris';
-                    saveBlob(new Blob([buildRis(info, pdfUrl, new Date())], { type: 'application/x-research-info-systems' }), name);
-                });
-                var link = el('button', 'btn btn-sm btn-outline-secondary', 'Copy link to this page');
-                link.type = 'button';
-                link.addEventListener('click', function() { copyWithFeedback(pageLink(num, withSettings), null, 'Link'); });
-
-                var areaBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
-                areaBtn.type = 'button';
-                areaBtn.innerHTML = '<i class="bi bi-camera" aria-hidden="true"></i> Select area to cite & share';
-                areaBtn.setAttribute('data-bs-toggle', 'tooltip');
-                areaBtn.setAttribute('data-bs-title', 'Select an area of this page to share as an image with embedded link and citation');
-                areaBtn.addEventListener('click', function() {
-                    closeDialog();
-                    startSnapshot();
-                });
-
-                actions.appendChild(ris);
-                actions.appendChild(link);
-                actions.appendChild(areaBtn);
-                list.appendChild(actions);
             };
+
+            copyCiteBtn.addEventListener('click', function() {
+                var withSettings = cb.checked && cbSettings.checked;
+                var info = citationInfo(num, cb.checked, withSettings);
+                var cites = buildCitations(info, new Date());
+                var c = cites[currentCiteStyle] || cites.chicago;
+                var styleName = styleSelect.options[styleSelect.selectedIndex] ? styleSelect.options[styleSelect.selectedIndex].text.split(' (')[0] : 'Citation';
+                copyWithFeedback(c.text, c.html, styleName + ' citation');
+            });
+
+            copyLinkBtn.addEventListener('click', function() {
+                var withSettings = cb.checked && cbSettings.checked;
+                copyWithFeedback(pageLink(num, withSettings), null, 'Link');
+            });
+
+            ris.addEventListener('click', function() {
+                var withSettings = cb.checked && cbSettings.checked;
+                var info = citationInfo(num, cb.checked, withSettings);
+                var name = fileNameFromUrl(pdfUrl).replace(/\.pdf$/i, '') + (info.page ? '-p' + info.page : '') + '.ris';
+                saveBlob(new Blob([buildRis(info, pdfUrl, new Date())], { type: 'application/x-research-info-systems' }), name);
+            });
+
+            areaBtn.addEventListener('click', function() {
+                closeDialog();
+                startSnapshot();
+            });
 
             styleSelect.addEventListener('change', function() {
                 currentCiteStyle = styleSelect.value;
@@ -1846,6 +1913,7 @@
                 draw();
             });
             cbSettings.addEventListener('change', draw);
+
             draw();
             openDialog('Cite this document', body);
         }

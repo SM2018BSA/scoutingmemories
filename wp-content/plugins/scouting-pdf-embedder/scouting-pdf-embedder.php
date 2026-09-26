@@ -807,7 +807,7 @@ class Scouting_PDF_Embedder {
                         <strong data-pdf-role="dialog-title"></strong>
                         <button type="button" class="btn-close" data-pdf-control="dialog-close" aria-label="Close"></button>
                     </div>
-                    <div class="card-body small" data-pdf-role="dialog-body"></div>
+                    <div class="card-body" data-pdf-role="dialog-body"></div>
                 </div>
 
                 <div class="toast-container position-absolute top-0 start-50 translate-middle-x p-3" data-pdf-role="toasts" aria-live="polite"></div>
