@@ -515,6 +515,73 @@
     color: var(--sm-green);
 }
 
+/* ---- Close buttons: clean, neutral gray (never green) ---- */
+
+[data-pdf-viewer] .btn-close,
+[data-pdf-viewer] [data-pdf-control="menu-close"],
+[data-pdf-viewer] [data-pdf-control="sidebar-close"],
+[data-pdf-viewer] [data-pdf-control="adjust-close"],
+[data-pdf-viewer] [data-pdf-control="dialog-close"] {
+    color: #6c757d !important;
+    background-color: transparent !important;
+    text-decoration: none !important;
+    opacity: 0.65;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    box-shadow: none !important;
+}
+
+[data-pdf-viewer] .btn-close:hover,
+[data-pdf-viewer] [data-pdf-control="menu-close"]:hover,
+[data-pdf-viewer] [data-pdf-control="sidebar-close"]:hover,
+[data-pdf-viewer] [data-pdf-control="adjust-close"]:hover,
+[data-pdf-viewer] [data-pdf-control="dialog-close"]:hover {
+    color: #212529 !important;
+    opacity: 1;
+}
+
+[data-pdf-viewer] .btn-close:focus-visible,
+[data-pdf-viewer] [data-pdf-control="menu-close"]:focus-visible,
+[data-pdf-viewer] [data-pdf-control="sidebar-close"]:focus-visible,
+[data-pdf-viewer] [data-pdf-control="adjust-close"]:focus-visible,
+[data-pdf-viewer] [data-pdf-control="dialog-close"]:focus-visible {
+    color: #212529 !important;
+    opacity: 1;
+    outline: 2px solid rgba(0, 0, 0, 0.25) !important;
+    box-shadow: none !important;
+}
+
+[data-pdf-viewer] [data-pdf-control="menu-close"] .bi,
+[data-pdf-viewer] [data-pdf-control="sidebar-close"] .bi,
+[data-pdf-viewer] [data-pdf-control="adjust-close"] .bi,
+[data-pdf-viewer] [data-pdf-control="dialog-close"] .bi,
+[data-pdf-viewer] .btn-close .bi,
+[data-pdf-viewer] [data-pdf-control="more"][aria-expanded="true"] .bi {
+    color: inherit !important;
+    -webkit-text-stroke: 0 !important;
+}
+
+/* More button when menu is expanded (stays neutral, never green) */
+[data-pdf-viewer] [data-pdf-control="more"][aria-expanded="true"] {
+    --bs-btn-color: #495057;
+    --bs-btn-bg: #e9ecef;
+    --bs-btn-border-color: #ced4da;
+    --bs-btn-hover-color: #212529;
+    --bs-btn-hover-bg: #dee2e6;
+    --bs-btn-hover-border-color: #ced4da;
+    --bs-btn-active-color: #212529;
+    --bs-btn-active-bg: #ced4da;
+    --bs-btn-active-border-color: #adb5bd;
+    --bs-btn-focus-shadow-rgb: 108, 117, 125;
+}
+
+[data-pdf-viewer] [data-pdf-control="more"][aria-expanded="true"] .bi {
+    color: #495057 !important;
+}
+
+[data-pdf-viewer] [data-pdf-control="more"][aria-expanded="true"]:hover .bi {
+    color: #212529 !important;
+}
+
 /* ---- Dialog (cite, print) and messages ---- */
 
 [data-pdf-viewer] [data-pdf-role="dialog-backdrop"] {

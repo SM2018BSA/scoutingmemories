@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.0.1');
+define('SCOUTING_PDF_VERSION', '2.0.2');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -752,13 +752,12 @@ class Scouting_PDF_Embedder {
                     <?php echo $this->button('adjust', 'bi-sliders', 'Adjust', 'Brighten, darken or invert faded scans', ' aria-pressed="false"'); ?>
                     <?php echo $this->button('rotate', 'bi-arrow-clockwise', 'Rotate', 'Rotate pages clockwise ( R )'); ?>
                     <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Get a citation for this page (Chicago, MLA, APA, or for Zotero)'); ?>
-                    <?php echo $this->button('download', 'bi-download', 'Download', 'Save the original PDF file', $hidden_if_no_download); ?>
                     <div class="position-relative" data-pdf-role="menu-wrap">
                         <?php echo $this->button('more', 'bi-three-dots', 'More', 'Link to this page, print, save an area as a picture, two-page view and more', ' aria-haspopup="menu" aria-expanded="false"'); ?>
                         <div class="scouting-pdf-menu shadow" role="menu" data-pdf-role="menu" hidden>
                             <div class="d-flex align-items-center justify-content-between px-3 py-1 border-bottom mb-1 text-muted small">
                                 <span class="fw-semibold">Menu</span>
-                                <button type="button" class="btn btn-sm btn-link text-muted p-0 border-0" data-pdf-control="menu-close" aria-label="Close menu" title="Close menu"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                                <button type="button" class="btn-close" data-pdf-control="menu-close" aria-label="Close menu" title="Close menu"></button>
                             </div>
                             <?php echo $this->menu_item('copy-link', 'bi-link-45deg', 'Copy link to this page'); ?>
                             <?php echo $this->menu_item('comment-page', 'bi-chat-left-text', 'Comment on this page', ' hidden'); ?>
@@ -787,7 +786,7 @@ class Scouting_PDF_Embedder {
                         <button type="button" class="nav-link active" role="tab" aria-selected="true" data-pdf-tab="thumbs">Pages</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="outline" hidden>Contents</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="info">Details</button>
-                        <button type="button" class="btn btn-sm btn-link text-muted p-1 px-2 border-0 align-self-center ms-auto" data-pdf-control="sidebar-close" aria-label="Close sidebar" title="Close sidebar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                        <button type="button" class="btn-close align-self-center ms-auto me-1" data-pdf-control="sidebar-close" aria-label="Close sidebar" title="Close sidebar"></button>
                     </div>
                     <div data-pdf-panel="thumbs" role="tabpanel"></div>
                     <div data-pdf-panel="outline" role="tabpanel" hidden></div>
