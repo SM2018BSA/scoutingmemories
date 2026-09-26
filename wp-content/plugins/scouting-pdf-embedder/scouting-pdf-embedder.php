@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Scouting PDF Embedder
  * Plugin URI: https://scoutingmemories.org/
- * Description: PDF viewer for Scouting Memories, built for research: search inside documents, selectable text, printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, print and download. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
- * Version: 2.0.0
+ * Description: PDF viewer for Scouting Memories, built for research: printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, page rotation, two-page view and sharing part of a page as a picture. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
+ * Version: 2.0.3
  * Author: Roger Ellis / Scouting Memories
  * License: GPL-2.0+
  * Text Domain: scouting-pdf-embedder
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.0.2');
+define('SCOUTING_PDF_VERSION', '2.0.3');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -23,6 +23,9 @@ class Scouting_PDF_Embedder {
     private static $instance = null;
     private $scripts_enqueued = false;
     private $viewer_count = 0;
+    private $lib_url = '';
+    private $worker_url = '';
+    private $post_pdf = null;
 
     // Archive fields (ACF) that go into citations and the document info panel
     const CITATION_FIELDS = array(
@@ -64,6 +67,10 @@ class Scouting_PDF_Embedder {
         add_action('wp_print_footer_scripts', array($this, 'dequeue_legacy_scripts'), 1);
 
         add_action('init', array($this, 'takeover_shortcodes'), 99999);
+
+        // On posts with a document, start fetching PDF.js and connecting to storage from the head
+        add_filter('wp_resource_hints', array($this, 'resource_hints'), 10, 2);
+        add_action('wp_head', array($this, 'print_preload_links'), 3);
 
         // Citation tags that Zotero, Mendeley and Google Scholar read from the page head
         add_action('wp_head', array($this, 'print_citation_meta_tags'), 5);
@@ -214,6 +221,8 @@ class Scouting_PDF_Embedder {
         }
         $pdfjs = $plugin_url . 'assets/vendor/pdfjs/';
         $ver = '?ver=' . SCOUTING_PDFJS_VERSION;
+        $this->lib_url = $pdfjs . 'pdf.min.js' . $ver;
+        $this->worker_url = $pdfjs . 'pdf.worker.min.js' . $ver;
 
         wp_register_style(
             'scouting-pdf-viewer-css',
@@ -231,8 +240,8 @@ class Scouting_PDF_Embedder {
         );
 
         $config = array(
-            'libUrl'              => $pdfjs . 'pdf.min.js' . $ver,
-            'workerUrl'           => $pdfjs . 'pdf.worker.min.js' . $ver,
+            'libUrl'              => $this->lib_url,
+            'workerUrl'           => $this->worker_url,
             'cMapUrl'             => $pdfjs . 'cmaps/',
             'standardFontDataUrl' => $pdfjs . 'standard_fonts/',
             'wasmUrl'             => $pdfjs . 'wasm/',
@@ -241,6 +250,66 @@ class Scouting_PDF_Embedder {
             'siteName'            => wp_strip_all_tags(get_bloginfo('name')),
         );
         wp_add_inline_script('scouting-pdf-viewer-js', 'window.ScoutingPdfConfig = ' . wp_json_encode($config) . ';', 'before');
+
+        // Known before the content renders: load the stylesheet in the head, so the viewer
+        // doesn't flash unstyled while a late (footer) stylesheet arrives
+        if ($this->current_post_pdf()) {
+            wp_enqueue_style('scouting-pdf-viewer-css');
+        }
+    }
+
+    /**
+     * First embeddable PDF in the post being viewed (single posts and pages only), when the
+     * post shows it in a viewer rather than just linking to it
+     */
+    private function current_post_pdf() {
+        if ($this->post_pdf === null) {
+            $this->post_pdf = '';
+            $post = is_singular() ? get_queried_object() : null;
+            if ($post && !empty($post->post_content)) {
+                $content = $this->clean_shortcodes_in_content($post->post_content);
+                $has_viewer = preg_match('/\[pdf[-_]embedder\b|wp:pdfemb\/|pdfemb-viewer|wp:scouting\/pdf-viewer|<p>\s*<a[^>]*href=["\'][^"\']+\.pdf(\?[^"\']*)?["\'][^>]*>[^<]+<\/a>\s*<\/p>/i', $content);
+                if ($has_viewer) {
+                    $this->post_pdf = self::first_pdf_in_content($content);
+                }
+            }
+        }
+        return $this->post_pdf;
+    }
+
+    /**
+     * Connect to the storage server early; the viewer fetches the PDF from it with CORS
+     */
+    public function resource_hints($urls, $relation) {
+        if ($relation !== 'preconnect' || !$this->current_post_pdf()) {
+            return $urls;
+        }
+        $pdf = self::upgrade_storage_url($this->current_post_pdf());
+        $host = wp_parse_url($pdf, PHP_URL_HOST);
+        if ($host && strtolower($host) !== strtolower((string) wp_parse_url(home_url(), PHP_URL_HOST))) {
+            $urls[] = array('href' => wp_parse_url($pdf, PHP_URL_SCHEME) . '://' . $host, 'crossorigin' => 'anonymous');
+        }
+        return $urls;
+    }
+
+    /**
+     * PDF.js loads in a chain (viewer script, then library, then worker, then the PDF).
+     * Fetch the library and worker while the page is still loading.
+     */
+    public function print_preload_links() {
+        if (!$this->current_post_pdf() || !$this->lib_url) {
+            return;
+        }
+        printf('<link rel="modulepreload" href="%s">' . "\n", esc_url($this->lib_url));
+        printf('<link rel="prefetch" href="%s">' . "\n", esc_url($this->worker_url));
+    }
+
+    /**
+     * Legacy posts link storage over http; it serves https, and http is blocked on an https page
+     */
+    private static function upgrade_storage_url($url) {
+        $url = preg_replace('/^http:\/\/storage\.scoutingmemories\.org/i', 'https://storage.scoutingmemories.org', $url);
+        return is_ssl() ? set_url_scheme($url, 'https') : $url;
     }
 
     /**
@@ -386,7 +455,11 @@ class Scouting_PDF_Embedder {
                 header('Content-Disposition: inline; filename="' . $filename . '"');
                 header('Cross-Origin-Resource-Policy: same-origin');
                 header('Referrer-Policy: no-referrer');
-                header('Cache-Control: public, max-age=86400, s-maxage=604800');
+                // Only whole files go in shared caches (WP Engine's page cache keys on the URL,
+                // not the Range header, so a cached slice could be served as the whole file)
+                header($state['status'] === 206
+                    ? 'Cache-Control: private, max-age=86400'
+                    : 'Cache-Control: public, max-age=86400, s-maxage=604800');
                 foreach ($state['headers'] as $name => $value) {
                     header($name . ': ' . $value, true);
                 }
@@ -400,7 +473,8 @@ class Scouting_PDF_Embedder {
                 CURLOPT_SSL_VERIFYPEER => true,
                 CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_CONNECTTIMEOUT => 10,
-                CURLOPT_TIMEOUT        => 120,
+                // WP Engine ends any request after 60 seconds; finish before that, cleanly
+                CURLOPT_TIMEOUT        => 55,
                 CURLOPT_RESOLVE        => array($host . ':443:' . $ip),
                 CURLOPT_USERAGENT      => 'ScoutingPdfEmbedder/' . SCOUTING_PDF_VERSION,
                 CURLOPT_NOBODY         => ($method === 'HEAD'),
@@ -674,25 +748,20 @@ class Scouting_PDF_Embedder {
 
     // ---- Viewer markup ------------------------------------------------------
 
-    private function button($control, $icon, $label, $tip, $attrs = '', $label_class = 'scouting-pdf-btn-label') {
+    /**
+     * A toolbar button: a Bootstrap .btn at its normal size, like the site's Submit button,
+     * in the light outline style, with a Bootstrap Icon and its label. Pass $icon_after for
+     * "Next", whose arrow follows the text.
+     */
+    private function button($control, $icon, $label, $tip, $attrs = '', $icon_after = false) {
+        // Larger icons (Bootstrap's .fs-5); .lh-1 keeps the button its usual height
+        $icon_html = '<i class="bi ' . esc_attr($icon) . ' fs-5 lh-1" aria-hidden="true"></i>';
         return sprintf(
-            '<button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="%s" data-bs-toggle="tooltip" data-bs-title="%s" aria-label="%s"%s><i class="bi %s" aria-hidden="true"></i>%s</button>',
+            '<button type="button" class="btn btn-outline-secondary text-nowrap px-3 py-2" data-pdf-control="%s" data-bs-toggle="tooltip" data-bs-title="%s"%s>%s</button>',
             esc_attr($control),
             esc_attr($tip),
-            esc_attr($label),
             $attrs,
-            esc_attr($icon),
-            $label_class ? '<span class="' . esc_attr($label_class) . '">' . esc_html($label) . '</span>' : ''
-        );
-    }
-
-    private function menu_item($control, $icon, $label, $attrs = '') {
-        return sprintf(
-            '<button type="button" class="scouting-pdf-menu-item d-flex align-items-center gap-2 w-100" role="menuitem" data-pdf-control="%s"%s><i class="bi %s" aria-hidden="true"></i><span>%s</span></button>',
-            esc_attr($control),
-            $attrs,
-            esc_attr($icon),
-            esc_html($label)
+            $icon_after ? esc_html($label) . ' ' . $icon_html : $icon_html . ' ' . esc_html($label)
         );
     }
 
@@ -701,12 +770,7 @@ class Scouting_PDF_Embedder {
      */
     public function build_viewer_html($url, $title = '', $options = array()) {
         // Enforce HTTPS on SSL environments and upgrade legacy HTTP storage URLs to prevent Mixed Content blocking on WP Engine SSL
-        if (is_ssl() || stripos($url, 'storage.scoutingmemories.org') !== false) {
-            $url = preg_replace('/^http:\/\/storage\.scoutingmemories\.org/i', 'https://storage.scoutingmemories.org', $url);
-            if (is_ssl()) {
-                $url = set_url_scheme($url, 'https');
-            }
-        }
+        $url = self::upgrade_storage_url($url);
 
         $raw_title = !empty($title) ? $title : basename((string) wp_parse_url($url, PHP_URL_PATH));
 
@@ -730,103 +794,106 @@ class Scouting_PDF_Embedder {
         $start_page = !empty($options['page']) ? (int) $options['page'] : 1;
         $cite = self::citation_data(!empty($title) ? $title : '');
 
-        $hidden_if_no_download = $allow_download ? '' : ' hidden';
-
         ob_start();
         ?>
-        <div class="card my-4 shadow-sm scouting-pdf-container" id="scouting-pdf-<?php echo (int) $this->viewer_count; ?>" data-pdf-viewer data-pdf-index="<?php echo (int) $this->viewer_count; ?>" data-pdf-state="loading" data-pdf-url="<?php echo esc_url($url); ?>" data-pdf-title="<?php echo esc_attr($raw_title); ?>" data-pdf-start-page="<?php echo (int) $start_page; ?>" data-pdf-download="<?php echo $allow_download ? '1' : '0'; ?>" data-pdf-cite="<?php echo esc_attr(wp_json_encode($cite)); ?>" tabindex="0" role="region" aria-label="<?php echo esc_attr(sprintf(__('PDF viewer: %s', 'scouting-pdf-embedder'), $raw_title)); ?>">
-            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 user-select-none" data-pdf-role="toolbar">
-                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('sidebar', 'bi-layout-sidebar', 'Pages', 'Show page thumbnails, contents, search results and document details', ' aria-pressed="true"'); ?>
-                </div>
-
-                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller ( - )'); ?>
-                    <span class="small text-muted text-center" data-pdf-control="zoom-level" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Current zoom. Hold Ctrl and scroll the mouse wheel to zoom in on a spot">100%</span>
-                    <?php echo $this->button('zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print ( + )'); ?>
-                    <?php echo $this->button('zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Fit the page width to the viewer ( 0 )', ' aria-pressed="false"'); ?>
-                    <?php echo $this->button('zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="true"'); ?>
-                </div>
-
-                <div class="d-flex align-items-center gap-1" data-pdf-role="group">
-                    <?php echo $this->button('adjust', 'bi-sliders', 'Adjust', 'Brighten, darken or invert faded scans', ' aria-pressed="false"'); ?>
-                    <?php echo $this->button('rotate', 'bi-arrow-clockwise', 'Rotate', 'Rotate pages clockwise ( R )'); ?>
-                    <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Get a citation for this page (Chicago, MLA, APA, or for Zotero)'); ?>
-                    <div class="position-relative" data-pdf-role="menu-wrap">
-                        <?php echo $this->button('more', 'bi-three-dots', 'More', 'Link to this page, print, save an area as a picture, two-page view and more', ' aria-haspopup="menu" aria-expanded="false"'); ?>
-                        <div class="scouting-pdf-menu shadow" role="menu" data-pdf-role="menu" hidden>
-                            <div class="d-flex align-items-center justify-content-between px-3 py-1 border-bottom mb-1 text-muted small">
-                                <span class="fw-semibold">Menu</span>
-                                <button type="button" class="btn-close" data-pdf-control="menu-close" aria-label="Close menu" title="Close menu"></button>
-                            </div>
-                            <?php echo $this->menu_item('copy-link', 'bi-link-45deg', 'Copy link to this page'); ?>
-                            <?php echo $this->menu_item('comment-page', 'bi-chat-left-text', 'Comment on this page', ' hidden'); ?>
-                            <?php echo $this->menu_item('print', 'bi-printer', 'Print…', $hidden_if_no_download); ?>
-                            <?php echo $this->menu_item('snapshot', 'bi-camera', 'Save an area as a picture'); ?>
-                            <?php echo $this->menu_item('spread', 'bi-book', 'Two-page view', ' aria-checked="false" role="menuitemcheckbox"'); ?>
-                            <?php echo $this->menu_item('info', 'bi-info-circle', 'Document details'); ?>
-                        </div>
+        <?php $n = (int) $this->viewer_count; ?>
+        <div class="card my-4 scouting-pdf-container" id="scouting-pdf-<?php echo $n; ?>" data-pdf-viewer data-pdf-index="<?php echo $n; ?>" data-pdf-state="loading" data-pdf-url="<?php echo esc_url($url); ?>" data-pdf-title="<?php echo esc_attr($raw_title); ?>" data-pdf-start-page="<?php echo (int) $start_page; ?>" data-pdf-download="<?php echo $allow_download ? '1' : '0'; ?>" data-pdf-cite="<?php echo esc_attr(wp_json_encode($cite)); ?>" tabindex="0" role="region" aria-label="<?php echo esc_attr(sprintf(__('PDF viewer: %s', 'scouting-pdf-embedder'), $raw_title)); ?>">
+            <?php /* Toolbars: a Bootstrap row of three groups. The outer .col groups share the leftover
+               space equally, which keeps the middle group centered. The viewer script moves groups
+               onto their own rows (.col-12) when the viewer is too narrow for one row. */ ?>
+            <div class="card-header user-select-none" data-pdf-role="toolbar">
+                <div class="row g-2 align-items-center" data-pdf-role="toolbar-row">
+                    <div class="col d-flex align-items-center gap-2" data-pdf-group="start">
+                        <?php echo $this->button('sidebar', 'bi-layout-sidebar', 'Pages', 'Show or hide the page thumbnails and document details', ' aria-pressed="false"'); ?>
                     </div>
-                    <?php echo $this->button('fullscreen', 'bi-arrows-fullscreen', 'Fullscreen', 'Fill the whole screen with the document (Esc to exit)'); ?>
+                    <div class="col-auto d-flex align-items-center gap-2" data-pdf-group="middle">
+                        <?php echo $this->button('adjust', 'bi-sliders', 'Adjust', 'Change the brightness and contrast to make faded scans easier to read', ' aria-pressed="false"'); ?>
+                        <?php echo $this->button('rotate', 'bi-arrow-clockwise', 'Rotate', 'Rotate this page a quarter turn clockwise (shortcut: R key)'); ?>
+                        <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Cite or share this page: copy a citation or a link, or clip part of the page as a picture'); ?>
+                    </div>
+                    <div class="col d-flex align-items-center justify-content-end gap-2" data-pdf-group="end">
+                        <?php echo $this->button('spread', 'bi-book', 'Two-page view', 'Show two pages side by side, like an open book', ' aria-pressed="false"'); ?>
+                        <?php echo $this->button('fullscreen', 'bi-arrows-fullscreen', 'Fullscreen', 'Show the document on the whole screen (press Esc to exit)'); ?>
+                    </div>
                 </div>
             </div>
 
-            <div class="d-flex flex-wrap align-items-center gap-3 px-3 py-2 border-bottom bg-body-tertiary small" data-pdf-role="adjustbar" hidden>
-                <label class="d-flex align-items-center gap-2 mb-0">Brightness <input type="range" class="form-range" min="50" max="200" step="5" value="100" data-pdf-control="brightness"></label>
-                <label class="d-flex align-items-center gap-2 mb-0">Contrast <input type="range" class="form-range" min="50" max="300" step="5" value="100" data-pdf-control="contrast"></label>
-                <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="scouting-pdf-<?php echo (int) $this->viewer_count; ?>-gray" data-pdf-control="grayscale"><label class="form-check-label" for="scouting-pdf-<?php echo (int) $this->viewer_count; ?>-gray">Black &amp; white</label></div>
-                <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="scouting-pdf-<?php echo (int) $this->viewer_count; ?>-invert" data-pdf-control="invert"><label class="form-check-label" for="scouting-pdf-<?php echo (int) $this->viewer_count; ?>-invert">Invert (negatives, blueprints)</label></div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-pdf-control="adjust-reset">Reset</button>
+            <?php /* hidden goes on a wrapper: Bootstrap's .d-flex would override it on the bar itself */ ?>
+            <div data-pdf-role="adjustbar" hidden>
+            <div class="d-flex flex-wrap align-items-center gap-3 px-3 py-2 border-bottom bg-body-tertiary">
+                <label class="d-flex align-items-center gap-2">Brightness <input type="range" class="form-range w-auto" min="50" max="200" step="5" value="100" data-pdf-control="brightness"></label>
+                <label class="d-flex align-items-center gap-2">Contrast <input type="range" class="form-range w-auto" min="50" max="300" step="5" value="100" data-pdf-control="contrast"></label>
+                <div class="d-flex align-items-center gap-2"><input class="form-check-input fs-3 rounded-0 m-0" type="checkbox" id="scouting-pdf-<?php echo $n; ?>-gray" data-pdf-control="grayscale"><label class="form-check-label" for="scouting-pdf-<?php echo $n; ?>-gray">Black &amp; white</label></div>
+                <div class="d-flex align-items-center gap-2"><input class="form-check-input fs-3 rounded-0 m-0" type="checkbox" id="scouting-pdf-<?php echo $n; ?>-invert" data-pdf-control="invert"><label class="form-check-label" for="scouting-pdf-<?php echo $n; ?>-invert">Invert (negatives, blueprints)</label></div>
+                <button type="button" class="btn btn-outline-secondary px-3 py-2" data-pdf-control="adjust-reset">Reset</button>
                 <button type="button" class="btn-close ms-auto" data-pdf-control="adjust-close" aria-label="Close image adjustments"></button>
             </div>
+            </div>
 
-            <div class="d-flex position-relative" data-pdf-role="body">
-                <aside class="border-end bg-body" data-pdf-role="sidebar" aria-label="Document navigation">
-                    <div class="nav nav-tabs nav-fill small px-1 pt-1" role="tablist" data-pdf-role="tabs">
+            <div class="d-flex flex-grow-1 position-relative overflow-hidden" data-pdf-role="body">
+                <aside class="flex-shrink-0 overflow-auto border-end bg-body" style="width: 13.5rem" data-pdf-role="sidebar" aria-label="Document navigation" hidden>
+                    <div class="nav nav-tabs nav-fill flex-nowrap sticky-top bg-body px-1 pt-1" role="tablist" data-pdf-role="tabs">
                         <button type="button" class="nav-link active" role="tab" aria-selected="true" data-pdf-tab="thumbs">Pages</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="outline" hidden>Contents</button>
                         <button type="button" class="nav-link" role="tab" aria-selected="false" data-pdf-tab="info">Details</button>
-                        <button type="button" class="btn-close align-self-center ms-auto me-1" data-pdf-control="sidebar-close" aria-label="Close sidebar" title="Close sidebar"></button>
+                        <button type="button" class="btn-close align-self-center ms-auto me-1" data-pdf-control="sidebar-close" aria-label="Close the sidebar"></button>
                     </div>
                     <div data-pdf-panel="thumbs" role="tabpanel"></div>
                     <div data-pdf-panel="outline" role="tabpanel" hidden></div>
                     <div data-pdf-panel="info" role="tabpanel" hidden></div>
                 </aside>
 
-                <div class="position-relative d-flex align-items-start bg-light flex-grow-1" data-pdf-role="viewport">
+                <div class="position-relative d-flex align-items-start flex-grow-1 overflow-auto bg-light p-2 p-md-4" data-pdf-role="viewport">
                     <div class="position-absolute top-50 start-50 translate-middle d-flex flex-column align-items-center gap-2 text-muted" data-pdf-role="loading" role="status" aria-live="polite">
                         <div class="spinner-border sm_green_color" aria-hidden="true"></div>
-                        <div class="small">Loading document... <span data-pdf-role="progress"></span></div>
+                        <div>Loading document... <span data-pdf-role="progress"></span></div>
                     </div>
-                    <div data-pdf-role="pages"></div>
-                </div>
-
-                <div class="scouting-pdf-dialog-backdrop" data-pdf-role="dialog-backdrop" hidden></div>
-
-                <div class="card shadow" data-pdf-role="dialog" role="dialog" aria-modal="true" hidden>
-                    <div class="card-header d-flex align-items-center justify-content-between py-2">
-                        <strong data-pdf-role="dialog-title"></strong>
-                        <button type="button" class="btn-close" data-pdf-control="dialog-close" aria-label="Close"></button>
-                    </div>
-                    <div class="card-body" data-pdf-role="dialog-body"></div>
+                    <div class="d-flex flex-column align-items-center flex-shrink-0 gap-3 mx-auto" data-pdf-role="pages"></div>
                 </div>
 
                 <div class="toast-container position-absolute top-0 start-50 translate-middle-x p-3" data-pdf-role="toasts" aria-live="polite"></div>
-            </div>
 
-            <div class="card-footer d-flex align-items-center justify-content-center py-2 user-select-none bg-body" data-pdf-role="bottom-toolbar">
-                <div class="d-flex align-items-center gap-2" data-pdf-role="group">
-                    <?php echo $this->button('prev', 'bi-chevron-left', 'Previous', 'Go to the previous page (Left arrow)'); ?>
-                    <span class="d-inline-flex align-items-center gap-1 small text-muted px-1" data-pdf-role="page-display">
-                        <span class="fw-medium text-body-secondary me-1">Page:</span>
-                        <input type="number" class="form-control form-control-sm text-center" data-pdf-control="page-input" value="1" min="1" aria-label="Current page" data-bs-toggle="tooltip" data-bs-title="Type a page number and press Enter to jump to it">
-                        <span>of</span>
-                        <span data-pdf-control="total-pages">--</span>
-                        <span class="badge text-bg-light border" data-pdf-control="page-label" hidden data-bs-toggle="tooltip" data-bs-title="The page number printed on this page. Use it in citations"></span>
-                    </span>
-                    <?php echo $this->button('next', 'bi-chevron-right', 'Next', 'Go to the next page (Right arrow)'); ?>
+                <?php /* Cite and clipping windows: a Bootstrap modal inside the viewer's document area, so it
+                   covers the pages with a light wash (instead of darkening the whole web page) and opens
+                   centered over the document. It also shows in fullscreen. */ ?>
+                <div class="modal fade position-absolute bg-white bg-opacity-75" tabindex="-1" data-bs-backdrop="false" aria-labelledby="scouting-pdf-<?php echo $n; ?>-dialog-title" aria-hidden="true" data-pdf-role="dialog">
+                    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content shadow">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="scouting-pdf-<?php echo $n; ?>-dialog-title" data-pdf-role="dialog-title"></h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" data-pdf-control="dialog-close" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" data-pdf-role="dialog-body"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <div class="card-footer user-select-none" data-pdf-role="bottom-toolbar">
+                <div class="row g-2 align-items-center" data-pdf-role="toolbar-row">
+                    <div class="col d-flex align-items-center gap-2" data-pdf-group="start">
+                        <?php echo $this->button('zoom-out', 'bi-zoom-out', 'Zoom out', 'Make the pages smaller (shortcut: minus key)'); ?>
+                        <span class="text-muted text-center" style="min-width: 3.5rem" data-pdf-control="zoom-level" tabindex="0" data-bs-toggle="tooltip" data-bs-title="Current zoom level. To zoom in on one spot, hold Ctrl and scroll the mouse wheel.">100%</span>
+                        <?php echo $this->button('zoom-in', 'bi-zoom-in', 'Zoom in', 'Make the pages larger to read small print (shortcut: plus key)'); ?>
+                    </div>
+                    <div class="col-auto d-flex align-items-center gap-2" data-pdf-group="middle">
+                        <?php echo $this->button('prev', 'bi-chevron-left', 'Previous', 'Go to the previous page (shortcut: Left arrow key)'); ?>
+                        <span class="d-inline-flex align-items-center gap-2 text-muted text-nowrap" data-pdf-role="page-display">
+                            <span data-pdf-role="page-word">Page</span>
+                            <input type="number" class="form-control text-center py-2" style="width: 5rem" data-pdf-control="page-input" value="1" min="1" aria-label="Current page" data-bs-toggle="tooltip" data-bs-title="Type a page number and press Enter to go to that page">
+                            <span>of</span>
+                            <span data-pdf-control="total-pages">--</span>
+                            <span class="badge text-bg-light border" data-pdf-control="page-label" hidden data-bs-toggle="tooltip" data-bs-title="The page number printed on this page. Use this number in citations."></span>
+                        </span>
+                        <?php echo $this->button('next', 'bi-chevron-right', 'Next', 'Go to the next page (shortcut: Right arrow key)', '', true); ?>
+                    </div>
+                    <div class="col d-flex align-items-center justify-content-end gap-2" data-pdf-group="end">
+                        <?php echo $this->button('zoom-fit', 'bi-arrow-left-right', 'Fit width', 'Make the page as wide as the viewer (shortcut: 0 key)', ' aria-pressed="false"'); ?>
+                        <?php echo $this->button('zoom-page', 'bi-file-earmark', 'Fit page', 'Show one whole page at a time', ' aria-pressed="true"'); ?>
+                    </div>
+                </div>
+            </div>
+
         </div>
         <?php
         return ob_get_clean();

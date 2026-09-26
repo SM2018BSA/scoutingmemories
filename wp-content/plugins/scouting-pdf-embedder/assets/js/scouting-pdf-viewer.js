@@ -44,7 +44,6 @@
     var MAX_SCALE = 5.0;
     var ZOOM_STEP = 1.25;
     var PAGE_GAP = 16; // matches the 1rem gap between pages in the CSS
-    var PRINT_DPI = 150;
     var SNAPSHOT_DPI = 300;
     var THUMB_WIDTH = 132;
     var RESUME_DAYS = 180;
@@ -58,7 +57,7 @@
         return document.fullscreenElement || document.webkitFullscreenElement || null;
     }
 
-    // User rotation is added to the page's own rotation
+    // The reader's rotation of a page is added to the page's own rotation
     function getPageViewport(page, scaleVal, rotation) {
         return page.getViewport({ scale: scaleVal, rotation: ((page.rotate || 0) + (rotation || 0)) % 360 });
     }
@@ -78,6 +77,11 @@
         return String(s).replace(/[&<>"']/g, function(c) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
+    }
+
+    // Icon and label for a button, the same larger icon (.fs-5) as the toolbar buttons
+    function iconLabel(icon, label) {
+        return '<i class="bi ' + icon + ' fs-5 lh-1" aria-hidden="true"></i> ' + escHtml(label);
     }
 
     function isTypingTarget(t) {
@@ -194,6 +198,29 @@
         return d.getDate() + ' ' + MLA_MONTHS[d.getMonth()] + ' ' + d.getFullYear();
     }
 
+    // Archive dates are stored as YYYY-MM-DD. Volunteers record a year alone as YYYY-01-01 and
+    // a month (a monthly newsletter) as YYYY-MM-01, so cite those as "1955" and "December 1955"
+    // rather than inventing a day. Anything not in that form is cited as entered.
+    function parseDocDate(value) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+        if (!m) return null;
+        var month = parseInt(m[2], 10);
+        var day = parseInt(m[3], 10);
+        if (month < 1 || month > 12) return null;
+        if (month === 1 && day === 1) return { year: m[1] };
+        return { year: m[1], month: month - 1, day: day === 1 ? 0 : day };
+    }
+
+    // Chicago "September 25, 2026", MLA "25 Sept. 2026", APA "2026, September 25"
+    function formatDocDate(value, style) {
+        var d = parseDocDate(value);
+        if (!d) return value;
+        if (d.month === undefined) return d.year;
+        if (style === 'mla') return (d.day ? d.day + ' ' : '') + MLA_MONTHS[d.month] + ' ' + d.year;
+        if (style === 'apa') return d.year + ', ' + MONTHS[d.month] + (d.day ? ' ' + d.day : '');
+        return MONTHS[d.month] + ' ' + (d.day ? d.day + ', ' : '') + d.year;
+    }
+
     function endSentence(s) {
         return /[.?!]$/.test(s) ? s : s + '.';
     }
@@ -221,7 +248,7 @@
         }
 
         // Chicago notes-bibliography style for an unpublished archival document
-        parts = ['“' + info.title + ',” ' + (info.date || 'n.d.') + (pageText ? ', ' + pageText : '') + '. '];
+        parts = ['“' + info.title + ',” ' + (info.date ? formatDocDate(info.date, 'chicago') : 'n.d.') + (pageText ? ', ' + pageText : '') + '. '];
         if (info.container) parts.push('In ', { i: info.container }, '. ');
         if (info.identifier) parts.push(endSentence(info.identifier) + ' ');
         if (info.publisher) parts.push('Digitized by ' + endSentence(info.publisher) + ' ');
@@ -232,14 +259,15 @@
         parts = ['“' + endSentence(info.title) + '” '];
         if (info.container) parts.push({ i: info.container }, ', ');
         parts.push({ i: info.site }, ', ');
-        if (info.date) parts.push(info.date + ', ');
+        if (info.date) parts.push(formatDocDate(info.date, 'mla') + ', ');
         if (pageText) parts.push(pageText + ', ');
         parts.push(info.url + '. Accessed ' + formatMlaDate(now) + '.');
         var mla = both(parts);
 
         // APA 7
         var author = info.publisher || info.site;
-        parts = [endSentence(author) + ' (' + year + '). ', { i: info.title }, ' [Archival document]'];
+        var apaDate = parseDocDate(info.date) ? formatDocDate(info.date, 'apa') : year;
+        parts = [endSentence(author) + ' (' + apaDate + '). ', { i: info.title }, ' [Archival document]'];
         if (pageText) parts.push(' (' + pageText + ')');
         parts.push('. ');
         if (info.publisher) parts.push(endSentence(info.site) + ' ');
@@ -426,31 +454,22 @@
         var textSelectBtn = control('text-select');
         var citeBtn = control('cite');
         var downloadBtn = control('download');
-        var moreBtn = control('more');
-        var menuEl = q('[data-pdf-role="menu"]');
+        var spreadBtn = control('spread');
         var findbar = q('[data-pdf-role="findbar"]');
         var findInput = control('find-input');
         var findStatus = q('[data-pdf-role="find-status"]');
         var adjustbar = q('[data-pdf-role="adjustbar"]');
         var sidebar = q('[data-pdf-role="sidebar"]');
         var dialog = q('[data-pdf-role="dialog"]');
-        var backdrop = q('[data-pdf-role="dialog-backdrop"]');
         var toasts = q('[data-pdf-role="toasts"]');
 
         if (!viewportEl) return null;
-
-        if (!backdrop && dialog && dialog.parentNode) {
-            backdrop = el('div', 'scouting-pdf-dialog-backdrop');
-            backdrop.setAttribute('data-pdf-role', 'dialog-backdrop');
-            backdrop.hidden = true;
-            dialog.parentNode.insertBefore(backdrop, dialog);
-        }
 
         initTooltips(container);
 
         // Page HTML cached before v1.2 has a single canvas instead of the page column
         if (!pagesEl) {
-            pagesEl = document.createElement('div');
+            pagesEl = el('div', 'd-flex flex-column align-items-center flex-shrink-0 gap-3 mx-auto');
             pagesEl.setAttribute('data-pdf-role', 'pages');
             viewportEl.appendChild(pagesEl);
         }
@@ -460,12 +479,11 @@
 
         var pdfLib = null;
         var pdfDoc = null;
-        var pages = [];          // { num, page, el, canvas, baseW, baseH, renderedKey, text, textLayer }
+        var pages = [];          // { num, page, el, canvas, rotation, baseW, baseH, renderedKey, text, textLayer }
         var labels = null;       // printed page numbers, when the PDF defines them
         var outline = null;
         var currentPage = 1;
         var scale = 1.0;
-        var rotation = 0;
         var fitMode = 'page';    // 'width' | 'page' | null (manual zoom)
         var spread = false;
         var textSelect = false;
@@ -482,9 +500,10 @@
             goToLabel: function(label) { whenReady(function() { goToPage(pageForLabel(label), true); }); },
             labelFor: function(num) { return labelFor(num); },
             currentPage: function() { return currentPage; },
-            applySettings: function(s) {
+            // num: the page the link points at, which gets the link's rotation
+            applySettings: function(s, num) {
                 whenReady(function() {
-                    applyUrlSettings(s);
+                    applyUrlSettings(s, num || currentPage);
                     pages.forEach(releasePage);
                     measureBase();
                     layout();
@@ -495,7 +514,7 @@
                     resetThumbs();
                 });
             },
-            currentSettings: function() { return currentViewSettings(); }
+            currentSettings: function() { return currentViewSettings(currentPage); }
         };
         container.scoutingPdf = api;
 
@@ -505,6 +524,13 @@
 
         function setState(state) {
             container.setAttribute('data-pdf-state', state);
+            updateCursor();
+        }
+
+        // Drag to move around the pages; drag to draw a box while clipping
+        function updateCursor() {
+            viewportEl.style.cursor = snap ? 'crosshair' : pan ? 'grabbing' :
+                container.getAttribute('data-pdf-state') === 'ready' ? 'grab' : '';
         }
 
         function isExpanded() {
@@ -537,7 +563,8 @@
             return 'p. ' + labelFor(num) + (hasDistinctLabel(num) ? ' (PDF page ' + num + ')' : '');
         }
 
-        function currentViewSettings() {
+        // View settings for a link to page num; its rotation is that page's own
+        function currentViewSettings(num) {
             var b = control('brightness');
             var c = control('contrast');
             var g = control('grayscale');
@@ -548,8 +575,9 @@
             } else if (scale && Math.abs(scale - 1.0) > 0.01) {
                 s.zoom = Math.round(scale * 100) / 100;
             }
-            if (rotation && (rotation % 360 !== 0)) {
-                s.rot = (rotation % 360 + 360) % 360;
+            var p = pages[num - 1];
+            if (p && p.rotation) {
+                s.rot = p.rotation;
             }
             if (b && b.value && b.value !== '100' && b.value !== 100) {
                 s.brightness = b.value;
@@ -565,11 +593,11 @@
 
         function pageLink(num, includeSettings) {
             var base = cite.permalink || window.location.href.split('#')[0];
-            var settings = includeSettings ? currentViewSettings() : null;
+            var settings = includeSettings ? currentViewSettings(num) : null;
             return base.split('#')[0] + '#' + buildPageHash(viewerIndex, num, settings);
         }
 
-        function applyUrlSettings(s) {
+        function applyUrlSettings(s, num) {
             if (!s) return;
             if (s.brightness !== undefined || s.contrast !== undefined || s.grayscale !== undefined || s.invert !== undefined) {
                 var b = control('brightness');
@@ -585,16 +613,13 @@
                     toggleAdjust(true);
                 }
             }
-            if (s.rot !== undefined && !isNaN(s.rot)) {
-                rotation = (s.rot % 360 + 360) % 360;
+            var linked = pages[(num || currentPage) - 1];
+            if (linked && s.rot !== undefined && !isNaN(s.rot)) {
+                linked.rotation = (Math.round(s.rot / 90) * 90 % 360 + 360) % 360;
             }
             if (s.spread !== undefined && s.spread !== spread) {
                 spread = !!s.spread;
-                var item = control('spread');
-                if (item) {
-                    item.setAttribute('aria-checked', spread ? 'true' : 'false');
-                    item.classList.toggle('active', spread);
-                }
+                setPressed(spreadBtn, spread);
             }
             if (s.zoom) {
                 if (s.zoom === 'width' || s.zoom === 'page') {
@@ -628,6 +653,20 @@
             setPressed(zoomFitBtn, fitMode === 'width');
             setPressed(zoomPageBtn, fitMode === 'page');
             updateThumbSelection();
+            refitToolbars();
+        }
+
+        // The page count and a printed page number change the width of the page navigation,
+        // which can call for a different toolbar layout (and so a different reading height)
+        var toolbarText = null;
+        function refitToolbars() {
+            var text = (totalPagesEl ? totalPagesEl.textContent : '') + '|' +
+                (pageLabelEl && !pageLabelEl.hidden ? pageLabelEl.textContent.length : 0);
+            if (text === toolbarText) return;
+            toolbarText = text;
+            var before = container.getAttribute('data-pdf-size');
+            sizeViewer(container);
+            if (container.getAttribute('data-pdf-size') !== before && fitMode && pages.length) applyFit();
         }
 
         // Bootstrap's .active shows the selected state in the site green
@@ -639,24 +678,29 @@
 
         // ---- Layout -----------------------------------------------------------
 
-        // Inner size of the reading area, excluding padding. Uses the max height (85vh) so
-        // "fit page" is right even while the column is still short.
+        // Inner size of the reading area, excluding padding. The viewer may grow to its max
+        // height (the screen) and the reading area gets what the toolbars leave, so measure
+        // against that: "fit page" is then right even while the column is still short.
         function getAvailableSize() {
             var style = window.getComputedStyle(viewportEl);
             var padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
             var padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
             var height = viewportEl.clientHeight;
-            var maxH = parseFloat(style.maxHeight);
-            if (!isExpanded() && isFinite(maxH) && maxH > 0) height = maxH;
+            var maxH = parseFloat(window.getComputedStyle(container).maxHeight);
+            if (!isExpanded() && isFinite(maxH) && maxH > 0) {
+                height = maxH - (container.offsetHeight - viewportEl.clientHeight);
+            }
             return { width: Math.max(0, viewportEl.clientWidth - padX), height: Math.max(0, height - padY) };
         }
 
+        function measurePage(p) {
+            var vp = getPageViewport(p.page, 1, p.rotation);
+            p.baseW = vp.width;
+            p.baseH = vp.height;
+        }
+
         function measureBase() {
-            pages.forEach(function(p) {
-                var vp = getPageViewport(p.page, 1, rotation);
-                p.baseW = vp.width;
-                p.baseH = vp.height;
-            });
+            pages.forEach(measurePage);
         }
 
         function layout() {
@@ -697,7 +741,7 @@
             }
             var num = 1;
             while (num <= pages.length) {
-                var row = el('div');
+                var row = el('div', 'd-flex align-items-start justify-content-center gap-3');
                 row.setAttribute('data-pdf-role', 'spread-row');
                 rowOf(num).forEach(function(n) { row.appendChild(pages[n - 1].el); });
                 pagesEl.appendChild(row);
@@ -836,8 +880,8 @@
 
         // ---- Rendering --------------------------------------------------------
 
-        function renderKey() {
-            return scale.toFixed(4) + '|' + rotation;
+        function renderKey(p) {
+            return scale.toFixed(4) + '|' + p.rotation;
         }
 
         function scheduleRender() {
@@ -861,15 +905,14 @@
             if (!pages.length) return;
             var top = viewportEl.scrollTop;
             var h = viewportEl.clientHeight || 600;
-            var key = renderKey();
             var wanted = [];
 
             pages.forEach(function(p) {
                 var pTop = p.el.offsetTop;
                 var pBottom = pTop + p.el.offsetHeight;
                 if (pBottom >= top - h && pTop <= top + 2 * h) {
-                    if (p.renderedKey !== key) wanted.push(p);
-                    else if (p.textLayerKey !== rotation) buildTextLayer(p);
+                    if (p.renderedKey !== renderKey(p)) wanted.push(p);
+                    else if (p.textLayerKey !== p.rotation) buildTextLayer(p);
                 } else if ((pBottom < top - 3 * h || pTop > top + 4 * h) && p.canvas) {
                     releasePage(p);
                 }
@@ -887,14 +930,14 @@
         function renderNext() {
             if (rendering || !renderQueue.length) return;
             var p = renderQueue.shift();
-            var key = renderKey();
+            var key = renderKey(p);
             if (p.renderedKey === key) {
                 renderNext();
                 return;
             }
             rendering = true;
 
-            var viewport = getPageViewport(p.page, scale, rotation);
+            var viewport = getPageViewport(p.page, scale, p.rotation);
             var dpr = window.devicePixelRatio || 1;
             var pixels = viewport.width * viewport.height * dpr * dpr;
             if (pixels > MAX_CANVAS_PIXELS) {
@@ -903,7 +946,7 @@
 
             // Draw off-screen and swap in when done, so the previous (stretched) image stays
             // visible during zoom instead of flashing blank
-            var canvas = document.createElement('canvas');
+            var canvas = el('canvas', 'position-absolute top-0 start-0 w-100 h-100');
             canvas.width = Math.floor(viewport.width * dpr);
             canvas.height = Math.floor(viewport.height * dpr);
 
@@ -912,8 +955,7 @@
                 if (!firstRenderDone) {
                     firstRenderDone = true;
                     if (loadingEl) {
-                        loadingEl.style.display = 'none';
-                        loadingEl.classList.add('hidden');
+                        loadingEl.classList.add('d-none');
                     }
                     pagesEl.style.visibility = '';
                     setState('ready');
@@ -929,7 +971,7 @@
                     readyCallbacks.splice(0).forEach(function(fn) { fn(); });
                     document.dispatchEvent(new CustomEvent('scouting-pdf:ready', { detail: { index: viewerIndex } }));
                 }
-                if (p.renderedKey !== renderKey()) scheduleRender();
+                if (p.renderedKey !== renderKey(p)) scheduleRender();
                 renderNext();
             }
 
@@ -943,7 +985,7 @@
                 p.el.insertBefore(canvas, p.el.firstChild);
                 p.canvas = canvas;
                 p.renderedKey = key;
-                if (p.textLayerKey !== rotation) buildTextLayer(p);
+                if (p.textLayerKey !== p.rotation) buildTextLayer(p);
                 done();
             }).catch(function(err) {
                 console.error('Scouting PDF: render error on page ' + p.num, err);
@@ -973,13 +1015,14 @@
             p.highlighted = [];
         }
 
+        // Only needed while text selection is on; skipping it spares a text extraction per page
         function buildTextLayer(p) {
-            if (!pdfLib || !pdfLib.TextLayer || p.textLayerKey === rotation || p.textLayerPending === rotation) return;
-            var rot = rotation;
+            if (!textSelect || !pdfLib || !pdfLib.TextLayer || p.textLayerKey === p.rotation || p.textLayerPending === p.rotation) return;
+            var rot = p.rotation;
             p.textLayerPending = rot;
             getText(p).then(function(tc) {
                 p.textLayerPending = null;
-                if (rotation !== rot || !p.canvas || !tc.items.length) return;
+                if (p.rotation !== rot || !p.canvas || !tc.items.length) return;
                 removeTextLayer(p);
                 var div = el('div', 'textLayer');
                 // Scale 1: the layer follows zoom through --total-scale-factor on the page
@@ -1005,7 +1048,7 @@
             textSelect = on;
             container.classList.toggle('is-text-select', on);
             setPressed(textSelectBtn, on);
-            storageSet('scouting-pdf:text-select', on ? '1' : '0');
+            if (on) pages.forEach(function(p) { if (p.canvas) buildTextLayer(p); });
         }
 
         // ---- Search -------------------------------------------------------------
@@ -1170,7 +1213,6 @@
 
         function openFindbar() {
             if (!findbar) return;
-            closeMenu();
             findbar.hidden = false;
             setPressed(searchBtn, true);
             findInput.focus();
@@ -1233,6 +1275,12 @@
         var thumbObserver = null;
         var thumbButtons = [];
 
+        // On a narrow viewer the sidebar slides over the pages (see sizeViewer) rather than
+        // sitting beside them
+        function sidebarCovers() {
+            return container.clientWidth < SIDEBAR_BESIDE_MIN;
+        }
+
         function openSidebar(tab) {
             if (!sidebar) return;
             if (sidebar.hidden) {
@@ -1286,47 +1334,62 @@
                 btn.type = 'button';
                 btn.setAttribute('data-pdf-thumb', String(p.num));
                 btn.setAttribute('aria-label', 'Go to ' + describePage(p.num));
-                var box = el('span', 'scouting-pdf-thumb');
+                var box = el('span', 'd-block overflow-hidden bg-white border border-2');
                 box.style.width = THUMB_WIDTH + 'px';
                 box.style.height = Math.round(THUMB_WIDTH * p.baseH / p.baseW) + 'px';
                 btn.appendChild(box);
                 btn.appendChild(el('span', 'small text-muted', labelFor(p.num)));
                 btn.addEventListener('click', function() {
                     goToPage(p.num, true);
-                    if (window.matchMedia('(max-width: 767.98px)').matches) closeSidebar();
+                    if (sidebarCovers()) closeSidebar();
                 });
                 list.appendChild(btn);
                 thumbButtons[p.num - 1] = btn;
             });
             host.appendChild(list);
 
-            var draw = function(btn) {
-                var p = pages[parseInt(btn.getAttribute('data-pdf-thumb'), 10) - 1];
-                var box = btn.firstChild;
-                if (box.firstChild) return;
-                var dpr = window.devicePixelRatio || 1;
-                var vp = getPageViewport(p.page, THUMB_WIDTH / p.baseW, rotation);
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.floor(vp.width * dpr);
-                canvas.height = Math.floor(vp.height * dpr);
-                p.page.render({ canvas: canvas, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise.then(function() {
-                    box.appendChild(canvas);
-                }).catch(function() {});
-            };
             if ('IntersectionObserver' in window) {
                 thumbObserver = new IntersectionObserver(function(entries) {
                     entries.forEach(function(entry) {
                         if (entry.isIntersecting) {
                             thumbObserver.unobserve(entry.target);
-                            draw(entry.target);
+                            drawThumb(entry.target);
                         }
                     });
                 }, { root: sidebar, rootMargin: '300px 0px' });
                 thumbButtons.forEach(function(b) { thumbObserver.observe(b); });
             } else {
-                thumbButtons.forEach(draw);
+                thumbButtons.forEach(drawThumb);
             }
             updateThumbSelection();
+        }
+
+        function drawThumb(btn) {
+            var p = pages[parseInt(btn.getAttribute('data-pdf-thumb'), 10) - 1];
+            var box = btn.firstChild;
+            if (box.firstChild) return;
+            var dpr = window.devicePixelRatio || 1;
+            var rot = p.rotation;
+            var vp = getPageViewport(p.page, THUMB_WIDTH / p.baseW, rot);
+            var canvas = el('canvas', 'd-block w-100 h-100');
+            canvas.width = Math.floor(vp.width * dpr);
+            canvas.height = Math.floor(vp.height * dpr);
+            p.page.render({ canvas: canvas, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise.then(function() {
+                // A quick second rotation may have started a newer drawing
+                if (p.rotation !== rot) return;
+                box.textContent = '';
+                box.appendChild(canvas);
+            }).catch(function() {});
+        }
+
+        // After a page is rotated, redraw just its thumbnail
+        function redrawThumb(p) {
+            var btn = thumbButtons[p.num - 1];
+            if (!btn) return;
+            var box = btn.firstChild;
+            box.textContent = '';
+            box.style.height = Math.round(THUMB_WIDTH * p.baseH / p.baseW) + 'px';
+            drawThumb(btn);
         }
 
         function resetThumbs() {
@@ -1340,7 +1403,10 @@
             if (!thumbButtons.length) return;
             thumbButtons.forEach(function(b, i) {
                 var on = i + 1 === currentPage;
-                b.classList.toggle('is-current', on);
+                b.firstChild.classList.toggle('border-primary', on);
+                b.lastChild.classList.toggle('text-primary', on);
+                b.lastChild.classList.toggle('fw-bold', on);
+                b.lastChild.classList.toggle('text-muted', !on);
                 if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
             });
             var btn = thumbButtons[currentPage - 1];
@@ -1397,7 +1463,7 @@
                     if (!p) return;
                     var offset;
                     if (explicit[1] && explicit[1].name === 'XYZ' && typeof explicit[3] === 'number') {
-                        var vp = getPageViewport(p.page, scale, rotation);
+                        var vp = getPageViewport(p.page, scale, p.rotation);
                         var pt = vp.convertToViewportPoint(explicit[2] || 0, explicit[3]);
                         offset = Math.max(0, pt[1] - 8);
                     }
@@ -1503,7 +1569,7 @@
                 add('File name', fileNameFromUrl(pdfUrl));
 
                 host.textContent = '';
-                var dl = el('dl', 'small p-3 mb-0 scouting-pdf-info');
+                var dl = el('dl', 'p-3 mb-0');
                 rows.forEach(function(row, i) {
                     if (i === archiveCount && archiveCount) dl.appendChild(el('hr'));
                     dl.appendChild(el('dt', '', row[0]));
@@ -1514,6 +1580,8 @@
         }
 
         if (sidebar) {
+            // Open beside the pages when there's room; where it would cover the page, start closed
+            sidebar.hidden = sidebarCovers();
             setPressed(sidebarBtn, !sidebar.hidden);
             var tabButtons = sidebar.querySelectorAll('[data-pdf-tab]');
             for (var t = 0; t < tabButtons.length; t++) {
@@ -1534,108 +1602,65 @@
             }
         }
 
-        // ---- Menu, dialogs and messages -------------------------------------------
+        // ---- Dialogs and messages -------------------------------------------------
 
-        function openMenu() {
-            if (!menuEl) return;
-            menuEl.hidden = false;
-            var menuCloseBtn = control('menu-close');
-            if (menuCloseBtn) {
-                menuCloseBtn.classList.remove('btn-link', 'text-muted');
-                if (!menuCloseBtn.classList.contains('btn-close')) menuCloseBtn.classList.add('btn-close');
-            }
-            if (moreBtn) {
-                moreBtn.setAttribute('aria-expanded', 'true');
-                var moreIcon = moreBtn.querySelector('i');
-                if (moreIcon) {
-                    moreIcon.classList.remove('bi-three-dots');
-                    moreIcon.classList.add('bi-x-lg');
-                }
-                var moreText = moreBtn.querySelector('.scouting-pdf-btn-label');
-                if (moreText) moreText.textContent = 'Close';
-            }
-            var first = menuEl.querySelector('[role^="menuitem"]:not([hidden])');
-            if (first) first.focus();
-        }
-
-        function closeMenu() {
-            if (!menuEl || menuEl.hidden) return false;
-            menuEl.hidden = true;
-            if (moreBtn) {
-                moreBtn.setAttribute('aria-expanded', 'false');
-                var moreIcon = moreBtn.querySelector('i');
-                if (moreIcon) {
-                    moreIcon.classList.remove('bi-x-lg');
-                    moreIcon.classList.add('bi-three-dots');
-                }
-                var moreText = moreBtn.querySelector('.scouting-pdf-btn-label');
-                if (moreText) moreText.textContent = 'More';
-            }
-            return true;
-        }
-
-        if (moreBtn && menuEl) {
-            moreBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                if (menuEl.hidden) openMenu(); else closeMenu();
-            });
-            menuEl.addEventListener('keydown', function(e) {
-                var items = Array.prototype.filter.call(menuEl.querySelectorAll('[role^="menuitem"]'), function(i) { return !i.hidden; });
-                var at = items.indexOf(document.activeElement);
-                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    closeMenu();
-                    moreBtn.focus();
-                }
-            });
-            menuEl.addEventListener('click', function(e) {
-                if (e.target.closest('[role^="menuitem"]') || e.target.closest('[data-pdf-control="menu-close"]')) {
-                    var wasClose = !!e.target.closest('[data-pdf-control="menu-close"]');
-                    closeMenu();
-                    if (wasClose && moreBtn) moreBtn.focus();
-                }
-            });
-            document.addEventListener('click', function(e) {
-                if (!menuEl.hidden && !menuEl.contains(e.target) && !moreBtn.contains(e.target)) closeMenu();
-            });
-        }
-
+        // The Cite and clipping windows are a Bootstrap modal (the theme's bootstrap.bundle
+        // opens and closes it, traps focus and closes it on Esc), placed over the document
+        // area with a light wash rather than a dark backdrop over the whole web page
+        var dialogOpen = false;
         var dialogOpener = null;
-        function openDialog(title, body) {
+        var modal = (dialog && window.bootstrap && window.bootstrap.Modal) ? window.bootstrap.Modal.getOrCreateInstance(dialog) : null;
+
+        function dialogClosed() {
+            dialogOpen = false;
+            if (dialogOpener && dialogOpener.focus && container.contains(dialogOpener)) dialogOpener.focus();
+            else container.focus({ preventScroll: true });
+        }
+
+        // size: 'lg' (the default) or 'xl' for a wide picture
+        function openDialog(title, body, size) {
             if (!dialog) return;
-            closeMenu();
             dialogOpener = document.activeElement;
             q('[data-pdf-role="dialog-title"]').textContent = title;
             var host = q('[data-pdf-role="dialog-body"]');
             host.textContent = '';
             host.appendChild(body);
-            if (backdrop) backdrop.hidden = false;
-            container.classList.add('has-dialog-open');
-            dialog.hidden = false;
-            var focusable = dialog.querySelector('input, button:not([data-pdf-control="dialog-close"]), textarea');
-            (focusable || dialog.querySelector('button')).focus();
+            var box = dialog.querySelector('.modal-dialog');
+            box.classList.toggle('modal-xl', size === 'xl');
+            box.classList.toggle('modal-lg', size !== 'xl');
+            initTooltips(host);
+            dialogOpen = true;
+            if (modal) {
+                modal.show();
+            } else {
+                dialog.style.display = 'block';
+                dialog.classList.add('show');
+            }
         }
 
         function closeDialog() {
-            if (!dialog || dialog.hidden) return false;
-            dialog.hidden = true;
-            if (backdrop) backdrop.hidden = true;
-            container.classList.remove('has-dialog-open');
-            if (dialogOpener && dialogOpener.focus && container.contains(dialogOpener)) dialogOpener.focus();
-            else container.focus({ preventScroll: true });
+            if (!dialogOpen) return false;
+            if (modal) {
+                modal.hide();
+            } else {
+                dialog.classList.remove('show');
+                dialog.style.display = 'none';
+                dialogClosed();
+            }
             return true;
         }
 
         if (dialog) {
-            var closeBtn = control('dialog-close');
-            if (closeBtn) closeBtn.addEventListener('click', closeDialog);
-        }
-        if (backdrop) {
-            backdrop.addEventListener('click', closeDialog);
+            dialog.addEventListener('hidden.bs.modal', dialogClosed);
+            // Clicking the light wash around the window closes it (Bootstrap only does that for
+            // its own dark backdrop, which the viewer doesn't use)
+            dialog.addEventListener('click', function(e) {
+                if (e.target === dialog || e.target === dialog.firstElementChild) closeDialog();
+            });
+            if (!modal) {
+                var closeBtn = control('dialog-close');
+                if (closeBtn) closeBtn.addEventListener('click', closeDialog);
+            }
         }
 
         function toast(message, actionLabel, action, timeout) {
@@ -1644,28 +1669,20 @@
             if (existing.length > 2) {
                 existing[0].remove();
             }
-            var t = el('div', 'toast show align-items-center shadow');
+            // Bootstrap's toast with a close button, as in its documentation
+            var t = el('div', 'toast show align-items-center');
             t.setAttribute('role', 'status');
-            var row = el('div', 'd-flex align-items-center gap-2 p-2');
-            
-            var msgEl = el('div', 'toast-body p-1 small flex-grow-1 d-flex align-items-center gap-1');
-            if (message.indexOf('copied') !== -1 || message.indexOf('Copied') !== -1) {
-                msgEl.innerHTML = '<i class="bi bi-check-circle-fill text-success fs-6" aria-hidden="true"></i> <span class="fw-semibold">' + message + '</span>';
-            } else {
-                msgEl.textContent = message;
-            }
-            row.appendChild(msgEl);
-
+            var row = el('div', 'd-flex');
+            row.appendChild(el('div', 'toast-body', message));
             if (actionLabel) {
-                var btn = el('button', 'btn btn-sm btn-sm-green text-nowrap', actionLabel);
+                var btn = el('button', 'btn btn-primary btn-sm my-auto text-nowrap', actionLabel);
                 btn.type = 'button';
                 btn.addEventListener('click', function() { action(); t.remove(); });
                 row.appendChild(btn);
             }
-            var x = el('button', 'btn-close ms-auto flex-shrink-0');
+            var x = el('button', 'btn-close me-2 m-auto');
             x.type = 'button';
             x.setAttribute('aria-label', 'Close');
-            x.title = 'Close';
             x.addEventListener('click', function() { t.remove(); });
             row.appendChild(x);
             t.appendChild(row);
@@ -1681,12 +1698,13 @@
                     }
                 }, ms);
             }
+            return t;
         }
 
         function copyText(text, html) {
             var fallback = function() {
                 return new Promise(function(resolve, reject) {
-                    var ta = el('textarea', 'scouting-pdf-copy-buffer');
+                    var ta = el('textarea', 'position-fixed top-0 start-0 opacity-0');
                     ta.value = text;
                     ta.setAttribute('readonly', '');
                     container.appendChild(ta);
@@ -1741,38 +1759,32 @@
 
         function openCite() {
             var num = currentPage;
-            var body = el('div', 'scouting-pdf-cite-dialog-body');
+            var body = el('div');
 
-            // 1. Context subheader
-            var intro = el('div', 'mb-3 pb-2 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2');
-            var introLeft = el('div', 'd-flex align-items-center gap-2');
-            introLeft.innerHTML = '<span class="badge sm_green_bkg_color text-white px-2 py-1 fs-6 fw-semibold"><i class="bi bi-file-earmark-text me-1" aria-hidden="true"></i> Citing ' + escHtml(describePage(num)) + '</span>';
+            // Which page of which document, then one line on what this window is for
             var docTitle = cite.title || cite.postTitle || container.getAttribute('data-pdf-title') || fileNameFromUrl(pdfUrl);
-            var titleEl = el('span', 'text-muted small fw-medium text-truncate', docTitle);
-            titleEl.style.maxWidth = '360px';
-            introLeft.appendChild(titleEl);
-            intro.appendChild(introLeft);
+            var context = el('p', 'd-flex align-items-center gap-2 mb-2');
+            context.appendChild(el('span', 'badge text-bg-primary flex-shrink-0', describePage(num)));
+            context.appendChild(el('span', 'text-muted text-truncate', docTitle));
+            body.appendChild(context);
+            body.appendChild(el('p', '', 'Copy a ready-made citation for this page, copy a link that opens right at it for email or social media, save it to Zotero or EndNote, or clip part of the page as a picture.'));
 
-            var note = el('div', 'small text-muted fst-italic', 'Academic reference & link generator');
-            intro.appendChild(note);
-            body.appendChild(intro);
-
-            // 2. Academic Citation Section ("Notes & Bibliography")
-            var citeCard = el('div', 'scouting-pdf-cite-card p-3 mb-3');
-            var citeHead = el('div', 'd-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom');
-            
-            var styleWrap = el('div', 'd-flex align-items-center gap-2');
-            var styleLabel = el('label', 'form-label mb-0 fw-bold small text-uppercase text-muted', 'Style:');
+            // Citation
+            var citeCard = el('div', 'card mb-3');
+            var citeBody = el('div', 'card-body');
+            citeBody.appendChild(el('h6', 'card-title', 'Citation'));
+            var citeHead = el('div', 'd-flex flex-wrap align-items-center gap-2 mb-3');
+            var styleLabel = el('label', 'form-label mb-0', 'Style');
             styleLabel.htmlFor = container.id + '-cite-style';
-            var styleSelect = el('select', 'form-select form-select-sm fw-semibold');
+            var styleSelect = el('select', 'form-select w-auto mw-100');
             styleSelect.id = container.id + '-cite-style';
             styleSelect.setAttribute('data-pdf-control', 'cite-style-select');
-            styleSelect.style.width = 'auto';
 
+            // [key, menu label, name used in the "copied" message]
             var styles = [
-                ['chicago', 'Chicago (Notes & Bibliography)'],
-                ['mla', 'MLA (Modern Language Association)'],
-                ['apa', 'APA (American Psychological Association)']
+                ['chicago', 'Chicago — used by most historians', 'Chicago'],
+                ['mla', 'MLA — common in schools', 'MLA'],
+                ['apa', 'APA — used in the social sciences', 'APA']
             ];
             styles.forEach(function(s) {
                 var opt = el('option', '', s[1]);
@@ -1780,95 +1792,93 @@
                 if (s[0] === currentCiteStyle) opt.selected = true;
                 styleSelect.appendChild(opt);
             });
-            styleWrap.appendChild(styleLabel);
-            styleWrap.appendChild(styleSelect);
-            citeHead.appendChild(styleWrap);
 
-            var copyCiteBtn = el('button', 'btn btn-sm btn-sm-green fw-semibold px-3 d-flex align-items-center gap-1 shadow-sm');
+            var copyCiteBtn = el('button', 'btn btn-primary ms-auto px-3 py-2');
             copyCiteBtn.type = 'button';
-            copyCiteBtn.innerHTML = '<i class="bi bi-clipboard-check" aria-hidden="true"></i> Copy Citation';
+            copyCiteBtn.innerHTML = iconLabel('bi-clipboard-check', 'Copy citation');
+            citeHead.appendChild(styleLabel);
+            citeHead.appendChild(styleSelect);
             citeHead.appendChild(copyCiteBtn);
-            citeCard.appendChild(citeHead);
+            citeBody.appendChild(citeHead);
 
-            var list = el('div', 'd-flex flex-column mb-2');
-            citeCard.appendChild(list);
-
-            var citeHelp = el('div', 'small text-muted fst-italic', 'Check details, punctuation, and italics against your publisher or style guide before publishing.');
-            citeCard.appendChild(citeHelp);
+            var list = el('div', 'mb-2');
+            citeBody.appendChild(list);
+            citeBody.appendChild(el('div', 'form-text', 'Check the details against the original before you publish. Dates on older records are sometimes estimates.'));
+            citeCard.appendChild(citeBody);
             body.appendChild(citeCard);
 
-            // 3. Direct Page Link Section (Checkboxes + Call to Action together!)
-            var linkCard = el('div', 'scouting-pdf-cite-card p-3 mb-3');
-            var linkTitle = el('div', 'fw-bold text-dark mb-2 d-flex align-items-center gap-1');
-            linkTitle.innerHTML = '<i class="bi bi-link-45deg sm_green_color fs-5" aria-hidden="true"></i> Direct Page Link & Settings';
-            linkCard.appendChild(linkTitle);
+            // Link to this page
+            var linkCard = el('div', 'card mb-3');
+            var linkBody = el('div', 'card-body');
+            linkBody.appendChild(el('h6', 'card-title', 'Link to this page'));
 
-            var checksWrap = el('div', 'd-flex flex-column gap-2 mb-3');
+            var checksWrap = el('div', 'mb-3');
 
-            var pageSwitch = el('div', 'form-check');
-            var cb = el('input', 'form-check-input');
+            var pageSwitch = el('div', 'd-flex align-items-center gap-2 mb-2');
+            var cb = el('input', 'form-check-input fs-3 rounded-0 m-0');
             cb.type = 'checkbox';
             cb.checked = true;
             cb.id = container.id + '-cite-page';
-            var lab = el('label', 'form-check-label fw-medium', 'Include page number in link (open straight to ' + describePage(num) + ')');
+            var lab = el('label', 'form-check-label', 'Point to ' + describePage(num) + ' (uncheck to cite the whole document)');
             lab.htmlFor = cb.id;
             pageSwitch.appendChild(cb);
             pageSwitch.appendChild(lab);
             checksWrap.appendChild(pageSwitch);
 
-            var settingsSwitch = el('div', 'form-check');
-            var cbSettings = el('input', 'form-check-input');
+            var settingsSwitch = el('div', 'd-flex align-items-center gap-2');
+            var cbSettings = el('input', 'form-check-input fs-3 rounded-0 m-0');
             cbSettings.type = 'checkbox';
             cbSettings.checked = false;
             cbSettings.id = container.id + '-cite-settings';
-            var labSettings = el('label', 'form-check-label', 'Include current view settings in link (zoom, rotation, adjustments)');
+            var labSettings = el('label', 'form-check-label', 'Show it the way I see it (same zoom, rotation and image adjustments)');
             labSettings.htmlFor = cbSettings.id;
             settingsSwitch.appendChild(cbSettings);
             settingsSwitch.appendChild(labSettings);
             checksWrap.appendChild(settingsSwitch);
-            linkCard.appendChild(checksWrap);
+            linkBody.appendChild(checksWrap);
 
-            // Live URL preview + Copy Link Button (co-located with checkboxes!)
             var urlGroup = el('div', 'input-group');
-            var urlIcon = el('span', 'input-group-text bg-light text-muted');
-            urlIcon.innerHTML = '<i class="bi bi-link" aria-hidden="true"></i>';
-            var urlInput = el('input', 'form-control form-control-sm scouting-pdf-cite-link-input');
+            var urlIcon = el('span', 'input-group-text');
+            urlIcon.innerHTML = '<i class="bi bi-link-45deg fs-5 lh-1" aria-hidden="true"></i>';
+            var urlInput = el('input', 'form-control');
             urlInput.type = 'text';
             urlInput.readOnly = true;
-            urlInput.setAttribute('aria-label', 'Direct link to this page');
+            urlInput.setAttribute('aria-label', 'Link to this page');
 
-            var copyLinkBtn = el('button', 'btn btn-sm btn-sm-green fw-semibold px-3 d-flex align-items-center gap-1 text-nowrap shadow-sm');
+            var copyLinkBtn = el('button', 'btn btn-primary px-3 py-2');
             copyLinkBtn.type = 'button';
-            copyLinkBtn.innerHTML = '<i class="bi bi-link-45deg" aria-hidden="true"></i> Copy Link';
+            copyLinkBtn.innerHTML = iconLabel('bi-link-45deg', 'Copy link');
 
             urlGroup.appendChild(urlIcon);
             urlGroup.appendChild(urlInput);
             urlGroup.appendChild(copyLinkBtn);
-            linkCard.appendChild(urlGroup);
+            linkBody.appendChild(urlGroup);
+            linkCard.appendChild(linkBody);
             body.appendChild(linkCard);
 
-            // 4. Secondary Researcher Tools Footer
-            var toolsRow = el('div', 'd-flex flex-wrap align-items-center justify-content-between pt-2 border-top gap-2 text-muted');
-            var toolsLeft = el('div', 'small fw-medium text-muted');
-            toolsLeft.innerHTML = '<i class="bi bi-tools me-1" aria-hidden="true"></i> Other researcher tools:';
-            toolsRow.appendChild(toolsLeft);
-
+            // More ways to save and share
+            var toolsCard = el('div', 'card');
+            var toolsBody = el('div', 'card-body');
+            toolsBody.appendChild(el('h6', 'card-title', 'More ways to save and share'));
             var toolsBtns = el('div', 'd-flex flex-wrap gap-2');
-            var ris = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            var ris = el('button', 'btn btn-outline-secondary px-3 py-2');
             ris.type = 'button';
             ris.setAttribute('data-pdf-control', 'cite-ris');
-            ris.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> Download .ris (Zotero / EndNote)';
+            ris.innerHTML = iconLabel('bi-download', 'Download for Zotero / EndNote');
+            ris.setAttribute('data-bs-toggle', 'tooltip');
+            ris.setAttribute('data-bs-title', 'Saves a small .ris file. Open it and Zotero, EndNote or Mendeley adds this document to your library.');
 
-            var areaBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            var areaBtn = el('button', 'btn btn-outline-secondary px-3 py-2');
             areaBtn.type = 'button';
-            areaBtn.innerHTML = '<i class="bi bi-camera" aria-hidden="true"></i> Select area to cite & share';
+            areaBtn.innerHTML = iconLabel('bi-camera', 'Clip part of the page');
             areaBtn.setAttribute('data-bs-toggle', 'tooltip');
-            areaBtn.setAttribute('data-bs-title', 'Select an area of this page to share as an image with embedded link and citation');
+            areaBtn.setAttribute('data-bs-title', 'Draw a box around part of this page and save it as a picture, with the title, page and link printed underneath');
 
             toolsBtns.appendChild(ris);
             toolsBtns.appendChild(areaBtn);
-            toolsRow.appendChild(toolsBtns);
-            body.appendChild(toolsRow);
+            toolsBody.appendChild(toolsBtns);
+            toolsCard.appendChild(toolsBody);
+            body.appendChild(toolsCard);
 
             var draw = function() {
                 var withSettings = cb.checked && cbSettings.checked;
@@ -1882,12 +1892,12 @@
                 styles.forEach(function(s) {
                     var styleKey = s[0];
                     var c = cites[styleKey];
-                    var box = el('div', 'scouting-pdf-citation');
+                    var box = el('div');
                     box.setAttribute('data-pdf-citation', styleKey);
                     if (styleKey !== currentCiteStyle) {
                         box.hidden = true;
                     }
-                    var text = el('div', 'scouting-pdf-cite-text user-select-all');
+                    var text = el('p', 'border rounded p-3 mb-0 user-select-all');
                     text.innerHTML = c.html;
                     box.appendChild(text);
                     list.appendChild(box);
@@ -1899,8 +1909,8 @@
                 var info = citationInfo(num, cb.checked, withSettings);
                 var cites = buildCitations(info, new Date());
                 var c = cites[currentCiteStyle] || cites.chicago;
-                var styleName = styleSelect.options[styleSelect.selectedIndex] ? styleSelect.options[styleSelect.selectedIndex].text.split(' (')[0] : 'Citation';
-                copyWithFeedback(c.text, c.html, styleName + ' citation');
+                var style = styles.filter(function(s) { return s[0] === currentCiteStyle; })[0];
+                copyWithFeedback(c.text, c.html, (style ? style[2] : 'Chicago') + ' citation');
             });
 
             copyLinkBtn.addEventListener('click', function() {
@@ -1937,11 +1947,7 @@
             cbSettings.addEventListener('change', draw);
 
             draw();
-            openDialog('Cite this document', body);
-        }
-
-        function copyPageLink() {
-            copyWithFeedback(pageLink(currentPage, false), null, 'Link');
+            openDialog('Cite or share this page', body);
         }
 
         function downloadPdf() {
@@ -1952,129 +1958,6 @@
             }).catch(function(err) {
                 console.error('Scouting PDF: download failed', err);
                 toast('The download didn’t work. Please try again.');
-            });
-        }
-
-        // "1-3, 7" -> [1, 2, 3, 7]
-        function parseRanges(text, total) {
-            var out = [];
-            String(text).split(',').forEach(function(part) {
-                var m = /^\s*(\d+)\s*(?:-\s*(\d+)\s*)?$/.exec(part);
-                if (!m) return;
-                var a = parseInt(m[1], 10);
-                var b = m[2] ? parseInt(m[2], 10) : a;
-                if (a > b) { var tmp = a; a = b; b = tmp; }
-                for (var n = Math.max(1, a); n <= Math.min(total, b); n++) {
-                    if (out.indexOf(n) === -1) out.push(n);
-                }
-            });
-            return out;
-        }
-
-        function openPrint() {
-            if (!allowDownload) return;
-            var body = el('form', 'd-flex flex-column gap-2');
-            var choices = [['current', 'This page (' + describePage(currentPage) + ')'], ['all', 'All ' + pages.length + ' pages'], ['range', 'Pages:']];
-            var rangeInput = el('input', 'form-control form-control-sm d-inline-block w-auto ms-2');
-            rangeInput.type = 'text';
-            rangeInput.placeholder = 'e.g. 1-3, 7';
-            rangeInput.setAttribute('aria-label', 'PDF pages to print');
-            choices.forEach(function(c, i) {
-                var wrap = el('div', 'form-check d-flex align-items-center');
-                var r = el('input', 'form-check-input me-2');
-                r.type = 'radio';
-                r.name = container.id + '-print-range';
-                r.value = c[0];
-                r.id = container.id + '-print-' + c[0];
-                r.checked = i === 0;
-                var l = el('label', 'form-check-label', c[1]);
-                l.htmlFor = r.id;
-                wrap.appendChild(r);
-                wrap.appendChild(l);
-                if (c[0] === 'range') {
-                    wrap.appendChild(rangeInput);
-                    rangeInput.addEventListener('focus', function() { r.checked = true; });
-                }
-                body.appendChild(wrap);
-            });
-            if (filterValue() !== 'none') body.appendChild(el('p', 'text-muted mb-0', 'Your brightness and contrast settings will be used for the printout.'));
-            var status = el('p', 'text-muted mb-0');
-            status.setAttribute('role', 'status');
-            var go = el('button', 'btn btn-sm btn-sm-green align-self-start', 'Print');
-            go.type = 'submit';
-            body.appendChild(status);
-            body.appendChild(go);
-            body.addEventListener('submit', function(e) {
-                e.preventDefault();
-                var mode = body.querySelector('input[type="radio"]:checked').value;
-                var list = mode === 'all' ? pages.map(function(p) { return p.num; })
-                    : mode === 'range' ? parseRanges(rangeInput.value, pages.length) : [currentPage];
-                if (!list.length) {
-                    status.textContent = 'Enter the pages to print, like 1-3, 7';
-                    rangeInput.focus();
-                    return;
-                }
-                go.disabled = true;
-                printPages(list, function(n) {
-                    status.textContent = 'Preparing page ' + n + ' of ' + list.length + '…';
-                }).then(function() {
-                    closeDialog();
-                }, function(err) {
-                    console.error('Scouting PDF: print failed', err);
-                    status.textContent = 'Printing didn’t work. Please try again.';
-                    go.disabled = false;
-                });
-            });
-            openDialog('Print', body);
-        }
-
-        // Draw each page into an image at print resolution, then print only those images
-        function printPages(list, onProgress) {
-            var urls = [];
-            var holder = el('div');
-            holder.id = 'scouting-pdf-print';
-            var filter = filterValue();
-            return list.reduce(function(chain, num, i) {
-                return chain.then(function() {
-                    if (onProgress) onProgress(i + 1);
-                    var p = pages[num - 1];
-                    var vp = getPageViewport(p.page, PRINT_DPI / 72, rotation);
-                    var canvas = document.createElement('canvas');
-                    canvas.width = Math.floor(vp.width);
-                    canvas.height = Math.floor(vp.height);
-                    return p.page.render({ canvas: canvas, viewport: vp, intent: 'print' }).promise.then(function() {
-                        return canvasToBlob(applyFilterToCanvas(canvas, filter));
-                    }).then(function(blob) {
-                        var url = URL.createObjectURL(blob);
-                        urls.push(url);
-                        var img = el('img');
-                        img.src = url;
-                        img.alt = describePage(num);
-                        img.setAttribute('data-pdf-print-page', String(num));
-                        holder.appendChild(img);
-                    });
-                });
-            }, Promise.resolve()).then(function() {
-                var old = document.getElementById('scouting-pdf-print');
-                if (old) old.remove();
-                document.body.appendChild(holder);
-                document.body.classList.add('scouting-pdf-printing');
-                var cleaned = false;
-                var cleanup = function() {
-                    if (cleaned) return;
-                    cleaned = true;
-                    window.removeEventListener('afterprint', cleanup);
-                    document.body.classList.remove('scouting-pdf-printing');
-                    holder.remove();
-                    urls.forEach(function(u) { URL.revokeObjectURL(u); });
-                };
-                window.addEventListener('afterprint', cleanup);
-                var imgs = holder.querySelectorAll('img');
-                return Promise.all(Array.prototype.map.call(imgs, function(img) {
-                    return img.decode ? img.decode().catch(function() {}) : Promise.resolve();
-                })).then(function() {
-                    window.print();
-                });
             });
         }
 
@@ -2157,14 +2040,20 @@
             cancelSnapshot();
             snap = { active: true };
             container.classList.add('is-snapshot');
-            toast('Drag across a page to choose the area to save. Press Esc to cancel.', null, null, 6000);
+            viewportEl.classList.add('user-select-none');
+            updateCursor();
+            snap.hint = toast('Drag a box around the part of the page you want to keep. Press Esc to cancel.', null, null, 6000);
         }
 
         function cancelSnapshot() {
             if (!snap) return false;
             if (snap.box) snap.box.remove();
+            // The drag instruction has done its job once the box is drawn (or cancelled)
+            if (snap.hint && snap.hint.parentNode) snap.hint.remove();
             snap = null;
             container.classList.remove('is-snapshot');
+            viewportEl.classList.remove('user-select-none');
+            updateCursor();
             return true;
         }
 
@@ -2176,7 +2065,7 @@
             snap.pageEl = pageEl;
             snap.x0 = e.clientX - r.left;
             snap.y0 = e.clientY - r.top;
-            snap.box = el('div', 'scouting-pdf-snap-box');
+            snap.box = el('div', 'position-absolute border border-2 border-primary bg-primary bg-opacity-10 pe-none');
             pageEl.appendChild(snap.box);
             snap.pointerId = e.pointerId;
             if (viewportEl.setPointerCapture) viewportEl.setPointerCapture(e.pointerId);
@@ -2212,7 +2101,7 @@
             }
             cancelSnapshot();
             if (!rect || rect.w < 8 || rect.h < 8) {
-                toast('That area is too small. Choose "Save an area as a picture" and drag across the part you want.');
+                toast('That box was too small. Open Cite, choose “Clip part of the page” and drag a bigger box.');
                 return;
             }
             saveSnapshot(num, rect).catch(function(err) {
@@ -2234,7 +2123,7 @@
                 h = rect.h * factor;
             }
             var renderScale = scale * factor;
-            var vp = getPageViewport(p.page, renderScale, rotation);
+            var vp = getPageViewport(p.page, renderScale, p.rotation);
             var area = document.createElement('canvas');
             area.width = Math.max(1, Math.round(w));
             area.height = Math.max(1, Math.round(h));
@@ -2307,28 +2196,43 @@
         }
 
         function openSnapshotDialog(blob, canvas, num, rect, info, name) {
-            var body = el('div', 'scouting-pdf-snapshot-dialog');
-            
-            var previewWrap = el('div', 'text-center p-2 mb-3 bg-light border rounded overflow-hidden');
-            var previewImg = el('img', 'img-fluid rounded shadow-sm');
-            previewImg.style.maxHeight = '240px';
-            previewImg.style.objectFit = 'contain';
+            var body = el('div');
+
+            // The picture as large as the window allows. Clicking it opens the full-size
+            // picture in a new tab, which matters when it had to be shrunk to fit.
             var blobUrl = URL.createObjectURL(blob);
+            var previewLink = el('a', 'd-block text-center mb-2');
+            previewLink.href = blobUrl;
+            previewLink.target = '_blank';
+            previewLink.rel = 'noopener';
+            previewLink.title = 'Open the picture full size in a new tab';
+            var previewImg = el('img', 'img-fluid border');
+            // Room left in the viewer's document area once the window's text and buttons are in
+            previewImg.style.maxHeight = 'max(12rem, calc(100vh - 28rem))';
             previewImg.src = blobUrl;
             previewImg.alt = info.title + ' — ' + describePage(num);
-            previewWrap.appendChild(previewImg);
-            body.appendChild(previewWrap);
+            previewLink.appendChild(previewImg);
+            body.appendChild(previewLink);
 
-            var note = el('p', 'small text-muted mb-3');
-            note.innerHTML = 'Image captured from <strong>' + escHtml(describePage(num)) + '</strong> with the citation and link embedded directly on the image.';
+            var note = el('p', 'text-muted', 'Clipped from ' + describePage(num) + '. The title, page and link are printed underneath, so the source travels with the picture.');
+            var shrunk = el('span', '', ' It’s shown smaller to fit your screen; click it to see it full size.');
+            shrunk.hidden = true;
+            note.appendChild(shrunk);
             body.appendChild(note);
+            // Mention the full-size view only when the picture had to be shrunk
+            var checkShrunk = function() {
+                if (!previewImg.clientWidth) return;
+                shrunk.hidden = previewImg.naturalWidth <= previewImg.clientWidth + 1 && previewImg.naturalHeight <= previewImg.clientHeight + 1;
+            };
+            previewImg.addEventListener('load', checkShrunk);
+            if (dialog) dialog.addEventListener('shown.bs.modal', checkShrunk, { once: true });
 
-            var settingsSwitch = el('div', 'form-check mb-3');
-            var cbSettings = el('input', 'form-check-input');
+            var settingsSwitch = el('div', 'd-flex align-items-center gap-2 mb-3');
+            var cbSettings = el('input', 'form-check-input fs-3 rounded-0 m-0');
             cbSettings.type = 'checkbox';
             cbSettings.checked = false;
             cbSettings.id = container.id + '-snap-settings';
-            var labSettings = el('label', 'form-check-label', 'Include current view settings in link (zoom, rotation, adjustments)');
+            var labSettings = el('label', 'form-check-label', 'Shared link shows the page the way I see it (same zoom, rotation and image adjustments)');
             labSettings.htmlFor = cbSettings.id;
             settingsSwitch.appendChild(cbSettings);
             settingsSwitch.appendChild(labSettings);
@@ -2338,18 +2242,18 @@
                 return pageLink(num, cbSettings.checked);
             }
 
-            var actionsRow = el('div', 'd-flex flex-wrap gap-2 mb-3');
+            var actionsRow = el('div', 'd-flex flex-wrap gap-2');
 
             if (navigator.share) {
-                var shareBtn = el('button', 'btn btn-sm btn-sm-green d-flex align-items-center gap-1');
+                var shareBtn = el('button', 'btn btn-primary px-3 py-2');
                 shareBtn.type = 'button';
-                shareBtn.innerHTML = '<i class="bi bi-share" aria-hidden="true"></i> Share image…';
+                shareBtn.innerHTML = iconLabel('bi-share', 'Share picture…');
                 shareBtn.addEventListener('click', function() {
                     var currentUrl = getShareUrl();
                     var file = new File([blob], name, { type: 'image/jpeg' });
                     var shareData = {
                         title: info.title + ' (' + describePage(num) + ')',
-                        text: info.title + ', ' + describePage(num) + ' — Scouting Memories: ' + currentUrl,
+                        text: info.title + ', ' + describePage(num) + ' — ' + info.site + ': ' + currentUrl,
                         url: currentUrl
                     };
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2360,51 +2264,50 @@
                 actionsRow.appendChild(shareBtn);
             }
 
-            var copyImgBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            var copyImgBtn = el('button', 'btn btn-outline-secondary px-3 py-2');
             copyImgBtn.type = 'button';
-            copyImgBtn.innerHTML = '<i class="bi bi-clipboard" aria-hidden="true"></i> Copy image';
+            copyImgBtn.innerHTML = iconLabel('bi-clipboard', 'Copy picture');
             copyImgBtn.addEventListener('click', function() {
-                var currentUrl = getShareUrl();
                 if (navigator.clipboard && window.ClipboardItem) {
                     var item = {};
                     item[blob.type || 'image/jpeg'] = blob;
                     navigator.clipboard.write([new ClipboardItem(item)]).then(function() {
-                        toast('Image copied to clipboard! (Link: ' + currentUrl + ')');
+                        toast('Picture copied. Paste it into an email, post or document.');
                     }).catch(function() {
                         canvasToBlob(canvas, 'image/png').then(function(pngBlob) {
                             return navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
                         }).then(function() {
-                            toast('Image copied to clipboard! (Link: ' + currentUrl + ')');
+                            toast('Picture copied. Paste it into an email, post or document.');
                         }).catch(function() {
-                            toast('Direct clipboard image copying not permitted by browser. Use Download instead.');
+                            toast('Your browser won’t let the picture be copied. Use “Download picture” instead.');
                         });
                     });
                 } else {
-                    toast('Clipboard image copying is not supported in this browser. Use Download instead.');
+                    toast('This browser can’t copy pictures. Use “Download picture” instead.');
                 }
             });
             actionsRow.appendChild(copyImgBtn);
 
-            var copyLinkBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            var copyLinkBtn = el('button', 'btn btn-outline-secondary px-3 py-2');
             copyLinkBtn.type = 'button';
-            copyLinkBtn.innerHTML = '<i class="bi bi-link-45deg" aria-hidden="true"></i> Copy link';
+            copyLinkBtn.innerHTML = iconLabel('bi-link-45deg', 'Copy link');
             copyLinkBtn.addEventListener('click', function() {
                 copyWithFeedback(getShareUrl(), null, 'Link');
             });
             actionsRow.appendChild(copyLinkBtn);
 
-            var downloadBtn = el('button', 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1');
+            var downloadBtn = el('button', 'btn btn-outline-secondary px-3 py-2');
             downloadBtn.type = 'button';
-            downloadBtn.innerHTML = '<i class="bi bi-download" aria-hidden="true"></i> Download JPG';
+            downloadBtn.innerHTML = iconLabel('bi-download', 'Download picture');
             downloadBtn.addEventListener('click', function() {
                 saveBlob(blob, name);
-                toast('Picture saved with embedded citation and link');
+                toast('Picture saved, with the title, page and link printed underneath.');
             });
             actionsRow.appendChild(downloadBtn);
 
             body.appendChild(actionsRow);
 
-            openDialog('Share & Cite Clipped Image', body);
+            openDialog('Share your clipping', body, 'xl');
         }
 
         // ---- Other controls ---------------------------------------------------------
@@ -2419,24 +2322,24 @@
             applyFit();
         }
 
+        // Turn only the page being read (a sideways map or chart), not the whole document
         function rotate() {
             if (!pages.length) return;
-            rotation = (rotation + 90) % 360;
-            pages.forEach(releasePage);
-            measureBase();
+            var p = pages[currentPage - 1];
+            p.rotation = (p.rotation + 90) % 360;
+            releasePage(p);
+            measurePage(p);
             layout();
             applyFit();
             goToPage(currentPage, true);
-            resetThumbs();
+            redrawThumb(p);
         }
 
         function toggleSpread() {
             if (!pages.length) return;
             var keep = currentPage;
             spread = !spread;
-            var item = control('spread');
-            if (item) item.setAttribute('aria-checked', spread ? 'true' : 'false');
-            if (item) item.classList.toggle('active', spread);
+            setPressed(spreadBtn, spread);
             arrangePages();
             if (!fitMode) fitMode = 'width';
             layout();
@@ -2444,10 +2347,14 @@
             goToPage(keep, true);
         }
 
-        // CSS-only "expanded" mode for browsers without the Fullscreen API on elements (iPhone)
+        // "Expanded" mode for browsers without the Fullscreen API on elements (iPhone): the
+        // viewer covers the window, and the page behind it stops scrolling
+        var EXPANDED = ['is-expanded', 'position-fixed', 'top-0', 'start-0', 'w-100', 'h-100', 'm-0', 'rounded-0'];
         function setExpanded(on) {
-            container.classList.toggle('is-expanded', on);
-            document.body.classList.toggle('scouting-pdf-lock', on);
+            EXPANDED.forEach(function(c) { container.classList.toggle(c, on); });
+            container.style.zIndex = on ? '1050' : '';
+            container.style.maxHeight = on ? 'none' : '';
+            document.body.classList.toggle('overflow-hidden', on);
             onViewerResized();
         }
 
@@ -2488,22 +2395,6 @@
             }
         }
 
-        // The theme's comment form: start a comment that points at this page
-        var commentBox = document.querySelector('#commentform textarea[name="comment"], #commentform #comment');
-        var commentItem = control('comment-page');
-        if (commentItem && commentBox && viewerIndex === 1) commentItem.hidden = false;
-        function commentOnPage() {
-            if (!commentBox) return;
-            var ref = '[p. ' + labelFor(currentPage) + '] ';
-            commentBox.value = commentBox.value ? commentBox.value.replace(/\s*$/, '\n') + ref : ref;
-            if (isExpanded()) {
-                if (getFullscreenElement()) toggleFullscreen(); else setExpanded(false);
-            }
-            commentBox.scrollIntoView({ block: 'center' });
-            commentBox.focus();
-            commentBox.setSelectionRange(commentBox.value.length, commentBox.value.length);
-        }
-
         var handlers = {
             prev: function() { stepPage(-1); },
             next: function() { stepPage(1); },
@@ -2520,19 +2411,13 @@
             'text-select': function() { setTextSelect(!textSelect); },
             cite: openCite,
             download: downloadPdf,
-            'copy-link': copyPageLink,
-            'comment-page': commentOnPage,
-            'menu-close': function() { closeMenu(); if (moreBtn) moreBtn.focus(); },
-            print: openPrint,
-            snapshot: startSnapshot,
-            spread: toggleSpread,
-            info: function() { openSidebar('info'); }
+            spread: toggleSpread
         };
         Object.keys(handlers).forEach(function(name) {
             var btn = control(name, name === 'prev' || name === 'next' ? 'scouting-pdf-' + name : null);
             if (!btn) return;
             btn.addEventListener('click', function() {
-                if (!pdfDoc && name !== 'fullscreen' && name !== 'menu-close' && name !== 'sidebar-close') return;
+                if (!pdfDoc && name !== 'fullscreen' && name !== 'sidebar-close') return;
                 handlers[name]();
             });
         });
@@ -2579,7 +2464,8 @@
             container.focus({ preventScroll: true });
             pan = { x: e.clientX, y: e.clientY, left: viewportEl.scrollLeft, top: viewportEl.scrollTop, id: e.pointerId };
             if (viewportEl.setPointerCapture) viewportEl.setPointerCapture(e.pointerId);
-            viewportEl.classList.add('is-panning');
+            viewportEl.classList.add('is-panning', 'user-select-none');
+            updateCursor();
         });
         viewportEl.addEventListener('pointermove', function(e) {
             if (snap && snap.box) {
@@ -2600,7 +2486,8 @@
                 try { viewportEl.releasePointerCapture(pan.id); } catch (err) {}
             }
             pan = null;
-            viewportEl.classList.remove('is-panning');
+            viewportEl.classList.remove('is-panning', 'user-select-none');
+            updateCursor();
         }
         viewportEl.addEventListener('pointerup', endPan);
         viewportEl.addEventListener('pointercancel', endPan);
@@ -2613,7 +2500,7 @@
                 return;
             }
             if (e.key === 'Escape') {
-                if (closeMenu() || closeDialog() || cancelSnapshot()) {
+                if (closeDialog() || cancelSnapshot()) {
                     e.preventDefault();
                     return;
                 }
@@ -2629,8 +2516,7 @@
                 return;
             }
             if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
-            if (dialog && !dialog.hidden) return;
-            if (menuEl && !menuEl.hidden) return;
+            if (dialogOpen) return;
             var handled = true;
             switch (e.key) {
                 case 'ArrowRight':
@@ -2667,10 +2553,6 @@
                 case 'r':
                 case 'R':
                     rotate();
-                    break;
-                case 't':
-                case 'T':
-                    setTextSelect(!textSelect);
                     break;
                 default:
                     handled = false;
@@ -2721,12 +2603,12 @@
         function showError() {
             setState('error');
             if (!loadingEl) return;
-            loadingEl.style.display = 'flex';
-            loadingEl.innerHTML = '<div class="card shadow-sm text-center p-4 mx-auto" style="max-width: 28rem;" data-pdf-role="error">' +
-                '<div class="h6 mb-2">Unable to display this document</div>' +
-                '<p class="text-muted small mb-3">It may still be loading from storage or be temporarily unavailable. Please try again.</p>' +
-                '<div><button type="button" class="btn btn-sm btn-sm-green" data-pdf-control="retry">Try again</button></div>' +
-                '</div>';
+            loadingEl.classList.remove('d-none');
+            loadingEl.innerHTML = '<div class="card text-center mx-auto" style="max-width: 28rem" data-pdf-role="error"><div class="card-body">' +
+                '<h5 class="card-title">Unable to display this document</h5>' +
+                '<p class="card-text">It may still be loading from storage, or it may be unavailable for a moment. Please try again.</p>' +
+                '<button type="button" class="btn btn-primary px-3 py-2" data-pdf-control="retry">Try again</button>' +
+                '</div></div>';
             var retryBtn = loadingEl.querySelector('[data-pdf-control="retry"]');
             if (retryBtn) retryBtn.addEventListener('click', function() { start(); });
         }
@@ -2748,15 +2630,15 @@
                 pagesEl.style.visibility = 'hidden';
                 pages = pageProxies.map(function(pageProxy, idx) {
                     var num = idx + 1;
-                    var pageEl = document.createElement('div');
+                    var pageEl = el('div', 'position-relative flex-shrink-0 bg-white shadow-sm');
                     pageEl.setAttribute('data-pdf-page', String(num));
                     pageEl.setAttribute('data-page-label', 'Page ' + labelFor(num));
                     pageEl.setAttribute('role', 'img');
                     pageEl.setAttribute('aria-label', 'Page ' + num + ' of ' + doc.numPages + (hasDistinctLabel(num) ? ', printed page ' + labelFor(num) : ''));
-                    return { num: num, page: pageProxy, el: pageEl, canvas: null, baseW: 0, baseH: 0, renderedKey: null };
+                    return { num: num, page: pageProxy, el: pageEl, canvas: null, rotation: 0, baseW: 0, baseH: 0, renderedKey: null };
                 });
                 if (urlSettings) {
-                    applyUrlSettings(urlSettings);
+                    applyUrlSettings(urlSettings, startPage);
                 }
                 arrangePages();
                 measureBase();
@@ -2777,9 +2659,8 @@
             setState('loading');
             firstRenderDone = false;
             if (loadingEl) {
-                loadingEl.style.display = 'flex';
-                loadingEl.classList.remove('hidden');
-                loadingEl.innerHTML = '<div class="spinner-border sm_green_color" aria-hidden="true"></div><div class="small">Loading document... <span data-pdf-role="progress"></span></div>';
+                loadingEl.classList.remove('d-none');
+                loadingEl.innerHTML = '<div class="spinner-border sm_green_color" aria-hidden="true"></div><div>Loading document... <span data-pdf-role="progress"></span></div>';
             }
 
             var loadingTask = pdfLib.getDocument({
@@ -2905,6 +2786,119 @@
         });
     }
 
+    // Toolbar layout follows the viewer's own width, not the window's: the theme's column can
+    // leave the viewer much narrower than the screen. Each toolbar is a Bootstrap row of three
+    // groups (start, middle, end) and every button keeps its label. Try the roomiest layout
+    // first and keep the first where every group fits and each middle group is truly
+    // centered, so it works with any font and label length.
+    //   one:         start | middle | end, on one row
+    //   splitTop:    start and end on one row, middle centered below them (top toolbar)
+    //   splitBottom: middle centered on its own row, start and end below it (bottom toolbar)
+    //   stack:       every group centered on its own row, page navigation first (bottom toolbar)
+    //   stackTop:    every group centered on its own row, the tools last (top toolbar, small phones)
+    var LAYOUT_CLASSES = ['col', 'col-auto', 'col-12', 'order-first', 'order-last', 'justify-content-center', 'justify-content-end'];
+    var LAYOUTS = {
+        one: { start: ['col'], middle: ['col-auto'], end: ['col', 'justify-content-end'] },
+        splitTop: { start: ['col'], middle: ['col-12', 'order-last', 'justify-content-center'], end: ['col', 'justify-content-end'] },
+        splitBottom: { start: ['col'], middle: ['col-12', 'order-first', 'justify-content-center'], end: ['col', 'justify-content-end'] },
+        stack: { start: ['col-12', 'justify-content-center'], middle: ['col-12', 'order-first', 'justify-content-center'], end: ['col-12', 'justify-content-center'] },
+        stackTop: { start: ['col-12', 'justify-content-center'], middle: ['col-12', 'order-last', 'justify-content-center'], end: ['col-12', 'justify-content-center'] }
+    };
+    var LAYOUT_ROWS = { one: 1, splitTop: 2, splitBottom: 2, stack: 3, stackTop: 3 };
+    // [size, top toolbar layout, bottom toolbar layout], roomiest first
+    var SIZES = [['lg', 'one', 'one'], ['md', 'one', 'splitBottom'], ['sm', 'splitTop', 'splitBottom'], ['xs', 'splitTop', 'stack'], ['xxs', 'stackTop', 'stack']];
+    // Narrower than this, the sidebar slides over the pages instead of sitting beside them
+    var SIDEBAR_BESIDE_MIN = 768;
+    var SIDEBAR_OVER = ['position-absolute', 'top-0', 'bottom-0', 'start-0', 'z-3', 'shadow'];
+
+    function applyLayout(row, name) {
+        var layout = LAYOUTS[name];
+        Array.prototype.forEach.call(row.children, function(group) {
+            var classes = layout[group.getAttribute('data-pdf-group')];
+            if (!classes) return;
+            group.classList.remove.apply(group.classList, LAYOUT_CLASSES);
+            group.classList.add.apply(group.classList, classes);
+        });
+        row.pdfLayout = name;
+    }
+
+    // Every group on its intended row, nothing sticking out, the middle group centered
+    function layoutFits(row) {
+        var tops = Array.prototype.map.call(row.children, function(g) { return g.getBoundingClientRect().top; })
+            .sort(function(a, b) { return a - b; });
+        var rows = 1;
+        for (var i = 1; i < tops.length; i++) {
+            if (tops[i] - tops[i - 1] > 8) rows++;
+        }
+        if (rows !== LAYOUT_ROWS[row.pdfLayout] || row.scrollWidth > row.clientWidth + 1) return false;
+        var mid = row.querySelector('[data-pdf-group="middle"]');
+        if (!mid) return true;
+        var b = row.getBoundingClientRect();
+        var m = mid.getBoundingClientRect();
+        return Math.abs((m.left + m.right) - (b.left + b.right)) < 3;
+    }
+
+    function sizeViewer(container) {
+        if (!container.clientWidth) return;
+        var top = container.querySelector('[data-pdf-role="toolbar"] [data-pdf-role="toolbar-row"]');
+        var bottom = container.querySelector('[data-pdf-role="bottom-toolbar"] [data-pdf-role="toolbar-row"]');
+        var word = container.querySelector('[data-pdf-role="page-word"]');
+        var display = container.querySelector('[data-pdf-role="page-display"]');
+        for (var i = 0; i < SIZES.length; i++) {
+            var phone = SIZES[i][0] === 'xs' || SIZES[i][0] === 'xxs';
+            // On phones "Page" goes, and a printed page number may wrap under the page box
+            if (word) word.classList.toggle('d-none', phone);
+            if (display) display.classList.toggle('flex-wrap', phone);
+            if (top) applyLayout(top, SIZES[i][1]);
+            if (bottom) applyLayout(bottom, SIZES[i][2]);
+            container.setAttribute('data-pdf-size', SIZES[i][0]);
+            if ((!top || layoutFits(top)) && (!bottom || layoutFits(bottom))) break;
+        }
+        var sidebar = container.querySelector('[data-pdf-role="sidebar"]');
+        if (sidebar) {
+            var covers = container.clientWidth < SIDEBAR_BESIDE_MIN;
+            SIDEBAR_OVER.forEach(function(c) { sidebar.classList.toggle(c, covers); });
+        }
+        container.pdfSizedWidth = container.clientWidth;
+    }
+
+    // On narrow screens the viewer spans the window; a desktop scrollbar isn't part of that
+    // width. Phones have overlay scrollbars (width 0), and a zoomed-out phone page makes
+    // innerWidth larger than the page for reasons that have nothing to do with a scrollbar,
+    // so cap the gap at the width a real scrollbar has on this device.
+    var deviceScrollbar = null;
+    function setScrollbarWidth() {
+        var root = document.documentElement;
+        if (deviceScrollbar === null && document.body) {
+            var probe = document.createElement('div');
+            probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll';
+            document.body.appendChild(probe);
+            deviceScrollbar = probe.offsetWidth - probe.clientWidth;
+            document.body.removeChild(probe);
+        }
+        var gap = Math.max(0, Math.min(window.innerWidth - root.clientWidth, deviceScrollbar || 0));
+        root.style.setProperty('--scouting-pdf-scrollbar', gap + 'px');
+    }
+
+    function watchViewerSizes() {
+        var viewers = allViewers();
+        setScrollbarWidth();
+        Array.prototype.forEach.call(viewers, sizeViewer);
+        if ('ResizeObserver' in window) {
+            // Only a change of width matters (the viewer's height changes with its own layout)
+            var observer = new ResizeObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.target.clientWidth !== entry.target.pdfSizedWidth) sizeViewer(entry.target);
+                });
+            });
+            Array.prototype.forEach.call(viewers, function(v) { observer.observe(v); });
+        }
+        window.addEventListener('resize', function() {
+            setScrollbarWidth();
+            if (!('ResizeObserver' in window)) Array.prototype.forEach.call(viewers, sizeViewer);
+        });
+    }
+
     // Only download a PDF once its viewer is near the screen, so posts with several
     // documents don't pull every file on page load
     function initAllViewers() {
@@ -2952,9 +2946,14 @@
         parseHash: parseHash
     };
 
+    // This script loads in the footer, after the viewers' markup, so lay out their toolbars
+    // right away rather than showing the wide layout first
     if (document.readyState === 'loading') {
+        if (allViewers().length) watchViewerSizes();
+        else document.addEventListener('DOMContentLoaded', watchViewerSizes);
         document.addEventListener('DOMContentLoaded', initAllViewers);
     } else {
+        watchViewerSizes();
         initAllViewers();
     }
 })();
