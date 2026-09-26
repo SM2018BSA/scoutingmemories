@@ -517,6 +517,37 @@
 
 /* ---- Dialog (cite, print) and messages ---- */
 
+[data-pdf-viewer] [data-pdf-role="dialog-backdrop"] {
+    position: absolute;
+    inset: 0;
+    z-index: 1045;
+    background-color: rgba(255, 255, 255, 0.90);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    cursor: pointer;
+    animation: pdfBackdropFadeIn 0.2s ease-out;
+}
+
+[data-pdf-viewer].has-dialog-open [data-pdf-role="toolbar"],
+[data-pdf-viewer].has-dialog-open [data-pdf-role="bottom-toolbar"] {
+    opacity: 0.55;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+[data-pdf-viewer] [data-pdf-role="toasts"] {
+    z-index: 1090;
+}
+
+@keyframes pdfBackdropFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 [data-pdf-viewer] [data-pdf-role="dialog"] {
     position: absolute;
     top: 1.25rem;
@@ -527,8 +558,21 @@
     max-height: calc(100% - 2.5rem);
     overflow-y: auto;
     border-radius: 0.75rem;
+    background-color: #fff;
     box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.28) !important;
     border: 1px solid rgba(0, 0, 0, 0.15);
+    animation: pdfDialogFadeIn 0.2s ease-out;
+}
+
+@keyframes pdfDialogFadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -10px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
 }
 
 [data-pdf-viewer] [data-pdf-role="dialog"] .card-header {

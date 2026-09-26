@@ -434,9 +434,17 @@
         var adjustbar = q('[data-pdf-role="adjustbar"]');
         var sidebar = q('[data-pdf-role="sidebar"]');
         var dialog = q('[data-pdf-role="dialog"]');
+        var backdrop = q('[data-pdf-role="dialog-backdrop"]');
         var toasts = q('[data-pdf-role="toasts"]');
 
         if (!viewportEl) return null;
+
+        if (!backdrop && dialog && dialog.parentNode) {
+            backdrop = el('div', 'scouting-pdf-dialog-backdrop');
+            backdrop.setAttribute('data-pdf-role', 'dialog-backdrop');
+            backdrop.hidden = true;
+            dialog.parentNode.insertBefore(backdrop, dialog);
+        }
 
         initTooltips(container);
 
@@ -1598,6 +1606,8 @@
             var host = q('[data-pdf-role="dialog-body"]');
             host.textContent = '';
             host.appendChild(body);
+            if (backdrop) backdrop.hidden = false;
+            container.classList.add('has-dialog-open');
             dialog.hidden = false;
             var focusable = dialog.querySelector('input, button:not([data-pdf-control="dialog-close"]), textarea');
             (focusable || dialog.querySelector('button')).focus();
@@ -1606,6 +1616,8 @@
         function closeDialog() {
             if (!dialog || dialog.hidden) return false;
             dialog.hidden = true;
+            if (backdrop) backdrop.hidden = true;
+            container.classList.remove('has-dialog-open');
             if (dialogOpener && dialogOpener.focus && container.contains(dialogOpener)) dialogOpener.focus();
             else container.focus({ preventScroll: true });
             return true;
@@ -1614,6 +1626,9 @@
         if (dialog) {
             var closeBtn = control('dialog-close');
             if (closeBtn) closeBtn.addEventListener('click', closeDialog);
+        }
+        if (backdrop) {
+            backdrop.addEventListener('click', closeDialog);
         }
 
         function toast(message, actionLabel, action, timeout) {

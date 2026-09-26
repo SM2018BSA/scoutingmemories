@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.0.0');
+define('SCOUTING_PDF_VERSION', '2.0.1');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -801,6 +801,8 @@ class Scouting_PDF_Embedder {
                     </div>
                     <div data-pdf-role="pages"></div>
                 </div>
+
+                <div class="scouting-pdf-dialog-backdrop" data-pdf-role="dialog-backdrop" hidden></div>
 
                 <div class="card shadow" data-pdf-role="dialog" role="dialog" aria-modal="true" hidden>
                     <div class="card-header d-flex align-items-center justify-content-between py-2">
