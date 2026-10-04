@@ -41,9 +41,17 @@ test-results/
 playwright-report/
 .env
 .env.*
+*.env
+.ssh/
 *.log
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
+.venv/
+venv/
+/ocr-service/trial/
+/ocr-service/data/
 
 # Starter-theme documents we never deploy
 /wp-content/themes/*/README.md
