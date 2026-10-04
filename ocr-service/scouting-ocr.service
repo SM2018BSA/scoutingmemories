@@ -1,0 +1,65 @@
+# Scouting Memories page OCR. Installed by hand as /etc/systemd/system/scouting-ocr.service on the
+# development server (copy this file there, then: systemctl daemon-reload). The service logs a
+# NOTE at start when the installed copy differs from this one.
+# The code it runs is a git checkout in /opt/scouting-ocr, updated only from the control panel.
+
+[Unit]
+Description=Scouting Memories page OCR (reads one PDF page at a time with Tesseract)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/scouting-ocr/ocr-service/ocr_service.py
+# The shared secret and the limits. Readable by root only; systemd reads it, the service cannot.
+EnvironmentFile=/etc/scouting/ocr.env
+Environment=PYTHONUNBUFFERED=1
+
+# If it stops by itself it is started again, waiting longer each time (5 seconds up to 10 minutes)
+Restart=on-failure
+RestartSec=5
+RestartSteps=6
+RestartMaxDelaySec=600
+
+# Its own throwaway user, with its job list in /var/lib/scouting-ocr and its PDF cache in /var/cache/scouting-ocr
+DynamicUser=yes
+StateDirectory=scouting-ocr
+CacheDirectory=scouting-ocr
+UMask=0077
+
+# Limits. A page that needs too much memory fails on its own (OOMPolicy=continue: only the
+# reading tool is stopped, not the service), and the website and database are spared first.
+MemoryMax=1500M
+OOMPolicy=continue
+OOMScoreAdjust=300
+TasksMax=64
+LimitFSIZE=536870912
+
+# Locked down: the rest of the system is read-only or hidden from it
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+InaccessiblePaths=-/var/www -/etc/scouting -/etc/apache2 -/run/mysqld -/var/lib/mysql
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+# It talks to the web server on this machine and to the public internet (the PDF storage),
+# never to private networks or the cloud provider's metadata address
+IPAddressDeny=169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fe80::/10 fc00::/7
+
+[Install]
+WantedBy=multi-user.target

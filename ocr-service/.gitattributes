@@ -1,0 +1,2 @@
+# These files run on a Linux server: plain LF line endings everywhere
+* text=auto eol=lf
