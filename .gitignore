@@ -14,8 +14,15 @@
 # ...except our tests
 !/tests/
 
-# ...the OCR app that runs on the development server (never published to WP Engine)
+# ...the OCR app that runs on the development server (never published to WP Engine).
+# Inside it, ONLY these four files: anything else (test output, downloads, keys, settings
+# files) stays out of a public repository.
 !/ocr-service/
+/ocr-service/*
+!/ocr-service/.gitattributes
+!/ocr-service/README.md
+!/ocr-service/ocr_service.py
+!/ocr-service/scouting-ocr.service
 
 # ...and wp-content, where only our folders are allowed
 !/wp-content/
@@ -50,8 +57,12 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-/ocr-service/trial/
-/ocr-service/data/
+*.sql
+*.sql.gz
+*.sqlite3
+*.pem
+*.key
+*.bak
 
 # Starter-theme documents we never deploy
 /wp-content/themes/*/README.md

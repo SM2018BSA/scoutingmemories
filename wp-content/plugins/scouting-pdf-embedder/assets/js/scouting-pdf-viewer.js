@@ -2395,6 +2395,186 @@
             }
         }
 
+        // ---- Machine-read page text (the "Text" button) -----------------------------
+
+        var ocrKey = container.getAttribute('data-pdf-ocr-key') || '';
+        var ocrTimer = null;   // the open Text window's next ask, so closing the window stops it
+
+        function ocrStop() {
+            if (ocrTimer) { clearTimeout(ocrTimer); ocrTimer = null; }
+        }
+
+        // Ask WordPress. Answers are {status: ...} or, for a refusal, {code: ..., message: ...};
+        // anything that isn't JSON (the service or the server is down) becomes {status: 'error'}
+        function ocrFetch(method, url, body) {
+            var headers = { 'Accept': 'application/json' };
+            // The nonce only on the request that needs a login. The GET is public, and an
+            // expired nonce (a tab left open overnight) would make WordPress refuse even that.
+            if (config.ocrNonce && method === 'POST') headers['X-WP-Nonce'] = config.ocrNonce;
+            if (body) headers['Content-Type'] = 'application/json';
+            return fetch(url, {
+                method: method,
+                headers: headers,
+                credentials: 'same-origin',
+                body: body ? JSON.stringify(body) : undefined
+            }).then(function(r) {
+                return r.json().catch(function() { return { status: 'error' }; });
+            }, function() { return { status: 'error' }; });
+        }
+
+        function openText() {
+            if (!ocrKey || !config.ocrUrl) return;
+            var num = currentPage;
+            var statusUrl = config.ocrUrl + '/' + ocrKey + '/' + num;
+
+            var body = el('div');
+            // Which page of which document, as in the Cite window
+            var docTitle = cite.title || cite.postTitle || container.getAttribute('data-pdf-title') || fileNameFromUrl(pdfUrl);
+            var context = el('p', 'd-flex align-items-center gap-2 mb-2');
+            context.appendChild(el('span', 'badge text-bg-primary flex-shrink-0', describePage(num)));
+            context.appendChild(el('span', 'text-muted text-truncate', docTitle));
+            body.appendChild(context);
+            var stage = el('div');
+            body.appendChild(stage);
+
+            function open() { return dialogOpen && container.contains(stage); }
+
+            function show() {
+                stage.textContent = '';
+                for (var i = 0; i < arguments.length; i++) stage.appendChild(arguments[i]);
+            }
+
+            function spinnerRow(message) {
+                var row = el('div', 'd-flex align-items-center gap-3 my-3');
+                var spin = el('div', 'spinner-border sm_green_color flex-shrink-0');
+                spin.setAttribute('role', 'status');
+                row.appendChild(spin);
+                row.appendChild(el('div', '', message));
+                return row;
+            }
+
+            function greenButton(label, icon, action) {
+                var btn = el('button', 'btn btn-primary px-3 py-2');
+                btn.type = 'button';
+                btn.innerHTML = iconLabel(icon, label);
+                btn.addEventListener('click', action);
+                return btn;
+            }
+
+            // The text as paragraphs, with its line breaks kept
+            function textBox(text) {
+                var box = el('div', 'border rounded p-3 mb-3');
+                String(text).replace(/\r\n/g, '\n').split(/\n{2,}/).forEach(function(block) {
+                    if (!block.trim()) return;
+                    var p = el('p', 'mb-2');
+                    block.split('\n').forEach(function(line, i) {
+                        if (i) p.appendChild(document.createElement('br'));
+                        p.appendChild(document.createTextNode(line));
+                    });
+                    box.appendChild(p);
+                });
+                return box;
+            }
+
+            function askToRead() {
+                show(spinnerRow('Reading page ' + labelFor(num) + '. This usually takes less than a minute.'));
+                ocrFetch('POST', config.ocrUrl, { url: pdfUrl, page: num }).then(function(d) {
+                    if (!open()) return;
+                    // WordPress answers with the document code the row was saved under;
+                    // poll that one, in case it differs from the attribute's
+                    if (d.doc_key) statusUrl = config.ocrUrl + '/' + d.doc_key + '/' + num;
+                    if (d.status === 'queued') pollWhileReading();
+                    else render(d);
+                });
+            }
+
+            // While the page is being read, ask WordPress every 3 seconds, up to 40 times
+            function pollWhileReading() {
+                var polls = 0;
+                show(spinnerRow('Reading page ' + labelFor(num) + '. This usually takes less than a minute.'));
+                var tick = function() {
+                    ocrTimer = null;
+                    if (!open()) return;
+                    ocrFetch('GET', statusUrl).then(function(d) {
+                        if (!open()) return;
+                        // 'error' here is the service restarting mid-read: keep asking
+                        if (d.status === 'queued' || d.status === 'error') {
+                            polls++;
+                            if (polls >= 40) {
+                                show(el('p', 'my-3', 'This is taking longer than usual. You can close this window. The text will be here when you come back.'));
+                                return;
+                            }
+                            ocrTimer = setTimeout(tick, 3000);
+                        } else {
+                            render(d);
+                        }
+                    });
+                };
+                ocrTimer = setTimeout(tick, 3000);
+            }
+
+            function render(d) {
+                if (d.code === 'ocr_limit' || (d.data && d.data.status === 429)) {
+                    show(el('p', 'my-3', "Today's limit for reading pages has been reached. Please try again tomorrow."));
+                    return;
+                }
+                if (d.code === 'ocr_busy') {
+                    show(el('p', 'my-3', 'The reading service is busy right now. Please try again in an hour.'));
+                    return;
+                }
+                if (d.code === 'rest_cookie_invalid_nonce') {
+                    show(el('p', 'my-3', 'This page has been open a long time. Please reload it and try again.'));
+                    return;
+                }
+                if (d.status === 'off') {
+                    show(el('p', 'my-3', 'The reading service is switched off.'));
+                    return;
+                }
+                if (d.status === 'done' && typeof d.text === 'string') {
+                    var note = el('p', '', 'Machine-read text. It may contain mistakes, so check it against the page.');
+                    var copyBtn = greenButton('Copy text', 'bi-clipboard-check', function() {
+                        copyText(d.text).then(function() { toast('Text copied.'); }, function() {
+                            toast('Couldn’t copy automatically. Select the text and copy it instead.', null, null, 5000);
+                        });
+                    });
+                    show(note, textBox(d.text), copyBtn);
+                    return;
+                }
+                if (d.status === 'empty') {
+                    show(el('p', 'my-3', "No readable text was found on this page. Handwriting and very faded pages often can't be read."));
+                    return;
+                }
+                if (d.status === 'none' || d.status === 'failed') {
+                    if (config.ocrCanRequest) {
+                        var line = (d.status === 'failed')
+                            ? 'Reading this page did not work last time. You can try again.'
+                            : 'This page has not been read yet.';
+                        show(el('p', '', line), greenButton('Read this page', 'bi-file-text', askToRead));
+                    } else {
+                        var p = el('p', 'my-3', 'This page has not been read yet. ');
+                        var a = el('a', '', 'Log in to have it read.');
+                        a.href = config.ocrLoginUrl || '#';
+                        p.appendChild(a);
+                        show(p);
+                    }
+                    return;
+                }
+                if (d.status === 'queued') {
+                    pollWhileReading();
+                    return;
+                }
+                // 'off', 'error' and anything unexpected
+                show(el('p', 'my-3', 'The reading service is not answering right now. Please try again later.'));
+            }
+
+            ocrStop();
+            show(spinnerRow('Checking for saved text…'));
+            openDialog('Text of page ' + labelFor(num), body);
+            ocrFetch('GET', statusUrl).then(function(d) {
+                if (open()) render(d);
+            });
+        }
+
         var handlers = {
             prev: function() { stepPage(-1); },
             next: function() { stepPage(1); },
@@ -2410,6 +2590,7 @@
             adjust: function() { toggleAdjust(adjustbar && adjustbar.hidden); },
             'text-select': function() { setTextSelect(!textSelect); },
             cite: openCite,
+            ocr: openText,
             download: downloadPdf,
             spread: toggleSpread
         };

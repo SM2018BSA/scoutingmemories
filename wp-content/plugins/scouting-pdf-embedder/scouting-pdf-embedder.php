@@ -3,7 +3,7 @@
  * Plugin Name: Scouting PDF Embedder
  * Plugin URI: https://scoutingmemories.org/
  * Description: PDF viewer for Scouting Memories, built for research: printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, page rotation, two-page view and sharing part of a page as a picture. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
- * Version: 2.0.3
+ * Version: 2.1.0
  * Author: Roger Ellis / Scouting Memories
  * License: GPL-2.0+
  * Text Domain: scouting-pdf-embedder
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.0.3');
+define('SCOUTING_PDF_VERSION', '2.1.0');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -249,6 +249,17 @@ class Scouting_PDF_Embedder {
             'restUrl'             => $rest_url,
             'siteName'            => wp_strip_all_tags(get_bloginfo('name')),
         );
+        if (class_exists('Scouting_PDF_OCR') && Scouting_PDF_OCR::enabled()) {
+            $ocr_url = rest_url('scouting-pdf/v1/ocr');
+            $config['ocrUrl'] = $is_ssl ? set_url_scheme($ocr_url, 'https') : $ocr_url;
+            $config['ocrCanRequest'] = is_user_logged_in();
+            if (is_user_logged_in()) {
+                // Logged-in pages are never cached, so the nonce stays fresh
+                $config['ocrNonce'] = wp_create_nonce('wp_rest');
+            } else {
+                $config['ocrLoginUrl'] = wp_login_url((is_singular() && get_permalink()) ? get_permalink() : home_url('/'));
+            }
+        }
         wp_add_inline_script('scouting-pdf-viewer-js', 'window.ScoutingPdfConfig = ' . wp_json_encode($config) . ';', 'before');
 
         // Known before the content renders: load the stylesheet in the head, so the viewer
@@ -793,11 +804,13 @@ class Scouting_PDF_Embedder {
         $allow_download = (bool) apply_filters('scouting_pdf_allow_download', $allow_download, $url);
         $start_page = !empty($options['page']) ? (int) $options['page'] : 1;
         $cite = self::citation_data(!empty($title) ? $title : '');
+        // Set when the OCR feature is on and the service can read this document
+        $ocr_attr = class_exists('Scouting_PDF_OCR') ? Scouting_PDF_OCR::viewer_attr($url) : '';
 
         ob_start();
         ?>
         <?php $n = (int) $this->viewer_count; ?>
-        <div class="card my-4 scouting-pdf-container" id="scouting-pdf-<?php echo $n; ?>" data-pdf-viewer data-pdf-index="<?php echo $n; ?>" data-pdf-state="loading" data-pdf-url="<?php echo esc_url($url); ?>" data-pdf-title="<?php echo esc_attr($raw_title); ?>" data-pdf-start-page="<?php echo (int) $start_page; ?>" data-pdf-download="<?php echo $allow_download ? '1' : '0'; ?>" data-pdf-cite="<?php echo esc_attr(wp_json_encode($cite)); ?>" tabindex="0" role="region" aria-label="<?php echo esc_attr(sprintf(__('PDF viewer: %s', 'scouting-pdf-embedder'), $raw_title)); ?>">
+        <div class="card my-4 scouting-pdf-container" id="scouting-pdf-<?php echo $n; ?>" data-pdf-viewer data-pdf-index="<?php echo $n; ?>" data-pdf-state="loading" data-pdf-url="<?php echo esc_url($url); ?>" data-pdf-title="<?php echo esc_attr($raw_title); ?>" data-pdf-start-page="<?php echo (int) $start_page; ?>" data-pdf-download="<?php echo $allow_download ? '1' : '0'; ?>" data-pdf-cite="<?php echo esc_attr(wp_json_encode($cite)); ?>"<?php echo $ocr_attr; ?> tabindex="0" role="region" aria-label="<?php echo esc_attr(sprintf(__('PDF viewer: %s', 'scouting-pdf-embedder'), $raw_title)); ?>">
             <?php /* Toolbars: a Bootstrap row of three groups. The outer .col groups share the leftover
                space equally, which keeps the middle group centered. The viewer script moves groups
                onto their own rows (.col-12) when the viewer is too narrow for one row. */ ?>
@@ -810,6 +823,7 @@ class Scouting_PDF_Embedder {
                         <?php echo $this->button('adjust', 'bi-sliders', 'Adjust', 'Change the brightness and contrast to make faded scans easier to read', ' aria-pressed="false"'); ?>
                         <?php echo $this->button('rotate', 'bi-arrow-clockwise', 'Rotate', 'Rotate this page a quarter turn clockwise (shortcut: R key)'); ?>
                         <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Cite or share this page: copy a citation or a link, or clip part of the page as a picture'); ?>
+                        <?php if ($ocr_attr) { echo $this->button('ocr', 'bi-file-text', 'Text', 'Read the text on this page so you can copy it. A computer reads it, so it may contain mistakes.'); } ?>
                     </div>
                     <div class="col d-flex align-items-center justify-content-end gap-2" data-pdf-group="end">
                         <?php echo $this->button('spread', 'bi-book', 'Two-page view', 'Show two pages side by side, like an open book', ' aria-pressed="false"'); ?>
@@ -902,3 +916,7 @@ class Scouting_PDF_Embedder {
 
 // Initialize plugin
 Scouting_PDF_Embedder::get_instance();
+
+// Page OCR: the "Text" button and its routes (off unless an address and secret are configured)
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-ocr.php';
+Scouting_PDF_OCR::get_instance();
