@@ -19,6 +19,19 @@ add_filter('scouting_pdf_proxy_hosts', function($hosts) {
     return $hosts;
 });
 
+// The OCR tests use links on the real archive storage (the only host the Text button is
+// offered for) and hand the browser the local test file instead. Safety net: here the
+// stream endpoint never downloads anything from the real storage.
+add_filter('rest_pre_dispatch', function($result, $server, $request) {
+    if ($request->get_route() === '/scouting-pdf/v1/stream') {
+        $host = strtolower((string) wp_parse_url((string) $request->get_param('pdf_url'), PHP_URL_HOST));
+        if ($host === 'storage.scoutingmemories.org') {
+            return new WP_Error('test_no_storage', 'The tests never download from the real storage', array('status' => 403));
+        }
+    }
+    return $result;
+}, 10, 3);
+
 add_action('wp_enqueue_scripts', function() {
     wp_enqueue_style('test-bootstrap', home_url('/test-assets/bootstrap/css/bootstrap.min.css'), array(), null);
     wp_enqueue_style('test-bootstrap-icons', home_url('/test-assets/bootstrap-icons/bootstrap-icons.min.css'), array(), null);

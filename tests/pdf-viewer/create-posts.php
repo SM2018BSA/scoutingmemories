@@ -32,11 +32,14 @@ $uploads = content_url('uploads/fixtures');
 $guide = $uploads . '/leaders-guide.pdf';
 $scan = $uploads . '/scan-only.pdf';
 
+// The content goes in a Bootstrap container, as on the live theme. (The test site's default
+// theme forces automatic side margins on everything placed directly in a post, which would
+// undo the viewer's full-width layout on phones; the live theme doesn't.)
 function sm_test_post($slug, $title, $content, $meta = array()) {
     $id = wp_insert_post(array(
         'post_name'      => $slug,
         'post_title'     => $title,
-        'post_content'   => $content,
+        'post_content'   => '<div class="container">' . $content . '</div>',
         'post_status'    => 'publish',
         'comment_status' => 'open',
     ));
@@ -91,5 +94,27 @@ sm_test_post('xss-attempt', 'Script test', '[pdf-embedder url="' . $guide . '" t
 // A PDF on "storage" that the browser can't load directly (its certificate isn't trusted by
 // the browser), so the viewer has to fall back to the site's stream endpoint
 sm_test_post('proxied', 'Proxied document', '[pdf-embedder url="https://pdf-proxy-test.example/fixtures/leaders-guide.pdf" title="Proxied guide"]');
+
+// Page OCR: the Text button is only offered for documents on the archive storage, so this
+// post links there. The browser tests hand the browser the local test file instead, and
+// wp-test-env.php stops the site itself from ever downloading from the real storage.
+sm_test_post('ocr-document', 'Camp Tahquitz Leaders Guide (OCR)', '[pdf-embedder url="https://storage.scoutingmemories.org/sm-tests/leaders-guide.pdf" title="OCR guide"]');
+
+// OCR switched on, pointing at the stand-in service from fake-ocr.mjs (the tests start it)
+update_option('scouting_pdf_ocr', array(
+    'enabled'    => 1,
+    'url'        => 'http://127.0.0.1:8899',
+    'secret'     => 'fake-ocr-test-secret',
+    'site_limit' => 100,
+    'user_limit' => 20,
+));
+
+// A reader account (subscriber), like a historian who logs in to have pages read
+$reader = get_user_by('login', 'reader');
+if ($reader) {
+    wp_set_password('reader-pass-123', $reader->ID);
+} else {
+    wp_insert_user(array('user_login' => 'reader', 'user_pass' => 'reader-pass-123', 'user_email' => 'reader@example.com', 'role' => 'subscriber'));
+}
 
 flush_rewrite_rules();

@@ -6,26 +6,49 @@
 #
 # Needs php (with pdo_sqlite and curl), node and python3 with reportlab + Pillow.
 # WordPress comes from npm (@wp-playground/wordpress-builds), so wordpress.org isn't needed.
+#
+# On Windows (Git Bash) set WP_DIR to a folder for the test WordPress, and PYTHON to a Python
+# that has reportlab + Pillow, for example:
+#   WP_DIR=E:/test-wp PYTHON=E:/test-venv/Scripts/python.exe npm run setup
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
-WP="${WP_DIR:-/tmp/scouting-pdf-wp}"
 PORT="${WP_PORT:-8888}"
+PYTHON="${PYTHON:-python3}"
+WINDOWS=
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) WINDOWS=1 ;; esac
+if [ -n "$WINDOWS" ]; then
+    # Windows PHP can't read Git Bash paths (/e/...) written into its config, so use E:/...
+    [ -n "${WP_DIR:-}" ] || { echo "On Windows, set WP_DIR to a folder for the test WordPress." >&2; exit 1; }
+    WP="$(cygpath -m "$WP_DIR")"
+else
+    WP="${WP_DIR:-/tmp/scouting-pdf-wp}"
+fi
 BUILD="$WP.build"
+
+# Windows makes copies instead of symlinks, so there the copy is refreshed on every run
+link() {
+    if [ -n "$WINDOWS" ]; then
+        rm -rf "$2"
+        cp -r "$1" "$2"
+    else
+        ln -sfn "$1" "$2"
+    fi
+}
 
 if [ ! -f "$WP/wp-load.php" ]; then
     rm -rf "$WP" "$BUILD"
     mkdir -p "$WP" "$BUILD"
     (cd "$BUILD" && npm pack --silent @wp-playground/wordpress-builds@0.9.19 >/dev/null && tar xzf ./*.tgz)
-    python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$BUILD/package/src/wordpress/wp-6.5.zip" "$WP"
+    "$PYTHON" -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$BUILD/package/src/wordpress/wp-6.5.zip" "$WP"
     cp -r "$BUILD/package/public/wp-6.5/." "$WP/"
-    python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$BUILD/package/src/sqlite-database-integration/sqlite-database-integration.zip" "$WP/wp-content/plugins/"
+    "$PYTHON" -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$BUILD/package/src/sqlite-database-integration/sqlite-database-integration.zip" "$WP/wp-content/plugins/"
     mv "$WP/wp-content/plugins/sqlite-database-integration-main" "$WP/wp-content/plugins/sqlite-database-integration"
     sed -e "s#{SQLITE_IMPLEMENTATION_FOLDER_PATH}#$WP/wp-content/plugins/sqlite-database-integration#; s#{SQLITE_PLUGIN}#sqlite-database-integration/load.php#g" \
         "$WP/wp-content/plugins/sqlite-database-integration/db.copy" > "$WP/wp-content/db.php"
     rm -f "$WP/wp-content/database/.ht.sqlite"
-    python3 - "$WP" "$PORT" <<'EOF'
+    "$PYTHON" - "$WP" "$PORT" <<'EOF'
 import re, secrets, sys
 wp, port = sys.argv[1], sys.argv[2]
 p = wp + '/wp-config.php'
@@ -42,8 +65,8 @@ fi
 
 # The code under test, plus a test-only mu-plugin that stands in for the theme's Bootstrap
 mkdir -p "$WP/wp-content/mu-plugins" "$WP/test-assets"
-ln -sfn "$REPO/wp-content/plugins/scouting-pdf-embedder" "$WP/wp-content/plugins/scouting-pdf-embedder"
-ln -sfn "$REPO/wp-content/mu-plugins/scouting-pdf-loader.php" "$WP/wp-content/mu-plugins/scouting-pdf-loader.php"
+link "$REPO/wp-content/plugins/scouting-pdf-embedder" "$WP/wp-content/plugins/scouting-pdf-embedder"
+link "$REPO/wp-content/mu-plugins/scouting-pdf-loader.php" "$WP/wp-content/mu-plugins/scouting-pdf-loader.php"
 cp "$HERE/wp-test-env.php" "$WP/wp-content/mu-plugins/0-test-env.php"
 cp -r "$HERE/node_modules/bootstrap/dist" "$WP/test-assets/bootstrap"
 cp -r "$HERE/node_modules/bootstrap-icons/font" "$WP/test-assets/bootstrap-icons"
@@ -52,7 +75,7 @@ cp "$HERE/stale-cache.html" "$WP/test-assets/stale-cache.html"
 
 # Test documents
 mkdir -p "$WP/wp-content/uploads/fixtures"
-python3 "$HERE/make_fixtures.py" "$WP/wp-content/uploads/fixtures" >/dev/null
+"$PYTHON" "$HERE/make_fixtures.py" "$WP/wp-content/uploads/fixtures" >/dev/null
 
 # A fake storage server for the stream endpoint tests: an HTTPS host on a public-looking IP
 # (1.2.3.4 on a loopback alias) with a certificate from a throwaway CA. Needs root; the
@@ -70,7 +93,7 @@ if [ "$(id -u)" = "0" ] && [ ! -f "$TLS/server.crt" ]; then
         -days 30 -extfile "$TLS/san.ext" -out "$TLS/server.crt" 2>/dev/null
 fi
 if [ "$(id -u)" = "0" ]; then
-    python3 - "$FAKE_IP" <<'PYEOF'
+    "$PYTHON" - "$FAKE_IP" <<'PYEOF'
 import fcntl, socket, struct, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 req = struct.pack('16sH2s4s8s', b'lo:9', socket.AF_INET, b'\0\0', socket.inet_aton(sys.argv[1]), b'\0' * 8)
@@ -83,12 +106,25 @@ fi
 
 # Start the server (restart if it's already running). No outbound proxy, and PHP's curl
 # trusts the test CA, as the live server trusts the real storage certificate.
-pkill -f "php -d curl.cainfo" 2>/dev/null || true
-pkill -f "php -S localhost:$PORT" 2>/dev/null || true
-CAFILE="$TLS/ca.crt"
-[ -f "$CAFILE" ] || CAFILE=/etc/ssl/certs/ca-certificates.crt
-(cd "$WP" && env -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY \
-    setsid nohup php -d "curl.cainfo=$CAFILE" -S "localhost:$PORT" router.php </dev/null >"$WP/server.log" 2>&1 &)
+if [ -n "$WINDOWS" ]; then
+    # A hidden Windows process that outlives this shell; its number is kept in server.pid
+    # so the next run (or: taskkill //F //PID $(cat "$WP_DIR/server.pid")) can stop it
+    if [ -f "$WP/server.pid" ]; then
+        taskkill //F //PID "$(cat "$WP/server.pid")" >/dev/null 2>&1 || true
+    fi
+    # PowerShell writes the number itself: the server inherits this shell's output handles, so
+    # a pipe from PowerShell would never close
+    env -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY powershell -NoProfile -Command \
+        "(Start-Process -FilePath php -ArgumentList '-S','localhost:$PORT','router.php' -WorkingDirectory '$WP' -WindowStyle Hidden -RedirectStandardOutput '$WP/server.out' -RedirectStandardError '$WP/server.log' -PassThru).Id | Set-Content -Encoding ascii -NoNewline '$WP/server.pid'" \
+        </dev/null >/dev/null 2>&1
+else
+    pkill -f "php -d curl.cainfo" 2>/dev/null || true
+    pkill -f "php -S localhost:$PORT" 2>/dev/null || true
+    CAFILE="$TLS/ca.crt"
+    [ -f "$CAFILE" ] || CAFILE=/etc/ssl/certs/ca-certificates.crt
+    (cd "$WP" && env -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY \
+        setsid nohup php -d "curl.cainfo=$CAFILE" -S "localhost:$PORT" router.php </dev/null >"$WP/server.log" 2>&1 &)
+fi
 for _ in $(seq 1 50); do
     curl -s -o /dev/null "http://localhost:$PORT/wp-admin/install.php" && break
     sleep 0.2

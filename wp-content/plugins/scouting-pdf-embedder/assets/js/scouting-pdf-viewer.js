@@ -2406,11 +2406,12 @@
 
         // Ask WordPress. Answers are {status: ...} or, for a refusal, {code: ..., message: ...};
         // anything that isn't JSON (the service or the server is down) becomes {status: 'error'}
-        function ocrFetch(method, url, body) {
+        function ocrFetch(method, url, body, withoutNonce) {
             var headers = { 'Accept': 'application/json' };
-            // The nonce only on the request that needs a login. The GET is public, and an
-            // expired nonce (a tab left open overnight) would make WordPress refuse even that.
-            if (config.ocrNonce && method === 'POST') headers['X-WP-Nonce'] = config.ocrNonce;
+            // The nonce goes with every request from a logged-in reader: without it WordPress
+            // treats the request as logged out, and only a logged-in GET makes WordPress ask
+            // the service whether a page being read has finished
+            if (config.ocrNonce && !withoutNonce) headers['X-WP-Nonce'] = config.ocrNonce;
             if (body) headers['Content-Type'] = 'application/json';
             return fetch(url, {
                 method: method,
@@ -2419,7 +2420,14 @@
                 body: body ? JSON.stringify(body) : undefined
             }).then(function(r) {
                 return r.json().catch(function() { return { status: 'error' }; });
-            }, function() { return { status: 'error' }; });
+            }, function() { return { status: 'error' }; }).then(function(d) {
+                // An expired nonce (a tab left open overnight) makes WordPress refuse even the
+                // public GET; ask again without it, so text already read still shows
+                if (method === 'GET' && !withoutNonce && d && d.code === 'rest_cookie_invalid_nonce') {
+                    return ocrFetch(method, url, body, true);
+                }
+                return d;
+            });
         }
 
         function openText() {
@@ -3025,11 +3033,14 @@
         var bottom = container.querySelector('[data-pdf-role="bottom-toolbar"] [data-pdf-role="toolbar-row"]');
         var word = container.querySelector('[data-pdf-role="page-word"]');
         var display = container.querySelector('[data-pdf-role="page-display"]');
+        var tools = top ? top.querySelector('[data-pdf-group="middle"]') : null;
         for (var i = 0; i < SIZES.length; i++) {
             var phone = SIZES[i][0] === 'xs' || SIZES[i][0] === 'xxs';
             // On phones "Page" goes, and a printed page number may wrap under the page box
             if (word) word.classList.toggle('d-none', phone);
             if (display) display.classList.toggle('flex-wrap', phone);
+            // On the smallest screens the tools (Adjust, Rotate, Cite, Text) may take two lines
+            if (tools) tools.classList.toggle('flex-wrap', SIZES[i][0] === 'xxs');
             if (top) applyLayout(top, SIZES[i][1]);
             if (bottom) applyLayout(bottom, SIZES[i][2]);
             container.setAttribute('data-pdf-size', SIZES[i][0]);
