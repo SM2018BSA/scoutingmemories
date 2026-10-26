@@ -17,20 +17,27 @@ first unchecked task. Update the checkboxes and the **Progress log** as work lan
    (e.g. the Formidable compatibility layer, Phase 7) or written up here as a question.
 2. **Never update the live site.** No pushes of any kind (WP Engine or GitHub), no dashboard
    buttons, no commits to `master` or `live`. The owner publishes when they decide to.
-3. **Local only.** Test at http://localhost:8088 (Docker). Owner decision 2026-09-25: working
+   `master` is checked out in its own worktree (`sm-main`); agents cannot write or push there,
+   and the owner runs those commands.
+3. **Local only.** Test at https://sm-forms.ddev.site (DDEV). Owner decision 2026-09-25: working
    alongside Formidable is no longer a goal; the plugin must work on its own, every feature is
    tested, and where Formidable's behaviour is insecure the secure choice wins. Formidable (and
    its add-ons) may be deactivated on the local copy for testing; never on live.
-4. **Commits:** local commits on `develop` only, and only plugin paths:
-   `git -C E:/WEB/wpengine_repo add -- wp-content/plugins/scouting-forms`
-   `git -C E:/WEB/wpengine_repo commit -m "..." -- wp-content/plugins/scouting-forms`
+4. **Commits:** local commits on `develop` only, and only plugin paths. The repository is the
+   bare `E:\WEB\sm.git` with one worktree per branch, each with its own DDEV site
+   (`git worktree list` shows which folder holds which branch). Run git inside the worktree,
+   never in `sm.git` itself (the Lefthook hooks fail there):
+   `git add -- wp-content/plugins/scouting-forms`
+   `git commit -m "..." -- wp-content/plugins/scouting-forms`
    Check `git status` first; never commit files outside the plugin.
 5. **Keep Formidable's data where it is.** The plugin reads and writes Formidable's own tables
    (`wp_frm_forms`, `wp_frm_fields`, `wp_frm_items`, `wp_frm_item_metas`, `frm_display` and
    `frm_form_actions` posts). No data migration; the 16k existing entries, form/field IDs and the
    theme's 113 hard-coded IDs stay valid, and turning Formidable back on is an instant rollback.
 6. **No real emails from local testing.** Plugin-triggered mail is intercepted and logged when the
-   site URL is localhost (see Phase 0).
+   site URL is a local address: localhost, 127.0.0.1, `*.local`, `*.test` or `*.ddev.site`
+   (`Support\Environment`, see Phase 0). The Test Tools page and the Compare tool also only exist
+   there.
 7. **Clean up test data.** Test submissions are marked (item_key prefix `smtest-`) and removed with
    the plugin's cleanup tool after each test session. Test posts/users created by test runs are
    removed too. Record anything left behind in the Progress log.
@@ -38,16 +45,17 @@ first unchecked task. Update the checkboxes and the **Progress log** as work lan
    Reka UI are only for the wp-admin builder app.
 9. **Fix problems for real** (no hiding/dismissing warnings). Security: nonces, capability checks,
    `$wpdb->prepare`, escaping on output, sanitizing on input.
-10. PHP edits need `docker compose -f E:/WEB/wpengine_repo/docker-compose.yml restart wordpress`
-    (opcache doesn't re-check files). JS/CSS don't.
+10. If a PHP edit doesn't show up on the site, run `ddev restart` inside the worktree. JS/CSS
+    changes show on reload.
 
 ## Resume checklist
 
 1. Read this file and the memory notes.
-2. `git -C E:/WEB/wpengine_repo status` and `git -C E:/WEB/wpengine_repo log --oneline -5 develop`
-   (must be on `develop`; uncommitted changes should only be inside this plugin).
-3. Make sure the local site answers: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8088/`
-   (start with `docker compose start` in `E:/WEB/wpengine_repo` if needed).
+2. Inside the plugin's worktree (the one serving https://sm-forms.ddev.site): `git status` and
+   `git log --oneline -5 develop` (must be on `develop`; uncommitted changes should only be
+   inside this plugin).
+3. Make sure the local site is running: `ddev describe` inside that worktree (`ddev start` if it
+   is stopped).
 4. Continue at the first unchecked task below. Commit after each finished task.
 
 ---
@@ -420,3 +428,4 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done (with date).
 - 2026-09-25: Full review (see the review report). Fixed: repeating sections now show their Add/Remove labels from the section's settings (Add a Council: "Add Council" / "Remove Council", as in Formidable); while the theme saves the council/camp/lodge ACF lists, names already stored are kept exactly (one camp name had its double space tidied); an empty ID list given to the Formidable stand-ins now matches nothing instead of everything. Test-harness gap found: suites without the ACF guard had left 27 test names in the ACF lists (restored from the live backup) and one test council term (deleted); every suite now uses the guard, which also removes terms created during a test. Re-verified after the fixes: all 16 suites pass, views 105/105 identical to Formidable, theme calls identical except 5 known cases, crawl clean, Formidable tables/posts/users/terms equal to the live backup apart from pre-existing local edits and the old "?" import damage.
 - 2026-09-25: Review, second pass: fields only certain roles may see (e.g. Add a Post's "Post Active", administrators only) are now left out of the page for others, as in Formidable (the server already ignored values sent for them); security suite 28/28 with checks for both. GO-LIVE.md: both Formidable and Scouting Forms off breaks the site; develop also holds the 2026 theme work and a live-theme fix, so publishing all of develop publishes those too (how to bring over only the plugin).
 - 2026-10-26: Submit button colour (owner decision): `Ui\ButtonStyle` gives Submit, Next, Login and Reset Password Bootstrap's btn-secondary in the colours of the form's Formidable style (frm_styles post: the form's `custom_style`, else the default style; none for "no styling" or the style's "Disable submit button styling"), falling back to Formidable's default light blue. New Scouting Forms > Settings page (administrators) with "Use the site green for submit buttons", off by default.
+- 2026-10-26: Local setup changed (owner): the Docker copy at localhost:8088 in `E:/WEB/wpengine_repo` is gone; the repository is now the bare `E:\WEB\sm.git` with one worktree per branch, each with its own DDEV site, and the plugin is tested at https://sm-forms.ddev.site. Rules 2, 3, 4, 6, 10 and the Resume checklist updated. `Support\Environment::isLocal()` now also counts `*.ddev.site` as local; without that, mail interception, test-entry marking, Test Tools, the Compare tool and the local reCAPTCHA skip were all off on the DDEV site.
