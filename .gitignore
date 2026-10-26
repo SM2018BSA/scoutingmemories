@@ -40,3 +40,4 @@ Thumbs.db
 # Starter-theme documents we never deploy
 /wp-content/themes/*/README.md
 /wp-content/themes/*/LICENSE
+/wp-content/plugins/scouting-forms/docs/formidable-usage.json
