@@ -3,7 +3,7 @@
  * Plugin Name: Scouting PDF Embedder
  * Plugin URI: https://scoutingmemories.org/
  * Description: PDF viewer for Scouting Memories, built for research: printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, page rotation, two-page view and sharing part of a page as a picture. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
- * Version: 2.1.1
+ * Version: 2.1.2
  * Author: Roger Ellis / Scouting Memories
  * License: GPL-2.0+
  * Text Domain: scouting-pdf-embedder
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.1.1');
+define('SCOUTING_PDF_VERSION', '2.1.2');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));

@@ -741,13 +741,13 @@ test.describe('page OCR (Text button)', () => {
         expect(savedRows()[0]).toMatchObject({ status: 'done', asks: 2 });
     });
 
-    test('the service not answering, or busy, is explained', async ({ page }) => {
+    test('the service not answering, or busy, is explained and not counted', async ({ page }) => {
         await logIn(page);
         await setMode('down');
         const { viewer, dialog } = await openText(page);
         await readButton(dialog).click();
         await expect(dialog).toContainText('The reading service is not answering right now. Please try again later.', { timeout: 15000 });
-        expect(savedRows()[0]).toMatchObject({ status: 'failed' });
+        expect(savedRows()[0]).toMatchObject({ status: 'failed', asks: 0 });
 
         await setMode('busy');
         await closeDialog(viewer);
@@ -755,6 +755,7 @@ test.describe('page OCR (Text button)', () => {
         await expect(dialog).toContainText('Reading this page did not work last time. You can try again.');
         await readButton(dialog).click();
         await expect(dialog).toContainText('The reading service is busy right now. Please try again in an hour.', { timeout: 15000 });
+        expect(savedRows()[0]).toMatchObject({ status: 'failed', asks: 0 });
     });
 
     test("today's limit stops more pages being read", async ({ page }) => {

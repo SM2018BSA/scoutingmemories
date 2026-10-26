@@ -260,17 +260,40 @@ try {
     $r = $ask(array('url' => $doc, 'page' => 5));
     check('ocr service busy', array($r[0], $r[1]), array(503, 'ocr_busy'));
     $page5 = array_values(array_filter($rows(), function($row) { return (int) $row->page === 5; }));
-    check('ocr failed page kept for a retry, both tries counted', array($page5[0]->status, (int) $page5[0]->asks), array('failed', 2));
+    check('ocr refused page kept for a retry, refusals not counted', array($page5[0]->status, (int) $page5[0]->asks), array('failed', 0));
 
-    // Limits: user b has spent 3 asks today (page 4 once, page 5 twice) against a limit of 3
-    $r = $ask(array('url' => $doc, 'page' => 6));
-    check('ocr reader limit', array($r[0], $r[1]), array(429, 'ocr_limit'));
+    // Limits: user b has spent 1 ask today (page 4) against a limit of 1
+    $with(array('user_limit' => 1), function() use ($ask, $doc) {
+        $r = $ask(array('url' => $doc, 'page' => 6));
+        check('ocr reader limit', array($r[0], $r[1]), array(429, 'ocr_limit'));
+    });
     wp_set_current_user($users[0]);
     $with(array('site_limit' => 1), function() use ($ask, $doc) {
         $r = $ask(array('url' => $doc, 'page' => 7));
         check('ocr site limit', array($r[0], $r[1]), array(429, 'ocr_limit'));
     });
     check('ocr limits send nothing', count($sent), 5);
+
+    // Two requests at the same moment both pass the first limit check: user a (1 ask, page 3,
+    // limit 2) asks for page 8 while another of their requests saves page 9 in between. The ask
+    // that went over is taken back, and nothing is sent.
+    $racing = false;
+    $race = function($query) use (&$racing, $wpdb, $ocr_table, $S, $users) {
+        if (!$racing && strpos($query, 'INSERT IGNORE INTO') === 0 && strpos($query, '/php-checks/guide.pdf') !== false) {
+            $racing = true;
+            $wpdb->insert($ocr_table, array('doc_key' => str_repeat('0', 32), 'page' => 9, 'pdf_url' => "$S/php-checks/other.pdf", 'status' => 'queued', 'requested_by' => $users[0], 'requested_at' => current_time('mysql')));
+        }
+        return $query;
+    };
+    add_filter('query', $race);
+    $with(array('user_limit' => 2), function() use ($ask, $doc) {
+        $r = $ask(array('url' => $doc, 'page' => 8));
+        check('ocr limit checked again after saving', array($r[0], $r[1]), array(429, 'ocr_limit'));
+    });
+    remove_filter('query', $race);
+    check('ocr ...the other request got in first', $racing, true);
+    check('ocr ...the ask over the limit was taken back', count(array_filter($rows(), function($row) { return (int) $row->page === 8; })), 0);
+    check('ocr ...and nothing sent', count($sent), 5);
 
     // Switched off
     $with(array('enabled' => 0), function() use ($ask, $look, $doc, $key) {

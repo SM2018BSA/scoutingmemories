@@ -294,6 +294,27 @@ class Scouting_PDF_OCR {
             && (strtotime($row->requested_at) < strtotime(current_time('mysql')) - 10 * MINUTE_IN_SECONDS);
     }
 
+    /**
+     * Pages asked for today (site time): array(by this reader, by everyone)
+     */
+    private static function asks_today($user_id) {
+        global $wpdb;
+        $table = self::table();
+        $today = current_time('Y-m-d') . ' 00:00:00';
+        return array(
+            (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_by = %d AND requested_at >= %s", $user_id, $today
+            )),
+            (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_at >= %s", $today
+            )),
+        );
+    }
+
+    private static function limit_reached() {
+        return new WP_Error('ocr_limit', "Today's limit for reading pages has been reached.", array('status' => 429));
+    }
+
     // ---- REST routes ---------------------------------------------------------------
 
     public function register_rest_routes() {
@@ -409,29 +430,25 @@ class Scouting_PDF_OCR {
             return rest_ensure_response(array('status' => 'queued', 'doc_key' => $doc_key));
         }
 
-        // Today's limits (site time): the user's, then the whole site's. Every request that
-        // reaches the service is counted ("asks"), so retrying a failed page spends the
-        // allowance like any other request.
+        // Today's limits (site time): the user's, then the whole site's. Every page the service
+        // takes on is counted ("asks"), so retrying a failed read spends the allowance like any
+        // other request; a refusal (service stopped or busy) is given back further down.
         $limits = self::limits();
-        $today = current_time('Y-m-d') . ' 00:00:00';
         $user_id = get_current_user_id();
-        $by_user = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_by = %d AND requested_at >= %s", $user_id, $today
-        ));
-        $by_site = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_at >= %s", $today
-        ));
+        list($by_user, $by_site) = self::asks_today($user_id);
         if ($by_user >= $limits['user'] || $by_site >= $limits['site']) {
-            return new WP_Error('ocr_limit', "Today's limit for reading pages has been reached.", array('status' => 429));
+            return self::limit_reached();
         }
 
         // Save the queued row; the unique key stops two readers creating two jobs
         $now = current_time('mysql');
         if ($row) {
-            // A failed or stale row is asked for again, and the ask is counted
+            // A failed or stale row is asked for again, and the ask is counted. Of two readers
+            // retrying at the same moment only one gets it; the other finds it queued again.
+            $stale_before = gmdate('Y-m-d H:i:s', strtotime($now) - 10 * MINUTE_IN_SECONDS);
             $updated = $wpdb->query($wpdb->prepare(
                 "UPDATE $table SET status = 'queued', asks = asks + 1, job_id = '', requested_by = %d, requested_at = %s, finished_at = NULL
-                 WHERE id = %d AND status IN ('failed', 'queued')", $user_id, $now, $row->id
+                 WHERE id = %d AND (status = 'failed' OR (status = 'queued' AND requested_at < %s))", $user_id, $now, $row->id, $stale_before
             ));
             if (!$updated) {
                 return rest_ensure_response(array('status' => 'queued', 'doc_key' => $doc_key));
@@ -449,12 +466,30 @@ class Scouting_PDF_OCR {
             $row_id = (int) $wpdb->insert_id;
         }
 
+        // Requests sent at the same moment all pass the check above, so look again now that this
+        // ask is saved, and take it back if it went over
+        list($by_user, $by_site) = self::asks_today($user_id);
+        if ($by_user > $limits['user'] || $by_site > $limits['site']) {
+            if ($row) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE $table SET status = 'failed', asks = asks - 1, finished_at = %s WHERE id = %d", current_time('mysql'), $row_id
+                ));
+            } else {
+                $wpdb->delete($table, array('id' => $row_id), array('%d'));
+            }
+            return self::limit_reached();
+        }
+
         // Hand the job to the service
         $answer = self::call_service('POST', '/v1/jobs', wp_json_encode(array('url' => $canonical, 'page' => $page)));
         $job = $answer['json'];
         if (!$job || empty($job['status']) || !empty($job['error'])) {
-            // The row stays retryable either way, but a busy service is not a broken one
-            $wpdb->update($table, array('status' => 'failed', 'finished_at' => current_time('mysql')), array('id' => $row_id));
+            // The service took nothing on, so the ask is given back: a stopped or busy service
+            // must not use up readers' allowances. The row stays retryable either way, but a busy
+            // service is not a broken one.
+            $wpdb->query($wpdb->prepare(
+                "UPDATE $table SET status = 'failed', asks = asks - 1, finished_at = %s WHERE id = %d", current_time('mysql'), $row_id
+            ));
             $refusal = is_array($job) && isset($job['error']) ? (string) $job['error'] : '';
             if (in_array($refusal, array('queue_full', 'hourly_limit', 'paused'), true)) {
                 return new WP_Error('ocr_busy', 'The reading service is busy right now.', array('status' => 503));
