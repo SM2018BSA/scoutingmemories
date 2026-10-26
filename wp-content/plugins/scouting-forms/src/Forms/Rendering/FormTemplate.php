@@ -8,6 +8,7 @@ use ScoutingMemories\Forms\Forms\Submission\SpamGuard;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Support\ShortcodeTrust;
+use ScoutingMemories\Forms\Ui\ButtonStyle;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
@@ -371,7 +372,7 @@ class FormTemplate {
         if ($n > 0) {
             $html .= '<button type="button" class="frm_prev_page ' . esc_attr(ThemeClasses::button('secondary')) . '" data-sm-prev>' . esc_html($prev) . '</button> ';
         }
-        $html .= '<button type="button" class="frm_next_page ' . esc_attr(ThemeClasses::button('scout')) . '" data-sm-next>' . esc_html($nextLabel) . '</button>';
+        $html .= '<button type="button" ' . ButtonStyle::attributes('frm_next_page', $form['options']['custom_style'] ?? 1) . ' data-sm-next>' . esc_html($nextLabel) . '</button>';
         return $html . '</div>';
     }
 
@@ -474,8 +475,11 @@ class FormTemplate {
             '[draft_label]' => '',
             '[form_key]' => esc_attr($form['key']),
         ]);
-        // Formidable's button class plus the site's Bootstrap button
-        $template = preg_replace('/class="frm_button_submit/', 'class="frm_button_submit ' . esc_attr(ThemeClasses::button('scout')), $template, 1);
+        // Formidable's button class plus the site's Bootstrap button, coloured per ButtonStyle
+        $styleId = $opts['custom_style'] ?? 1;
+        $style = ButtonStyle::style($styleId);
+        $button = ($style !== '' ? 'style="' . esc_attr($style) . '" ' : '') . 'class="frm_button_submit ' . esc_attr(ButtonStyle::classes($styleId));
+        $template = preg_replace_callback('/class="frm_button_submit/', static fn() => $button, $template, 1);
         if ($paged) {
             // Only the last page shows the submit button (forms-front.js)
             $template = preg_replace('/class="frm_submit/', 'data-sm-final class="frm_submit', $template, 1);

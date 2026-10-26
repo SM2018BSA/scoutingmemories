@@ -27,6 +27,23 @@
     --bs-btn-focus-shadow-rgb: var(--sm-green-rgb);
 }
 
+/* Submit buttons as they looked under Formidable: the colours of the form's Formidable style,
+   set on the button by ButtonStyle, else Formidable's default light blue */
+.sm-forms .sm-btn-formidable {
+    --bs-btn-color: var(--sm-submit-color, #fff);
+    --bs-btn-bg: var(--sm-submit-bg, #579af6);
+    --bs-btn-border-color: var(--sm-submit-border, #579af6);
+    --bs-btn-hover-color: var(--sm-submit-hover-color, #444);
+    --bs-btn-hover-bg: var(--sm-submit-hover-bg, #efefef);
+    --bs-btn-hover-border-color: var(--sm-submit-hover-border, #ccc);
+    --bs-btn-active-color: var(--sm-submit-active-color, #444);
+    --bs-btn-active-bg: var(--sm-submit-active-bg, #efefef);
+    --bs-btn-active-border-color: var(--sm-submit-active-border, #ccc);
+    --bs-btn-disabled-color: var(--sm-submit-color, #fff);
+    --bs-btn-disabled-bg: var(--sm-submit-bg, #579af6);
+    --bs-btn-disabled-border-color: var(--sm-submit-border, #579af6);
+}
+
 /* Required-field marker after the label text */
 .sm-forms .sm-required::after {
     content: " *";

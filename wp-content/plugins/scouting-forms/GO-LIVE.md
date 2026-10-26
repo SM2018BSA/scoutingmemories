@@ -84,8 +84,10 @@ can stay active alongside Formidable.
 ## Later
 
 - When everything has run well for a while, the Formidable plugins can be deleted.
-- Open questions for you: the three search forms (Search Councils / Camps / Lodges) email the admin
-  on every search (switch those email actions off in the builder if not wanted); submit button colour.
+- Open question for you: the three search forms (Search Councils / Camps / Lodges) email the admin
+  on every search (switch those email actions off in the builder if not wanted).
+- Submit buttons keep Formidable's colours (light blue). To use the site green instead, tick
+  "Use the site green for submit buttons" under wp-admin > Scouting Forms > Settings.
 - Theme problems the plugin works around (they affect live today while Formidable runs): Edit Users
   with a single role left the member with no role; adding a council/camp/lodge as a non-administrator
   could break the ACF list of names.

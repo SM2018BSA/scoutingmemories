@@ -7,6 +7,7 @@ use ScoutingMemories\Forms\Models\ArchiveRepository;
 use ScoutingMemories\Forms\Support\Environment;
 use ScoutingMemories\Forms\Support\Mailer;
 use ScoutingMemories\Forms\Support\TestData;
+use ScoutingMemories\Forms\Ui\ButtonStyle;
 
 /**
  * AdminMenu
@@ -19,6 +20,7 @@ class AdminMenu {
     public static function registerHooks(): void {
         add_action('admin_menu', [__CLASS__, 'addAdminPages']);
         add_action('admin_init', [__CLASS__, 'handleAdminActions']);
+        add_action('admin_init', [__CLASS__, 'registerSettings']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueueAdminAssets']);
         add_action('admin_notices', [__CLASS__, 'displayAdminNotice']);
         add_action('wp_ajax_sm_dismiss_guide_notice', [__CLASS__, 'dismissNotice']);
@@ -104,6 +106,16 @@ class AdminMenu {
             'manage_options',
             'scouting-archives-tools',
             [__CLASS__, 'renderToolsPage']
+        );
+
+        // Settings: submit button colour
+        add_submenu_page(
+            'scouting-forms-builder',
+            __('Scouting Forms Settings', 'scouting-forms'),
+            __('🎨 Settings', 'scouting-forms'),
+            'manage_options',
+            'scouting-forms-settings',
+            [__CLASS__, 'renderSettingsPage']
         );
 
         // Local development only: test data cleanup and intercepted mail log
@@ -255,6 +267,24 @@ class AdminMenu {
         check_ajax_referer('sm_dismiss_notice_nonce', 'nonce');
         update_user_meta(get_current_user_id(), 'sm_dismiss_guide_notice', 1);
         wp_send_json_success();
+    }
+
+    /**
+     * Options saved through options.php from the Settings page (administrators only).
+     */
+    public static function registerSettings(): void {
+        register_setting('sm_forms_settings', ButtonStyle::OPTION, [
+            'type' => 'boolean',
+            'default' => false,
+            'sanitize_callback' => static fn($value) => empty($value) ? 0 : 1,
+        ]);
+    }
+
+    public static function renderSettingsPage(): void {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Permission denied.', 'scouting-forms'));
+        }
+        include SM_FORMS_PLUGIN_DIR . 'views/admin/settings-page.php';
     }
 
     public static function renderTestToolsPage(): void {
