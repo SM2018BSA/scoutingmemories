@@ -38,9 +38,9 @@ switched off the site stops with an error on every page.
 2. Publish the plugin with your dashboard. Note that the `develop` branch also holds two commits made
    before this work: the Scouting-Memories-2026 theme in progress (4f48df4) and a 4-line fix to the live
    theme's `Classes/Theme.php` for the search dropdowns (a43d240). Merging all of `develop` into
-   `master` publishes those too. To publish only the plugin, bring just its folder over to `master`:
+   `master` publishes those too. To publish only the plugin, bring just its folder over to `master`.
+   Run these in the `sm-main` worktree, where `master` is checked out (not in `sm.git` itself):
 
-       git checkout master
        git checkout develop -- wp-content/plugins/scouting-forms
        git commit -m "Scouting Forms plugin"
 
