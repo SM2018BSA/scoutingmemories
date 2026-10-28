@@ -13,10 +13,8 @@ namespace ScoutingMemories\Forms\Tools;
  * No entries (personal data) are exported, email addresses are redacted and Formidable's global
  * settings (which hold CAPTCHA keys) are left out. The output file is git-ignored.
  *
- * Run locally:
- *   docker compose exec -T wordpress php -r 'define("WP_USE_THEMES",false);
- *     $_SERVER["HTTP_HOST"]="localhost:8088"; require "/var/www/html/wp-load.php";
- *     echo \ScoutingMemories\Forms\Tools\FormidableAudit::writeFile();'
+ * Run locally, inside the worktree whose DDEV site has the data (e.g. sm-forms.ddev.site):
+ *   ddev wp eval 'echo \ScoutingMemories\Forms\Tools\FormidableAudit::writeFile();'
  */
 class FormidableAudit {
 
