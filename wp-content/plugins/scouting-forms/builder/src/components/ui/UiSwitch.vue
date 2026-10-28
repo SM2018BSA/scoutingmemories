@@ -17,9 +17,9 @@ const emit = defineEmits<{
 <template>
   <label class="inline-flex items-center gap-2.5 cursor-pointer select-none">
     <SwitchRoot
-      :checked="modelValue"
+      :model-value="modelValue"
       :disabled="disabled"
-      @update:checked="emit('update:modelValue', $event)"
+      @update:model-value="emit('update:modelValue', Boolean($event))"
       class="w-10 h-6 bg-slate-200 rounded-full relative data-[state=checked]:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <SwitchThumb

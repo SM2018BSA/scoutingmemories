@@ -2,7 +2,12 @@
 
 namespace ScoutingMemories\Forms\Admin;
 
+use ScoutingMemories\Forms\Support\Permissions;
 use ScoutingMemories\Forms\Models\ArchiveRepository;
+use ScoutingMemories\Forms\Support\Environment;
+use ScoutingMemories\Forms\Support\Mailer;
+use ScoutingMemories\Forms\Support\TestData;
+use ScoutingMemories\Forms\Ui\ButtonStyle;
 
 /**
  * AdminMenu
@@ -15,6 +20,7 @@ class AdminMenu {
     public static function registerHooks(): void {
         add_action('admin_menu', [__CLASS__, 'addAdminPages']);
         add_action('admin_init', [__CLASS__, 'handleAdminActions']);
+        add_action('admin_init', [__CLASS__, 'registerSettings']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'enqueueAdminAssets']);
         add_action('admin_notices', [__CLASS__, 'displayAdminNotice']);
         add_action('wp_ajax_sm_dismiss_guide_notice', [__CLASS__, 'dismissNotice']);
@@ -25,7 +31,7 @@ class AdminMenu {
         add_menu_page(
             __('Scouting Forms & Views Studio', 'scouting-forms'),
             __('Scouting Forms', 'scouting-forms'),
-            'manage_options',
+            'sm_view_forms',
             'scouting-forms-builder',
             [__CLASS__, 'renderBuilderPage'],
             'dashicons-feedback',
@@ -37,7 +43,7 @@ class AdminMenu {
             'scouting-forms-builder',
             __('Forms & Fields Studio', 'scouting-forms'),
             __('📋 Forms & Fields', 'scouting-forms'),
-            'manage_options',
+            'sm_view_forms',
             'scouting-forms-builder',
             [__CLASS__, 'renderBuilderPage']
         );
@@ -47,7 +53,7 @@ class AdminMenu {
             'scouting-forms-builder',
             __('Views & Templates Studio', 'scouting-forms'),
             __('👁️ Views Studio', 'scouting-forms'),
-            'manage_options',
+            'sm_edit_displays',
             'scouting-forms-views',
             [__CLASS__, 'renderBuilderPage']
         );
@@ -57,7 +63,7 @@ class AdminMenu {
             'scouting-forms-builder',
             __('Entries Manager', 'scouting-forms'),
             __('📑 Entries Manager', 'scouting-forms'),
-            'manage_options',
+            'sm_view_entries',
             'scouting-forms-entries',
             [__CLASS__, 'renderBuilderPage']
         );
@@ -66,7 +72,7 @@ class AdminMenu {
         add_submenu_page(
             'scouting-forms-builder',
             __('Historical Councils Archive', 'scouting-forms'),
-            __('🏛️ Councils (2,323)', 'scouting-forms'),
+            __('🏛️ Councils', 'scouting-forms'),
             'manage_options',
             'scouting-archives-councils',
             [__CLASS__, 'renderCouncilsPage']
@@ -76,7 +82,7 @@ class AdminMenu {
         add_submenu_page(
             'scouting-forms-builder',
             __('Historical Camps Archive', 'scouting-forms'),
-            __('🏕️ Camps (3,552)', 'scouting-forms'),
+            __('🏕️ Camps', 'scouting-forms'),
             'manage_options',
             'scouting-archives-camps',
             [__CLASS__, 'renderCampsPage']
@@ -86,7 +92,7 @@ class AdminMenu {
         add_submenu_page(
             'scouting-forms-builder',
             __('Order of the Arrow Lodges', 'scouting-forms'),
-            __('🏹 Lodges (1,003)', 'scouting-forms'),
+            __('🏹 Lodges', 'scouting-forms'),
             'manage_options',
             'scouting-archives-lodges',
             [__CLASS__, 'renderLodgesPage']
@@ -101,6 +107,28 @@ class AdminMenu {
             'scouting-archives-tools',
             [__CLASS__, 'renderToolsPage']
         );
+
+        // Settings: submit button colour
+        add_submenu_page(
+            'scouting-forms-builder',
+            __('Scouting Forms Settings', 'scouting-forms'),
+            __('🎨 Settings', 'scouting-forms'),
+            'manage_options',
+            'scouting-forms-settings',
+            [__CLASS__, 'renderSettingsPage']
+        );
+
+        // Local development only: test data cleanup and intercepted mail log
+        if (Environment::isLocal()) {
+            add_submenu_page(
+                'scouting-forms-builder',
+                __('Test Tools (local only)', 'scouting-forms'),
+                __('🧪 Test Tools', 'scouting-forms'),
+                'manage_options',
+                'scouting-forms-test-tools',
+                [__CLASS__, 'renderTestToolsPage']
+            );
+        }
 
         // Submenu 8: User Guide & Walkthrough
         add_submenu_page(
@@ -151,7 +179,18 @@ class AdminMenu {
                 'nonce'       => wp_create_nonce('wp_rest'),
                 'adminUrl'    => admin_url(),
                 'activeTheme' => get_stylesheet(),
-                'hook'        => $hook
+                'hook'        => $hook,
+                // What this person may do (the REST API checks the same capabilities)
+                'can'         => [
+                    'viewForms'     => Permissions::can('view_forms'),
+                    'editForms'     => Permissions::can('edit_forms'),
+                    'deleteForms'   => Permissions::can('delete_forms'),
+                    'views'         => Permissions::can('edit_displays'),
+                    'viewEntries'   => Permissions::can('view_entries'),
+                    'createEntries' => Permissions::can('create_entries'),
+                    'editEntries'   => Permissions::can('edit_entries'),
+                    'deleteEntries' => Permissions::can('delete_entries'),
+                ],
             ]);
         }
 
@@ -183,8 +222,10 @@ class AdminMenu {
             return;
         }
 
+        // Only on the Dashboard and Plugins screens, so it never sits on top of Formidable's
+        // (or anyone else's) admin pages while both plugins are in use
         $screen = get_current_screen();
-        if ($screen && (strpos($screen->id, 'scouting-forms') !== false || strpos($screen->id, 'scouting-archives') !== false)) {
+        if (!$screen || !in_array($screen->id, ['dashboard', 'plugins'], true)) {
             return;
         }
 
@@ -200,7 +241,7 @@ class AdminMenu {
         <div class="notice notice-info is-dismissible sm-admin-notice" style="border-left: 4px solid #2563eb; background: #ffffff; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin: 15px 0;">
             <p style="font-size: 14px; margin: 0 0 8px 0; color: #0f172a;">
                 <strong style="color: #1e3a8a;">🎉 Scouting Forms & Views Studio is active!</strong>
-                Manage your 23 forms, 266 fields, 14 views, and historical archives from the left sidebar under <strong>Scouting Forms</strong>.
+                Manage your forms, fields, views, entries and historical archives from the left sidebar under <strong>Scouting Forms</strong>.
             </p>
             <p style="margin: 0;">
                 <a href="<?php echo esc_url($builder_url); ?>" class="button button-primary" style="background: #2563eb; border-color: #1d4ed8;">
@@ -228,8 +269,63 @@ class AdminMenu {
         wp_send_json_success();
     }
 
+    /**
+     * Options saved through options.php from the Settings page (administrators only).
+     */
+    public static function registerSettings(): void {
+        register_setting('sm_forms_settings', ButtonStyle::OPTION, [
+            'type' => 'boolean',
+            'default' => false,
+            'sanitize_callback' => static fn($value) => empty($value) ? 0 : 1,
+        ]);
+    }
+
+    public static function renderSettingsPage(): void {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Permission denied.', 'scouting-forms'));
+        }
+        include SM_FORMS_PLUGIN_DIR . 'views/admin/settings-page.php';
+    }
+
+    public static function renderTestToolsPage(): void {
+        if (!current_user_can('manage_options') || !Environment::isLocal()) {
+            wp_die(__('Permission denied.', 'scouting-forms'));
+        }
+        $counts = TestData::counts();
+        $mailLog = Mailer::getLog();
+        include SM_FORMS_PLUGIN_DIR . 'views/admin/test-tools-page.php';
+    }
+
+    /**
+     * Test Tools actions (local copies only): delete marked test data, clear the mail log.
+     */
+    private static function handleTestToolsActions(string $action): void {
+        if (!Environment::isLocal() || !current_user_can('manage_options')) {
+            wp_die(__('Permission denied.', 'scouting-forms'));
+        }
+        check_admin_referer('sm_test_tools');
+
+        $args = ['page' => 'scouting-forms-test-tools'];
+        if ($action === 'cleanup_test_data') {
+            $removed = TestData::cleanup();
+            $args['removed_entries'] = $removed['entries'];
+            $args['removed_posts'] = $removed['posts'];
+            $args['removed_users'] = $removed['users'];
+        } elseif ($action === 'clear_mail_log') {
+            Mailer::clearLog();
+            $args['mail_cleared'] = 1;
+        }
+
+        wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
+        exit;
+    }
+
     public static function handleAdminActions(): void {
-        if (!isset($_POST['sm_admin_action']) || $_POST['sm_admin_action'] !== 'batch_update_dates') {
+        $action = isset($_POST['sm_admin_action']) ? sanitize_key(wp_unslash($_POST['sm_admin_action'])) : '';
+        if (in_array($action, ['cleanup_test_data', 'clear_mail_log'], true)) {
+            self::handleTestToolsActions($action);
+        }
+        if ($action !== 'batch_update_dates') {
             return;
         }
 
@@ -241,7 +337,11 @@ class AdminMenu {
             wp_die(__('Permission denied.', 'scouting-forms'));
         }
 
-        $year = sanitize_text_field($_POST['target_year'] ?? date('Y'));
+        // Written into every active council, camp and lodge: only a real year is accepted
+        $year = sanitize_text_field(wp_unslash($_POST['target_year'] ?? date('Y')));
+        if (!preg_match('/^\d{4}$/', $year) || (int) $year < 1900 || (int) $year > (int) date('Y') + 1) {
+            wp_die(esc_html__('Please enter a year such as 2026.', 'scouting-forms'), '', ['back_link' => true]);
+        }
         $counts = ArchiveRepository::updateActiveEndDates($year);
 
         wp_safe_redirect(add_query_arg([

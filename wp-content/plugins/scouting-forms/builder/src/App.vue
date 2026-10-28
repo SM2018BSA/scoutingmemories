@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import {
   TabsRoot,
   TabsList,
@@ -31,15 +31,31 @@ declare global {
       nonce: string;
       adminUrl: string;
       activeTheme: string;
+      hook?: string;
+      can?: Record<string, boolean>;
     };
   }
 }
 
 const restBase = window.smBuilderConfig?.restUrl || '/wp-json/scouting-forms/v1';
 const nonce = window.smBuilderConfig?.nonce || '';
+const adminUrl = window.smBuilderConfig?.adminUrl || '/wp-admin/';
+const ajaxUrl = adminUrl + 'admin-ajax.php';
 
-// Global State
-const currentTab = ref('forms');
+// What this person may do (the REST API checks the same capabilities)
+const can = {
+  viewForms: true, editForms: true, deleteForms: false, views: true, viewEntries: true,
+  createEntries: true, editEntries: true, deleteEntries: true,
+  ...(window.smBuilderConfig?.can || {})
+};
+
+// Global State: open the tab of the admin page that was clicked
+const hook = window.smBuilderConfig?.hook || '';
+const currentTab = ref(
+  hook.includes('scouting-forms-entries') && can.viewEntries ? 'entries'
+    : hook.includes('scouting-forms-views') && can.views ? 'views'
+    : can.viewForms ? 'forms' : 'entries'
+);
 const toastMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null);
 
 function showToast(text: string, type: 'success' | 'error' = 'success') {
@@ -64,7 +80,9 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(err.message || 'API error');
+    const error: Error & { errors?: Record<string, string> } = new Error(err.message || 'API error');
+    error.errors = err.errors || undefined;
+    throw error;
   }
 
   return response.json();
@@ -78,6 +96,23 @@ const formsLoading = ref(false);
 const activeFormId = ref<number | null>(null);
 const activeFormData = ref<any | null>(null);
 const formSaving = ref(false);
+const formErrors = ref<Record<string, string>>({});
+const actionErrors = ref<Record<string, Record<string, string>>>({});
+const actionSaving = ref<number | null>(null);
+const formEditorRef = ref<any>(null);
+
+// The builder's copy of a form: fields carry a "ref" the server uses to point at problems
+function useBuilderData(res: any) {
+  activeFormData.value = {
+    form: res.form,
+    fields: (res.fields || []).map((f: any) => ({ ...f, ref: String(f.id) })),
+    actions: res.actions || [],
+    pages: res.pages || [],
+    operators: res.operators || [],
+    new_field_types: res.new_field_types || [],
+    can_delete: res.can_delete ?? activeFormData.value?.can_delete ?? can.deleteForms
+  };
+}
 
 async function loadForms() {
   formsLoading.value = true;
@@ -94,11 +129,10 @@ async function loadForms() {
 async function selectForm(formId: number) {
   try {
     formsLoading.value = true;
-    const res = await apiFetch(`/forms/${formId}`);
-    activeFormData.value = {
-      ...res.form,
-      fields: res.fields || []
-    };
+    const res = await apiFetch(`/forms/${formId}/builder`);
+    formErrors.value = {};
+    actionErrors.value = {};
+    useBuilderData(res);
     activeFormId.value = formId;
   } catch (err: any) {
     showToast(`Failed to load form #${formId}: ${err.message}`, 'error');
@@ -107,32 +141,84 @@ async function selectForm(formId: number) {
   }
 }
 
-async function saveForm(payload: { form: any; fields: any[] }) {
+async function saveForm(payload: { form: any; fields: any[]; deleted: number[] }) {
   formSaving.value = true;
+  formErrors.value = {};
   try {
-    // 1. Update form settings
+    // 1. Form settings
     await apiFetch(`/forms/${payload.form.id}`, {
       method: 'POST',
       body: JSON.stringify({
         name: payload.form.name,
         form_key: payload.form.form_key,
+        description: payload.form.description,
         submit_value: payload.form.submit_value,
-        success_msg: payload.form.success_msg
+        edit_value: payload.form.edit_value
       })
     });
 
-    // 2. Save fields
-    await apiFetch(`/forms/${payload.form.id}/fields`, {
+    // 2. Fields: all checked by the server before anything is written
+    const res = await apiFetch(`/forms/${payload.form.id}/fields`, {
       method: 'POST',
-      body: JSON.stringify({ fields: payload.fields })
+      body: JSON.stringify({ fields: payload.fields, deleted: payload.deleted })
     });
-
-    showToast('Form and fields saved successfully!');
+    useBuilderData(res);
+    formEditorRef.value?.afterSave();
+    showToast('Form saved.');
     await loadForms();
   } catch (err: any) {
-    showToast(`Error saving form: ${err.message}`, 'error');
+    formErrors.value = err.errors || { form: err.message };
+    showToast(err.errors ? 'Nothing was saved: some fields need attention.' : `Error saving form: ${err.message}`, 'error');
   } finally {
     formSaving.value = false;
+  }
+}
+
+// Actions keep their open/closed state; only the saved one is replaced
+function mergeActions(res: any) {
+  if (activeFormData.value) activeFormData.value.actions = res.actions || [];
+}
+
+async function saveAction(action: any) {
+  actionSaving.value = action.id;
+  actionErrors.value = { ...actionErrors.value, [action.id]: {} };
+  try {
+    const res = await apiFetch(`/actions/${action.id}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: action.name, active: action.active, event: action.event,
+        settings: action.settings, conditions: action.conditions
+      })
+    });
+    mergeActions(res);
+    showToast(`"${action.name}" saved.`);
+  } catch (err: any) {
+    actionErrors.value = { ...actionErrors.value, [action.id]: err.errors || {} };
+    showToast(err.message || 'Error saving the action', 'error');
+  } finally {
+    actionSaving.value = null;
+  }
+}
+
+async function createAction(type: string) {
+  if (!activeFormId.value) return;
+  try {
+    const res = await apiFetch(`/forms/${activeFormId.value}/actions`, { method: 'POST', body: JSON.stringify({ type }) });
+    mergeActions(res);
+    showToast('Action added (inactive until you switch it on and save).');
+  } catch (err: any) {
+    showToast(`Error adding the action: ${err.message}`, 'error');
+  }
+}
+
+async function removeAction(action: any) {
+  if (!confirm(`Move the action "${action.name}" to the trash?`)) return;
+  try {
+    const res = await apiFetch(`/actions/${action.id}`, { method: 'DELETE' });
+    mergeActions(res);
+    showToast('Action moved to the trash.');
+  } catch (err: any) {
+    showToast(`Error: ${err.message}`, 'error');
   }
 }
 
@@ -192,7 +278,7 @@ async function createNewView() {
   try {
     const res = await apiFetch('/views', {
       method: 'POST',
-      body: JSON.stringify({ title: 'New Custom View', form_id: 8 })
+      body: JSON.stringify({ title: 'New Custom View', form_id: selectedFormIdForEntries.value || forms.value[0]?.id })
     });
     showToast('Created new view!');
     await loadViews();
@@ -207,16 +293,22 @@ async function createNewView() {
 // ----------------------------------------------------
 const entries = ref<any[]>([]);
 const entriesLoading = ref(false);
-const selectedFormIdForEntries = ref(8);
+const selectedFormIdForEntries = ref(0);
 const entriesTotal = ref(0);
 const entriesPage = ref(1);
 const entriesPages = ref(1);
+const entriesColumns = ref<{ id: number; name: string }[]>([]);
+const entriesSearch = ref('');
+const entriesOrder = ref<'asc' | 'desc'>('desc');
+const exportUrl = computed(() => `${restBase}/entries/export?form_id=${selectedFormIdForEntries.value}&_wpnonce=${encodeURIComponent(nonce)}`);
 
 // Entry Edit Modal
 const isEntryModalOpen = ref(false);
 const editingEntryId = ref<number | null>(null);
 const editingEntryFields = ref<any[]>([]);
-const editingEntryMetas = ref<Record<number, any>>({});
+const editingEntryMetas = ref<Record<string, any>>({});
+const editingEntryDisplay = ref<Record<string, string>>({});
+const editingEntryErrors = ref<Record<string, string>>({});
 const entrySaving = ref(false);
 
 async function loadEntries(formId: number, page: number = 1) {
@@ -225,8 +317,13 @@ async function loadEntries(formId: number, page: number = 1) {
   entriesLoading.value = true;
 
   try {
-    const res = await apiFetch(`/entries?form_id=${formId}&page=${page}&limit=25`);
+    const params = new URLSearchParams({
+      form_id: String(formId), page: String(page), limit: '25',
+      search: entriesSearch.value, orderby: 'created_at', order: entriesOrder.value
+    });
+    const res = await apiFetch(`/entries?${params.toString()}`);
     entries.value = res.entries || [];
+    entriesColumns.value = res.columns || [];
     entriesTotal.value = res.total || 0;
     entriesPages.value = res.pages || 1;
   } catch (err: any) {
@@ -243,6 +340,8 @@ async function openEditEntry(entryId: number) {
     const res = await apiFetch(`/entries/${entryId}`);
     editingEntryFields.value = res.fields || [];
     editingEntryMetas.value = res.metas || {};
+    editingEntryDisplay.value = res.display || {};
+    editingEntryErrors.value = {};
     isEntryModalOpen.value = true;
   } catch (err: any) {
     showToast(`Failed to load entry #${entryId}: ${err.message}`, 'error');
@@ -252,6 +351,8 @@ async function openEditEntry(entryId: number) {
 function openCreateEntry() {
   editingEntryId.value = null;
   editingEntryMetas.value = {};
+  editingEntryDisplay.value = {};
+  editingEntryErrors.value = {};
   // Find fields from active form
   const currentForm = forms.value.find(f => f.id === selectedFormIdForEntries.value);
   if (currentForm) {
@@ -264,7 +365,7 @@ function openCreateEntry() {
   }
 }
 
-async function saveEntryData(payload: { entryId: number | null; formId: number; metas: Record<number, any> }) {
+async function saveEntryData(payload: { entryId: number | null; formId: number; metas: Record<string, any> }) {
   entrySaving.value = true;
   try {
     if (payload.entryId) {
@@ -284,9 +385,12 @@ async function saveEntryData(payload: { entryId: number | null; formId: number; 
       showToast('New entry created!');
     }
     isEntryModalOpen.value = false;
+    editingEntryErrors.value = {};
     await loadEntries(selectedFormIdForEntries.value, entriesPage.value);
   } catch (err: any) {
-    showToast(`Error saving entry: ${err.message}`, 'error');
+    // Field problems stay in the dialog next to the fields
+    editingEntryErrors.value = err.errors || {};
+    showToast(err.errors ? 'Some fields need attention.' : `Error saving entry: ${err.message}`, 'error');
   } finally {
     entrySaving.value = false;
   }
@@ -308,11 +412,24 @@ function switchToEntriesForForm(formId: number) {
   loadEntries(formId, 1);
 }
 
-// Initial Mount
-onMounted(() => {
-  loadForms();
-  loadViews();
-  loadEntries(8, 1);
+function searchEntries(term: string) {
+  entriesSearch.value = term;
+  loadEntries(selectedFormIdForEntries.value, 1);
+}
+
+function toggleEntriesOrder() {
+  entriesOrder.value = entriesOrder.value === 'desc' ? 'asc' : 'desc';
+  loadEntries(selectedFormIdForEntries.value, 1);
+}
+
+// Initial Mount: the first form that has entries opens in the entries manager
+onMounted(async () => {
+  await loadForms();
+  if (can.views) loadViews();
+  if (can.viewEntries) {
+    const first = forms.value.find((f) => !Number(f.parent_form_id) && Number(f.entry_count) > 0) || forms.value[0];
+    if (first) loadEntries(Number(first.id), 1);
+  }
 });
 </script>
 
@@ -339,13 +456,13 @@ onMounted(() => {
           </span>
         </h1>
         <p class="text-xs text-slate-300 mt-1 max-w-2xl">
-          Visual Form Builder & View Template Editor. Directly manages your 23 forms, 266 fields, 14 views, and 15,913 entries with zero data loss.
+          Forms, views and entries of the Scouting Memories site, kept in the same tables Formidable uses.
         </p>
       </div>
 
       <div class="flex items-center gap-2">
         <a
-          :href="window.smBuilderConfig?.adminUrl + 'admin.php?page=scouting-archives'"
+          :href="adminUrl + 'admin.php?page=scouting-archives'"
           class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
         >
           <BookOpen class="w-4 h-4" />
@@ -358,6 +475,7 @@ onMounted(() => {
     <TabsRoot v-model="currentTab" class="w-full">
       <TabsList class="flex items-center gap-1 bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs mb-6 select-none">
         <TabsTrigger
+          v-if="can.viewForms"
           value="forms"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all cursor-pointer"
         >
@@ -366,6 +484,7 @@ onMounted(() => {
         </TabsTrigger>
 
         <TabsTrigger
+          v-if="can.views"
           value="views"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all cursor-pointer"
         >
@@ -374,6 +493,7 @@ onMounted(() => {
         </TabsTrigger>
 
         <TabsTrigger
+          v-if="can.viewEntries"
           value="entries"
           class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all cursor-pointer"
         >
@@ -386,10 +506,19 @@ onMounted(() => {
       <TabsContent value="forms" class="focus:outline-none">
         <div v-if="activeFormId && activeFormData">
           <FormEditor
-            :form="activeFormData"
+            ref="formEditorRef"
+            :key="activeFormId"
+            :builder="activeFormData"
             :saving="formSaving"
+            :errors="formErrors"
+            :action-errors="actionErrors"
+            :action-saving="actionSaving"
+            :can-edit="can.editForms"
             @back="activeFormId = null; activeFormData = null"
             @save="saveForm"
+            @save-action="saveAction"
+            @create-action="createAction"
+            @remove-action="removeAction"
           />
         </div>
         <div v-else>
@@ -406,6 +535,7 @@ onMounted(() => {
       <TabsContent value="views" class="focus:outline-none">
         <div v-if="activeViewId && activeViewData">
           <ViewEditor
+            :key="activeViewId"
             :view="activeViewData"
             :available-fields="availableFields"
             :saving="viewSaving"
@@ -429,12 +559,21 @@ onMounted(() => {
           :forms="forms"
           :selected-form-id="selectedFormIdForEntries"
           :entries="entries"
+          :columns="entriesColumns"
           :total="entriesTotal"
           :page="entriesPage"
           :pages="entriesPages"
           :loading="entriesLoading"
-          @change-form="loadEntries($event, 1)"
+          :search="entriesSearch"
+          :order="entriesOrder"
+          :export-url="exportUrl"
+          :can-create="can.createEntries"
+          :can-edit="can.editEntries"
+          :can-delete="can.deleteEntries"
+          @change-form="entriesSearch = ''; loadEntries($event, 1)"
           @change-page="loadEntries(selectedFormIdForEntries, $event)"
+          @search="searchEntries"
+          @toggle-order="toggleEntriesOrder"
           @edit-entry="openEditEntry"
           @create-entry="openCreateEntry"
           @delete-entry="deleteEntry"
@@ -447,7 +586,10 @@ onMounted(() => {
           :form-id="selectedFormIdForEntries"
           :fields="editingEntryFields"
           :metas="editingEntryMetas"
+          :display="editingEntryDisplay"
+          :errors="editingEntryErrors"
           :saving="entrySaving"
+          :ajax-url="ajaxUrl"
           @save="saveEntryData"
         />
       </TabsContent>

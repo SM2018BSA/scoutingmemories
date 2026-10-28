@@ -1,0 +1,8 @@
+# Local-only files for the Scouting Forms plugin (never committed)
+
+# Read-only snapshot of the site's Formidable configuration (regenerate with
+# src/Tools/FormidableAudit.php). Stays on this computer.
+/docs/formidable-usage.json
+
+# Builder dependencies (installed with npm inside builder/)
+/builder/node_modules/

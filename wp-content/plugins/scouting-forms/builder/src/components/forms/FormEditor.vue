@@ -1,125 +1,138 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import UiCard from '../ui/UiCard.vue';
 import UiButton from '../ui/UiButton.vue';
 import UiInput from '../ui/UiInput.vue';
 import UiBadge from '../ui/UiBadge.vue';
-import UiSwitch from '../ui/UiSwitch.vue';
 import UiDialog from '../ui/UiDialog.vue';
+import FieldSettings from './FieldSettings.vue';
+import ActionsPanel from './ActionsPanel.vue';
 import {
-  ArrowLeft,
-  Save,
-  Plus,
-  ArrowUp,
-  ArrowDown,
-  Trash2,
-  CheckCircle2,
-  AlertCircle
+  ArrowLeft, Save, Plus, ArrowUp, ArrowDown, Trash2, ChevronDown, ChevronRight, AlertCircle, GitBranch, Undo2
 } from 'lucide-vue-next';
 
-interface FieldItem {
-  id: number;
-  name: string;
-  type: string;
-  field_key: string;
-  required: boolean;
-  default_value: string;
-  field_order: number;
-  classes?: string;
-  placeholder?: string;
-  field_options?: any;
-}
-
-interface FormData {
-  id: number;
-  name: string;
-  form_key: string;
-  description: string;
-  submit_value?: string;
-  success_msg?: string;
-  fields: FieldItem[];
-}
-
+/**
+ * Edits a form in Formidable's tables: settings, fields (with choices and conditional logic) and
+ * actions. Field changes are saved together with "Save form"; the server checks everything first
+ * and saves nothing if a field needs attention (the message appears on that field).
+ */
 const props = defineProps<{
-  form: FormData;
+  builder: any;
   saving: boolean;
+  errors: Record<string, string>;
+  actionErrors: Record<string, Record<string, string>>;
+  actionSaving: number | null;
+  canEdit: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'back'): void;
-  (e: 'save', payload: { form: FormData; fields: FieldItem[] }): void;
+  (e: 'save', payload: { form: any; fields: any[]; deleted: number[] }): void;
+  (e: 'save-action', action: any): void;
+  (e: 'create-action', type: string): void;
+  (e: 'remove-action', action: any): void;
 }>();
 
-// Add Field Modal State
-const isAddModalOpen = ref(false);
-const newFieldType = ref('text');
-const newFieldLabel = ref('');
+const form = computed(() => props.builder.form);
+const fields = computed<any[]>(() => props.builder.fields);
+const deleted = ref<number[]>([]);
+const removed = ref<{ field: any; index: number }[]>([]);
+const expanded = ref<Record<string, boolean>>({});
 
-const fieldTypes = [
-  { value: 'text', label: 'Single Line Text' },
-  { value: 'textarea', label: 'Multi-line Paragraph' },
-  { value: 'number', label: 'Number / Year' },
-  { value: 'select', label: 'Dropdown Select' },
-  { value: 'radio', label: 'Radio Buttons' },
-  { value: 'checkbox', label: 'Checkboxes' },
-  { value: 'date', label: 'Date Picker' },
-  { value: 'email', label: 'Email Address' },
-  { value: 'url', label: 'Website URL' },
-  { value: 'hidden', label: 'Hidden Field' }
-];
+const typeLabels: Record<string, string> = {
+  text: 'Text', textarea: 'Paragraph', email: 'Email', url: 'Website', number: 'Number', phone: 'Phone',
+  date: 'Date', time: 'Time', select: 'Dropdown', radio: 'Radio buttons', checkbox: 'Checkboxes', hidden: 'Hidden',
+  html: 'HTML', divider: 'Section', end_divider: 'Section end', break: 'Page break', data: 'Dynamic', toggle: 'Toggle',
+  user_id: 'User ID', file: 'File upload', rte: 'Rich text', password: 'Password', captcha: 'reCAPTCHA', range: 'Slider'
+};
 
-function moveField(index: number, direction: 'up' | 'down') {
-  const targetIndex = direction === 'up' ? index - 1 : index + 1;
-  if (targetIndex < 0 || targetIndex >= props.form.fields.length) return;
+// Sections indent the fields inside them
+const depth = computed(() => {
+  let open = false;
+  return fields.value.map((f) => {
+    if (f.type === 'divider') { open = true; return 0; }
+    if (f.type === 'end_divider') { open = false; return 0; }
+    return open ? 1 : 0;
+  });
+});
 
-  const temp = props.form.fields[index];
-  props.form.fields[index] = props.form.fields[targetIndex];
-  props.form.fields[targetIndex] = temp;
+const hasLogic = (f: any) => f.logic && f.logic.rows && f.logic.rows.length > 0;
+const refOf = (f: any) => String(f.ref || f.id);
+
+function move(index: number, d: number) {
+  const j = index + d;
+  const list = fields.value;
+  if (j < 0 || j >= list.length) return;
+  [list[index], list[j]] = [list[j], list[index]];
 }
 
-function removeField(index: number) {
-  if (confirm(`Remove field "${props.form.fields[index].name}"?`)) {
-    props.form.fields.splice(index, 1);
+function remove(index: number) {
+  const f = fields.value[index];
+  if (f.theme_constant) {
+    alert(`The theme uses "${f.name}" (${f.theme_constant}), so it cannot be deleted.`);
+    return;
   }
+  if (['divider', 'end_divider'].includes(f.type)) {
+    alert('Sections cannot be deleted here.');
+    return;
+  }
+  if (f.id) {
+    if (!confirm(`Delete the field "${f.name}"?\n\nWhen you save, the field and every answer saved in it are deleted. This cannot be undone.`)) return;
+    deleted.value.push(f.id);
+    removed.value.push({ field: f, index });
+  }
+  fields.value.splice(index, 1);
 }
 
-function handleAddField() {
-  if (!newFieldLabel.value.trim()) return;
+// Add field dialog
+const isAddOpen = ref(false);
+const newType = ref('text');
+const newLabel = ref('');
+let newCount = 0;
 
-  const keySlug = newFieldLabel.value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-
-  props.form.fields.push({
-    id: 0, // 0 signifies new field to be inserted
-    name: newFieldLabel.value.trim(),
-    type: newFieldType.value,
-    field_key: `field_${keySlug || Date.now()}`,
-    required: false,
-    default_value: '',
-    field_order: props.form.fields.length + 1,
-    placeholder: '',
-    classes: ''
+function addField() {
+  if (!newLabel.value.trim()) return;
+  const choiceType = ['select', 'radio', 'checkbox'].includes(newType.value);
+  const ref = `new${Date.now()}${newCount++}`;
+  fields.value.push({
+    id: 0, ref, name: newLabel.value.trim(), field_key: '', type: newType.value, description: '', required: false,
+    default_value: '', default_locked: false, placeholder: '', classes: '', blank: '', invalid: '', unique: false,
+    unique_msg: '', separate_value: false,
+    choices: choiceType ? [{ key: '', label: 'Option 1', value: 'Option 1', array: false }, { key: '', label: 'Option 2', value: 'Option 2', array: false }] : null,
+    logic: { show_hide: 'show', any_all: 'any', rows: [] }, in_section: 0, repeat: false, info: [], theme_constant: ''
   });
-
-  newFieldLabel.value = '';
-  newFieldType.value = 'text';
-  isAddModalOpen.value = false;
+  expanded.value[ref] = true;
+  newLabel.value = '';
+  newType.value = 'text';
+  isAddOpen.value = false;
 }
 
-function handleSave() {
-  emit('save', {
-    form: props.form,
-    fields: props.form.fields
-  });
+function save() {
+  emit('save', { form: form.value, fields: fields.value, deleted: deleted.value });
 }
+
+// Called by the parent after a successful save (the server sends the fresh form)
+function afterSave() {
+  deleted.value = [];
+  removed.value = [];
+}
+
+// Put fields marked for deletion back where they were
+function restoreDeleted() {
+  for (const r of [...removed.value].reverse()) {
+    fields.value.splice(Math.min(r.index, fields.value.length), 0, r.field);
+  }
+  deleted.value = [];
+  removed.value = [];
+}
+defineExpose({ afterSave });
+
+const errorCount = computed(() => Object.keys(props.errors || {}).length);
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Header Navigation & Action Bar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm sticky top-8 z-10">
       <div class="flex items-center gap-3">
         <UiButton variant="outline" size="sm" @click="emit('back')">
           <ArrowLeft class="w-4 h-4" />
@@ -129,148 +142,117 @@ function handleSave() {
           <h2 class="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span>{{ form.name }}</span>
             <UiBadge variant="info">Form #{{ form.id }}</UiBadge>
+            <UiBadge v-if="form.parent_form_id" variant="neutral">Part of form #{{ form.parent_form_id }}</UiBadge>
           </h2>
-          <p class="text-xs text-slate-500 font-mono mt-0.5">Key: {{ form.form_key }}</p>
+          <p class="text-xs text-slate-500 font-mono mt-0.5">[sm_form id={{ form.id }}]</p>
         </div>
       </div>
-
-      <div class="flex items-center gap-2">
-        <UiButton variant="outline" @click="isAddModalOpen = true">
-          <Plus class="w-4 h-4" />
-          <span>Add New Field</span>
-        </UiButton>
-
-        <UiButton variant="scout" :disabled="saving" @click="handleSave">
-          <Save class="w-4 h-4" />
-          <span>{{ saving ? 'Saving Changes...' : 'Save Form & Fields' }}</span>
+      <div v-if="canEdit" class="flex items-center gap-2">
+        <span v-if="deleted.length" class="text-xs text-red-700 font-semibold">{{ deleted.length }} field(s) will be deleted</span>
+        <UiButton v-if="deleted.length" variant="ghost" size="sm" @click="restoreDeleted"><Undo2 class="w-3.5 h-3.5" /><span>Undo</span></UiButton>
+        <UiButton variant="outline" @click="isAddOpen = true"><Plus class="w-4 h-4" /><span>Add field</span></UiButton>
+        <UiButton variant="scout" :disabled="saving" @click="save">
+          <Save class="w-4 h-4" /><span>{{ saving ? 'Saving…' : 'Save form' }}</span>
         </UiButton>
       </div>
     </div>
 
-    <!-- Form Settings Panel -->
-    <UiCard title="General Form Settings" subtitle="Configure submission actions, keys, and confirmation messages">
+    <div v-if="errorCount" class="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+      <AlertCircle class="w-5 h-5 flex-shrink-0" />
+      <div>
+        <p class="font-semibold">The fields were not saved. {{ errors.form || 'Please fix the marked fields.' }}</p>
+        <ul v-if="deleted.length" class="mt-1 text-xs">
+          <li v-for="id in deleted.filter((d) => errors[String(d)])" :key="id">Field #{{ id }}: {{ errors[String(id)] }}</li>
+        </ul>
+      </div>
+    </div>
+
+    <UiCard title="Form settings">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <UiInput v-model="form.name" label="Form Title" required />
-        <UiInput v-model="form.form_key" label="Form Key (Unique Slug)" required />
-        <UiInput v-model="form.submit_value" label="Submit Button Label" placeholder="Submit" />
-        <UiInput v-model="form.success_msg" label="Success Message" placeholder="Your submission was successful." />
+        <UiInput v-model="form.name" label="Form title" required />
+        <UiInput v-model="form.form_key" label="Form key" required />
+        <UiInput v-model="form.submit_value" label="Submit button" placeholder="Submit" />
+        <UiInput v-model="form.edit_value" label="Update button (when editing)" placeholder="Update" />
+      </div>
+      <div class="mt-4">
+        <label class="sm-builder-label">Description</label>
+        <textarea v-model="form.description" rows="2" class="sm-builder-input text-sm" />
       </div>
     </UiCard>
 
-    <!-- Fields Canvas / Reordering List -->
     <UiCard>
       <template #header>
         <div>
-          <h3 class="text-base font-bold text-slate-900 tracking-tight">Form Fields ({{ form.fields.length }})</h3>
-          <p class="text-xs text-slate-500 mt-0.5">Drag or use arrow buttons to reorder fields. Changes persist directly to the database.</p>
+          <h3 class="text-base font-bold text-slate-900 tracking-tight">Fields ({{ fields.length }})</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Click a field to change its settings. Use the arrows to reorder. Nothing is stored until you press "Save form".</p>
         </div>
-        <UiButton variant="outline" size="sm" @click="isAddModalOpen = true">
-          <Plus class="w-3.5 h-3.5" />
-          <span>Add Field</span>
-        </UiButton>
       </template>
 
-      <div v-if="form.fields.length === 0" class="text-center py-12 text-slate-400">
-        <p class="text-sm">No fields in this form yet. Click "Add New Field" above to start.</p>
-      </div>
+      <p v-if="!fields.length" class="text-center py-12 text-sm text-slate-400">No fields yet.</p>
 
-      <div v-else class="space-y-3">
+      <div class="space-y-2">
         <div
-          v-for="(field, index) in form.fields"
-          :key="field.id || index"
-          class="bg-slate-50 border border-slate-200 rounded-xl p-4 transition-all hover:border-slate-300 hover:shadow-xs"
+          v-for="(field, index) in fields"
+          :key="refOf(field)"
+          class="border rounded-xl transition-all"
+          :class="[
+            errors[refOf(field)] ? 'border-red-400 bg-red-50/40' : field.type === 'divider' || field.type === 'end_divider' ? 'border-slate-300 bg-slate-100' : 'border-slate-200 bg-slate-50',
+            depth[index] ? 'ml-8' : ''
+          ]"
         >
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <!-- Left: Order & Meta -->
-            <div class="flex items-center gap-3">
-              <div class="flex flex-col gap-1">
-                <button
-                  type="button"
-                  :disabled="index === 0"
-                  @click="moveField(index, 'up')"
-                  class="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed rounded hover:bg-slate-200 transition-colors"
-                  title="Move Up"
-                >
-                  <ArrowUp class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  :disabled="index === form.fields.length - 1"
-                  @click="moveField(index, 'down')"
-                  class="p-1 text-slate-400 hover:text-slate-800 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed rounded hover:bg-slate-200 transition-colors"
-                  title="Move Down"
-                >
-                  <ArrowDown class="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div>
-                <div class="flex items-center gap-2">
-                  <UiBadge variant="neutral">Order {{ index + 1 }}</UiBadge>
-                  <UiBadge variant="info">{{ field.type }}</UiBadge>
-                  <span v-if="field.id" class="text-xs text-slate-400 font-mono">ID: {{ field.id }}</span>
-                </div>
-              </div>
+          <div class="flex items-center gap-3 p-3">
+            <div v-if="canEdit" class="flex flex-col">
+              <button type="button" :disabled="index === 0" class="p-0.5 text-slate-400 hover:text-slate-800 disabled:opacity-30 cursor-pointer" title="Move up" @click="move(index, -1)"><ArrowUp class="w-3.5 h-3.5" /></button>
+              <button type="button" :disabled="index === fields.length - 1" class="p-0.5 text-slate-400 hover:text-slate-800 disabled:opacity-30 cursor-pointer" title="Move down" @click="move(index, 1)"><ArrowDown class="w-3.5 h-3.5" /></button>
             </div>
-
-            <!-- Middle: Editable Inputs -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
-              <UiInput v-model="field.name" label="Label / Title" placeholder="Field Label" />
-              <UiInput v-model="field.field_key" label="Field Key" placeholder="field_key" />
-              <UiInput v-model="field.placeholder" label="Placeholder" placeholder="Optional placeholder" />
-            </div>
-
-            <!-- Right: Controls & Actions -->
-            <div class="flex items-center justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-slate-200">
-              <UiSwitch v-model="field.required" label="Required" />
-              <button
-                type="button"
-                @click="removeField(index)"
-                class="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                title="Delete Field"
-              >
-                <Trash2 class="w-4 h-4" />
-              </button>
-            </div>
+            <button type="button" class="flex-1 flex items-center gap-2 text-left cursor-pointer min-w-0" :aria-expanded="!!expanded[refOf(field)]" @click="expanded[refOf(field)] = !expanded[refOf(field)]">
+              <component :is="expanded[refOf(field)] ? ChevronDown : ChevronRight" class="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <span class="font-semibold text-sm text-slate-900 truncate">{{ field.name || '(no label)' }}<span v-if="field.required" class="text-red-500"> *</span></span>
+              <UiBadge variant="neutral">{{ typeLabels[field.type] || field.type }}</UiBadge>
+              <UiBadge v-if="field.repeat" variant="info">Repeating</UiBadge>
+              <span v-if="hasLogic(field)" class="inline-flex items-center gap-1 text-xs text-blue-700" title="Has conditional logic"><GitBranch class="w-3.5 h-3.5" />logic</span>
+              <UiBadge v-if="!field.id" variant="scout">New</UiBadge>
+              <span v-if="field.id" class="text-xs text-slate-400 font-mono">#{{ field.id }}</span>
+            </button>
+            <button v-if="canEdit" type="button" class="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 cursor-pointer" title="Delete field" @click="remove(index)">
+              <Trash2 class="w-4 h-4" />
+            </button>
+          </div>
+          <p v-if="errors[refOf(field)]" class="px-4 pb-2 text-xs text-red-700 font-semibold">{{ errors[refOf(field)] }}</p>
+          <div v-if="expanded[refOf(field)]" class="px-4 pb-4">
+            <FieldSettings :field="field" :fields="fields" :operators="builder.operators" />
           </div>
         </div>
       </div>
     </UiCard>
 
-    <!-- Add Field Modal Dialog -->
-    <UiDialog
-      v-model:open="isAddModalOpen"
-      title="Add New Form Field"
-      description="Select the input type and label for your new field"
-    >
+    <ActionsPanel
+      :actions="builder.actions"
+      :fields="fields"
+      :pages="builder.pages"
+      :operators="builder.operators"
+      :errors="actionErrors"
+      :saving="actionSaving"
+      :can-edit="canEdit"
+      :can-delete="!!builder.can_delete"
+      @save="emit('save-action', $event)"
+      @create="emit('create-action', $event)"
+      @remove="emit('remove-action', $event)"
+    />
+
+    <UiDialog v-model:open="isAddOpen" title="Add a field" description="Choose the kind of field and its label. It is added at the end; move it with the arrows.">
       <div class="space-y-4 py-2">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-            Field Type
-          </label>
-          <select
-            v-model="newFieldType"
-            class="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-          >
-            <option v-for="ft in fieldTypes" :key="ft.value" :value="ft.value">
-              {{ ft.label }} ({{ ft.value }})
-            </option>
+          <label class="sm-builder-label">Kind of field</label>
+          <select v-model="newType" class="sm-builder-input">
+            <option v-for="t in builder.new_field_types" :key="t" :value="t">{{ typeLabels[t] || t }}</option>
           </select>
         </div>
-
-        <UiInput
-          v-model="newFieldLabel"
-          label="Field Label"
-          placeholder="e.g. Council Name, Operating Years..."
-          required
-        />
+        <UiInput v-model="newLabel" label="Label" placeholder="e.g. Council Name" required />
       </div>
-
       <template #footer>
-        <UiButton variant="outline" @click="isAddModalOpen = false">Cancel</UiButton>
-        <UiButton variant="primary" :disabled="!newFieldLabel.trim()" @click="handleAddField">
-          Add Field to Form
-        </UiButton>
+        <UiButton variant="outline" @click="isAddOpen = false">Cancel</UiButton>
+        <UiButton variant="primary" :disabled="!newLabel.trim()" @click="addField">Add field</UiButton>
       </template>
     </UiDialog>
   </div>
