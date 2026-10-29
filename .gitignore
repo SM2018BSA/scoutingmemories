@@ -11,14 +11,35 @@
 /*
 !/.gitignore
 
-# ...except wp-content, where only our folders are allowed
+# ...except our tests
+!/tests/
+
+# ...the AI Tagging Assistant that runs on the development server (never published to
+# WP Engine). Inside it, ONLY the listed files and folders: anything else (state,
+# cache, keys, settings files) stays out of a public repository.
+!/tagger-service/
+/tagger-service/*
+!/tagger-service/.gitattributes
+!/tagger-service/README.md
+!/tagger-service/tagger_service.py
+!/tagger-service/scouting-tagger.service
+!/tagger-service/skills/
+/tagger-service/skills/*
+!/tagger-service/skills/*.md
+!/tagger-service/static/
+/tagger-service/static/*
+!/tagger-service/static/app.html
+!/tagger-service/static/settings.html
+!/tagger-service/static/app.js
+
+# ...and wp-content, where only our folders are allowed
 !/wp-content/
 /wp-content/*
 
 !/wp-content/plugins/
 /wp-content/plugins/*
 !/wp-content/plugins/scouting-pdf-embedder/
-!/wp-content/plugins/scouting-forms/
+!/wp-content/plugins/scouting-ai-tagger/
 
 !/wp-content/mu-plugins/
 /wp-content/mu-plugins/*
@@ -27,17 +48,29 @@
 !/wp-content/themes/
 /wp-content/themes/*
 !/wp-content/themes/scoutingmemories/
-!/wp-content/themes/Scouting-Memories-2026/
 
 # Never commit, even inside our folders
 node_modules/
+test-results/
+playwright-report/
 .env
 .env.*
+*.env
+.ssh/
 *.log
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.sql
+*.sql.gz
+*.sqlite3
+*.pem
+*.key
+*.bak
 
 # Starter-theme documents we never deploy
 /wp-content/themes/*/README.md
 /wp-content/themes/*/LICENSE
-/wp-content/plugins/scouting-forms/docs/formidable-usage.json
