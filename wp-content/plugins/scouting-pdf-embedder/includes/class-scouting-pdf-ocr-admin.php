@@ -30,6 +30,8 @@ class Scouting_PDF_OCR_Admin {
 
     private function __construct() {
         add_action('rest_api_init', array($this, 'register_rest_routes'));
+        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
     }
 
     /**
@@ -183,6 +185,9 @@ class Scouting_PDF_OCR_Admin {
             'queue'         => $queue,
             'backoff_until' => $backoff ? wp_date('Y-m-d H:i:s', $backoff) : null,
             'last_tick'     => Scouting_PDF_OCR_Queue::last_tick() !== '' ? Scouting_PDF_OCR_Queue::last_tick() : null,
+            // Seconds, counted here: the browser's clock may sit in another timezone
+            'last_tick_age' => Scouting_PDF_OCR_Queue::last_tick() !== ''
+                ? max(0, strtotime(current_time('mysql')) - strtotime(Scouting_PDF_OCR_Queue::last_tick())) : null,
             'docs'          => $counts,
             'current'       => $current ? array(
                 'doc_key'     => $current->doc_key,
@@ -490,6 +495,100 @@ class Scouting_PDF_OCR_Admin {
             get_current_user_id(), current_time('mysql'), $key
         ));
         return rest_ensure_response(array('approved' => $approved));
+    }
+
+    // ---- The PDF Text page --------------------------------------------------------------
+
+    /**
+     * Top level on purpose: reviewers are editors, and editors never see the Settings menu,
+     * so a Settings submenu would hide this from the people who use it daily. The page only
+     * appears while the feature is on.
+     */
+    public function add_admin_menu() {
+        if (!Scouting_PDF_OCR::enabled()) {
+            return;
+        }
+        add_menu_page('PDF Text', 'PDF Text', apply_filters('scouting_pdf_ocr_review_cap', 'edit_others_posts'),
+            'scouting-pdf-text', array($this, 'render_page'), 'dashicons-media-text', 26);
+    }
+
+    public function enqueue_assets($hook) {
+        if ($hook === 'toplevel_page_scouting-pdf-text') {
+            self::enqueue_admin_script();
+        }
+    }
+
+    public static function enqueue_admin_script() {
+        wp_enqueue_script('scouting-pdf-admin',
+            SCOUTING_PDF_PLUGIN_URL . 'assets/js/scouting-pdf-admin.js', array(), SCOUTING_PDF_VERSION, true);
+        wp_add_inline_script('scouting-pdf-admin', 'window.ScoutingPdfAdminConfig = ' . wp_json_encode(array(
+            'restRoot' => esc_url_raw(rest_url('scouting-pdf/v1/ocr/admin/')),
+            'nonce'    => wp_create_nonce('wp_rest'),
+            'isAdmin'  => current_user_can('manage_options'),
+            'queueOn'  => Scouting_PDF_OCR::queue_enabled(),
+        )) . ';', 'before');
+    }
+
+    public function render_page() {
+        if (!self::can_review()) {
+            return;
+        }
+        $tab = isset($_GET['tab']) && $_GET['tab'] === 'queue' ? 'queue' : 'overview';
+        $base = admin_url('admin.php?page=scouting-pdf-text');
+        $is_admin = current_user_can('manage_options');
+        $test_url = wp_nonce_url(admin_url('admin-post.php?action=scouting_pdf_ocr_test'), 'scouting_pdf_ocr_test');
+        ?>
+        <div class="wrap" id="sm-ocr-dashboard" data-tab="<?php echo esc_attr($tab); ?>">
+            <h1>PDF Text</h1>
+            <nav class="nav-tab-wrapper">
+                <a class="nav-tab <?php echo $tab === 'overview' ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url($base); ?>">Overview</a>
+                <a class="nav-tab <?php echo $tab === 'queue' ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url($base . '&tab=queue'); ?>">Queue</a>
+            </nav>
+            <?php if ($tab === 'overview') : ?>
+            <div id="sm-ocr-overview">
+                <p id="sm-ocr-state">Loading…</p>
+                <p id="sm-ocr-docs-line"></p>
+                <p id="sm-ocr-today-line"></p>
+                <p id="sm-ocr-unchecked-line"></p>
+                <p id="sm-ocr-current" hidden></p>
+                <p id="sm-ocr-lastrun"></p>
+                <p>
+                    <?php if ($is_admin) : ?>
+                        <button type="button" class="button button-primary" id="sm-ocr-resume" hidden>Resume the queue</button>
+                        <button type="button" class="button" id="sm-ocr-pause" hidden>Pause the queue</button>
+                        <button type="button" class="button" id="sm-ocr-tick">Run once now</button>
+                        <?php if (Scouting_PDF_OCR::enabled()) : ?>
+                            <a href="<?php echo esc_url($test_url); ?>" class="button">Test connection</a>
+                        <?php endif; ?>
+                        <a href="<?php echo esc_url(admin_url('options-general.php?page=scouting-pdf-ocr')); ?>">Settings</a>
+                    <?php endif; ?>
+                </p>
+                <p id="sm-ocr-action-result"></p>
+            </div>
+            <?php else : ?>
+            <div id="sm-ocr-queue">
+                <?php if ($is_admin) : ?>
+                <p>
+                    <label for="sm-ocr-add-url"><strong>Add one document by its link</strong></label><br>
+                    <input type="url" id="sm-ocr-add-url" class="regular-text" placeholder="https://storage.scoutingmemories.org/…/file.pdf">
+                    <button type="button" class="button" id="sm-ocr-add">Add document</button>
+                    <span class="description">It goes to the front of the queue.</span>
+                </p>
+                <p id="sm-ocr-add-result"></p>
+                <p>
+                    <button type="button" class="button" id="sm-ocr-scan">Find every document on the site</button>
+                    <span id="sm-ocr-scan-progress"></span>
+                </p>
+                <?php endif; ?>
+                <table class="widefat striped">
+                    <thead><tr><th>Document</th><th>Pages</th><th>Checked</th><th>Status</th><th>Added</th><th></th></tr></thead>
+                    <tbody id="sm-ocr-docs"><tr><td colspan="6">Loading…</td></tr></tbody>
+                </table>
+                <div class="tablenav"><div class="tablenav-pages" id="sm-ocr-pager"></div></div>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
     }
 
     /**

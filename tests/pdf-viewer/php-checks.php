@@ -653,7 +653,7 @@ try {
     // The status poll (as a reviewer)
     $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('GET', "$v1/ocr/admin/status"); });
     check('status answers a reviewer', $r[0], 200);
-    check('status shape', array_keys($r[2]), array('queue', 'backoff_until', 'last_tick', 'docs', 'current', 'pages_unchecked', 'today'));
+    check('status shape', array_keys($r[2]), array('queue', 'backoff_until', 'last_tick', 'last_tick_age', 'docs', 'current', 'pages_unchecked', 'today'));
     check('status: paused', $r[2]['queue'], 'paused');
     check('status: the waiting text is counted', $r[2]['pages_unchecked'], 3);
     check('status: not cached', $r[3]->get_headers()['Cache-Control'], 'no-store');

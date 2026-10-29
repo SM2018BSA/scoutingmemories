@@ -671,6 +671,9 @@ class Scouting_PDF_OCR {
         <div class="wrap">
             <h1>PDF OCR</h1>
             <p>Lets logged-in readers have the text of one PDF page read by the OCR service. Text already read is shown to everyone.</p>
+            <?php if (self::enabled()) : ?>
+                <p>Run background reading and follow the queue on the <a href="<?php echo esc_url(admin_url('admin.php?page=scouting-pdf-text')); ?>">PDF Text page</a>.</p>
+            <?php endif; ?>
             <?php if ($constants) : ?>
                 <div class="notice notice-info"><p>The service address and secret are set in <code>wp-config.php</code>, so the feature is <strong><?php echo self::enabled() ? 'on' : 'off'; ?></strong> and the boxes below are ignored.</p></div>
             <?php endif; ?>
