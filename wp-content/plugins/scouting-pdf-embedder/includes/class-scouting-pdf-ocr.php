@@ -483,6 +483,7 @@ class Scouting_PDF_OCR {
         if ($status === 'done') {
             $out['text'] = (string) $row->text;
             $out['engine'] = (string) $row->engine;
+            $out['reviewed'] = $row->review_status === 'approved';
         }
         return self::with_cache_headers(rest_ensure_response($out), $status === 'done' || $status === 'empty');
     }
@@ -528,6 +529,7 @@ class Scouting_PDF_OCR {
             if ($row->status === 'done') {
                 $out['text'] = (string) $row->text;
                 $out['engine'] = (string) $row->engine;
+                $out['reviewed'] = $row->review_status === 'approved';
             }
             return rest_ensure_response($out);
         }
@@ -613,6 +615,7 @@ class Scouting_PDF_OCR {
             if ($saved->status === 'done') {
                 $out['text'] = (string) $saved->text;
                 $out['engine'] = (string) $saved->engine;
+                $out['reviewed'] = $saved->review_status === 'approved';
             }
             return rest_ensure_response($out);
         }

@@ -2539,7 +2539,9 @@
                     return;
                 }
                 if (d.status === 'done' && typeof d.text === 'string') {
-                    var note = el('p', '', 'Machine-read text. It may contain mistakes, so check it against the page.');
+                    var note = el('p', '', d.reviewed
+                        ? 'Machine-read text, checked by a reviewer.'
+                        : 'Machine-read text. It may contain mistakes, so check it against the page.');
                     var copyBtn = greenButton('Copy text', 'bi-clipboard-check', function() {
                         copyText(d.text).then(function() { toast('Text copied.'); }, function() {
                             toast('Couldn’t copy automatically. Select the text and copy it instead.', null, null, 5000);

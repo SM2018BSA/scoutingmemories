@@ -665,6 +665,7 @@ try {
         array(1, 'done', 'pending', 'T', false));
     $r = $call('GET', "$v1/ocr/admin/doc-text", null, array('doc_key' => str_repeat('f', 32)));
     check('doc-text: a document never queued', array($r[2]['doc'], $r[2]['pages']), array(null, array()));
+    check('viewer: unchecked text is not marked reviewed', $look($d->key, 2)[2]['reviewed'] ?? null, false);
 
     $r = $call('POST', "$v1/ocr/admin/approve/$p1", array('text' => 'Corrected'));
     check('approve: with a correction', array($r[0], $r[2]['review_status']), array(200, 'approved'));
@@ -684,6 +685,7 @@ try {
     check('approve-doc: approves what still waits', $r[2]['approved'], 1);
     $r = $call('GET', "$v1/ocr/admin/docs");
     check('docs list: the checked count follows', $r[2]['docs'][0]['pages_checked'], 3);
+    check('viewer: approved text is marked reviewed', $look($d->key, 1)[2]['reviewed'] ?? null, true);
 
     // "Read this document" from the post's edit screen (as a reviewer)
     $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $matrix_post) {
