@@ -32,6 +32,8 @@ import sys
 import threading
 import time
 import traceback
+import unicodedata
+import urllib.parse
 
 
 def log(message):
@@ -119,7 +121,7 @@ INSTALLED_UNIT = '/etc/systemd/system/scouting-tagger.service'
 # Who may use the app at all; "admin" (the settings dashboard) is a separate flag on the login link
 ALLOWED_ROLES = ('administrator', 'manager', 'historian', 'regional', 'index_contributor')
 
-VERSION = '0.2.0'           # step 2: service skeleton (sessions, pages, index status)
+VERSION = '0.3.0'           # step 3: the index arrives from WordPress; the dropdowns work
 OCR_READY = False           # set in main(); on this PC the OCR tools may be missing
 
 
@@ -179,6 +181,20 @@ CREATE TABLE IF NOT EXISTS name_tokens (
     id    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS name_tokens_token ON name_tokens (token);
+-- which states an entity belongs to and which councils a camp/lodge belongs to,
+-- unpacked from the JSON columns at import time so the dropdowns are plain joins
+CREATE TABLE IF NOT EXISTS entity_states (
+    type     TEXT NOT NULL,
+    id       INTEGER NOT NULL,
+    state_id INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS entity_states_state ON entity_states (state_id, type);
+CREATE TABLE IF NOT EXISTS entity_councils (
+    type       TEXT NOT NULL,
+    id         INTEGER NOT NULL,
+    council_id INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS entity_councils_council ON entity_councils (council_id, type);
 CREATE TABLE IF NOT EXISTS notes (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     title    TEXT NOT NULL,
@@ -422,6 +438,259 @@ def too_many_login_failures(con):
     return recent >= LOGIN_FAILS_PER_HOUR
 
 
+# ---- The index (the RAG memory's backbone) --------------------------------------------------
+
+def normalize_text(value):
+    """Lower-case ASCII words only: what name matching and the token index work on"""
+    folded = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii').lower()
+    return re.sub(r'[^a-z0-9]+', ' ', folded).strip()
+
+
+def tokens_of(value):
+    return [piece for piece in normalize_text(value).split() if len(piece) >= 2 or piece.isdigit()]
+
+
+IMPORT_SOURCES = ('wp', 'csv', 'xlsx')
+ENTITY_KINDS = ('state', 'council', 'camp', 'lodge')
+LINK_RELATIONS = ('lineage', 'camp_council', 'lodge_council')
+CHUNK_ROWS_MAX = 500
+
+
+def clean_str(value, most):
+    return value.strip()[:most] if isinstance(value, str) else ''
+
+
+def clean_year(value):
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    if isinstance(value, bool) or not isinstance(value, int) or not 1800 <= value <= 2100:
+        return None
+    return value
+
+
+def clean_entry_id(value):
+    if isinstance(value, str) and value.isdigit():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10 ** 9:
+        return None
+    return value
+
+
+def clean_id_list(value):
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value[:50]:
+        entry = clean_entry_id(item)
+        if entry is not None and entry not in out:
+            out.append(entry)
+    return out
+
+
+def clean_text_list(value, most):
+    if not isinstance(value, list):
+        return []
+    return [clean_str(item, most) for item in value[:20] if clean_str(item, most)]
+
+
+def clean_row(kind, row):
+    """One pushed row in the shape the tables take, or None when it makes no sense"""
+    if not isinstance(row, dict):
+        return None
+    if kind in ENTITY_KINDS:
+        entry = clean_entry_id(row.get('id'))
+        name = clean_str(row.get('name'), 160)
+        if entry is None or not name:
+            return None
+        status = clean_str(row.get('status'), 20).lower()
+        return {
+            'id': entry, 'name': name,
+            'number': clean_str(row.get('number'), 12),
+            'code': clean_str(row.get('code'), 8).upper(),
+            'slug': clean_str(row.get('slug'), 160).lower(),
+            'states': clean_id_list(row.get('states')),
+            'councils': clean_id_list(row.get('councils')),
+            'start_year': clean_year(row.get('start')),
+            'end_year': clean_year(row.get('end')),
+            'status': status,
+            'aliases': clean_text_list(row.get('aliases'), 160),
+        }
+    if kind == 'link':
+        parent, child = clean_entry_id(row.get('parent_id')), clean_entry_id(row.get('child_id'))
+        if row.get('relation') not in LINK_RELATIONS or parent is None or child is None:
+            return None
+        return {'relation': row['relation'], 'parent_id': parent, 'child_id': child,
+                'role': clean_str(row.get('role'), 20),
+                'from_year': clean_year(row.get('from_year')), 'to_year': clean_year(row.get('to_year'))}
+    if kind == 'post':
+        post = clean_entry_id(row.get('post_id'))
+        if post is None:
+            return None
+        return {'post_id': post,
+                'title': clean_str(row.get('title'), 300),
+                'category': clean_str(row.get('category'), 40),
+                'states': clean_text_list(row.get('states'), 8),
+                'council': clean_str(row.get('council'), 160).lower(),
+                'camp': clean_str(row.get('camp'), 160).lower(),
+                'lodge': clean_str(row.get('lodge'), 160).lower(),
+                'start_date': clean_str(row.get('start_date'), 10),
+                'end_date': clean_str(row.get('end_date'), 10),
+                'publisher': clean_str(row.get('publisher'), 300),
+                'subject': clean_str(row.get('subject'), 300),
+                'identifier': clean_str(row.get('identifier'), 100)}
+    return None
+
+
+class Importer:
+    """The index arrives in signed chunks and replaces the old one in a single step,
+    so a push that breaks off half-way changes nothing."""
+
+    @staticmethod
+    def begin(con, source, expected):
+        con.execute('BEGIN IMMEDIATE')
+        try:
+            con.execute("UPDATE import_batches SET status = 'aborted' WHERE status = 'open'")
+            con.execute("DELETE FROM staging_rows WHERE batch_id NOT IN (SELECT id FROM import_batches WHERE status = 'open')")
+            batch = secrets.token_hex(8)
+            con.execute("INSERT INTO import_batches (id, source, started, expected, status) VALUES (?, ?, ?, ?, 'open')",
+                        (batch, source, int(time.time()), json.dumps(expected)[:2000], ))
+            con.execute('COMMIT')
+            return batch
+        except BaseException:
+            try:
+                con.execute('ROLLBACK')
+            except sqlite3.Error:
+                pass
+            raise
+
+    @staticmethod
+    def open_batch(con, batch):
+        if not isinstance(batch, str) or not re.fullmatch(r'[0-9a-f]{16}', batch):
+            raise Refused(400, 'unknown_batch')
+        row = con.execute("SELECT * FROM import_batches WHERE id = ? AND status = 'open'", (batch,)).fetchone()
+        if row is None:
+            raise Refused(409, 'unknown_batch')
+        return row
+
+    @staticmethod
+    def chunk(con, batch, kind, rows):
+        Importer.open_batch(con, batch)
+        if kind not in ENTITY_KINDS + ('link', 'post'):
+            raise Refused(400, 'bad_type')
+        if not isinstance(rows, list) or len(rows) > CHUNK_ROWS_MAX:
+            raise Refused(400, 'too_many_rows')
+        cleaned = []
+        for position, row in enumerate(rows):
+            good = clean_row(kind, row)
+            if good is None:
+                log('import: a %s row made no sense (row %d of this chunk)' % (kind, position))
+                raise Refused(400, 'bad_row')
+            cleaned.append(good)
+        start = con.execute('SELECT COALESCE(MAX(seq), 0) FROM staging_rows WHERE batch_id = ?', (batch,)).fetchone()[0]
+        con.executemany('INSERT INTO staging_rows (batch_id, type, seq, row) VALUES (?, ?, ?, ?)',
+                        [(batch, kind, start + 1 + at, json.dumps(row, ensure_ascii=False, separators=(',', ':')))
+                         for at, row in enumerate(cleaned)])
+        return len(cleaned)
+
+    @staticmethod
+    def commit(con, batch):
+        Importer.open_batch(con, batch)
+        con.execute('BEGIN IMMEDIATE')
+        try:
+            staged = {kind: [] for kind in ENTITY_KINDS + ('link', 'post')}
+            for row in con.execute('SELECT type, row FROM staging_rows WHERE batch_id = ? ORDER BY seq', (batch,)):
+                staged[row['type']].append(json.loads(row['row']))
+            if not any(staged[kind] for kind in ENTITY_KINDS):
+                raise Refused(400, 'empty_import')
+
+            for table in ('entities', 'links', 'posts', 'name_tokens', 'entity_states', 'entity_councils'):
+                con.execute('DELETE FROM %s' % table)
+            for kind in ENTITY_KINDS:
+                con.executemany(
+                    'INSERT OR REPLACE INTO entities (type, id, name, number, code, slug, states, councils, '
+                    'start_year, end_year, status, aliases) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [(kind, e['id'], e['name'], e['number'], e['code'], e['slug'],
+                      json.dumps(e['states']), json.dumps(e['councils']),
+                      e['start_year'], e['end_year'], e['status'], json.dumps(e['aliases'], ensure_ascii=False))
+                     for e in staged[kind]])
+            con.executemany(
+                'INSERT OR REPLACE INTO links (relation, parent_id, child_id, role, from_year, to_year) '
+                'VALUES (?, ?, ?, ?, ?, ?)',
+                [(l['relation'], l['parent_id'], l['child_id'], l['role'], l['from_year'], l['to_year'])
+                 for l in staged['link']])
+            con.executemany(
+                'INSERT OR REPLACE INTO posts (post_id, title, category, states, council, camp, lodge, '
+                'start_date, end_date, publisher, subject, identifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [(p['post_id'], p['title'], p['category'], json.dumps(p['states']), p['council'], p['camp'],
+                  p['lodge'], p['start_date'], p['end_date'], p['publisher'], p['subject'], p['identifier'])
+                 for p in staged['post']])
+
+            memberships_s, memberships_c, words = [], [], []
+            for kind in ENTITY_KINDS:
+                for e in staged[kind]:
+                    for state_id in e['states']:
+                        memberships_s.append((kind, e['id'], state_id))
+                    for council_id in e['councils']:
+                        memberships_c.append((kind, e['id'], council_id))
+                    seen = set(tokens_of(e['name'])) | {e['number']} - {''}
+                    for alias in e['aliases']:
+                        seen |= set(tokens_of(alias))
+                    words += [(token, kind, e['id']) for token in seen]
+            for l in staged['link']:
+                if l['relation'] == 'camp_council':
+                    memberships_c.append(('camp', l['parent_id'], l['child_id']))
+                elif l['relation'] == 'lodge_council':
+                    memberships_c.append(('lodge', l['parent_id'], l['child_id']))
+            con.executemany('INSERT INTO entity_states (type, id, state_id) VALUES (?, ?, ?)', set(memberships_s))
+            con.executemany('INSERT INTO entity_councils (type, id, council_id) VALUES (?, ?, ?)', set(memberships_c))
+            con.executemany('INSERT INTO name_tokens (token, type, id) VALUES (?, ?, ?)', set(words))
+
+            counts = {'states': len(staged['state']), 'councils': len(staged['council']),
+                      'camps': len(staged['camp']), 'lodges': len(staged['lodge']),
+                      'links': len(staged['link']), 'posts': len(staged['post'])}
+            source = con.execute('SELECT source FROM import_batches WHERE id = ?', (batch,)).fetchone()['source']
+            write_setting(con, 'index_received_at', str(int(time.time())))
+            write_setting(con, 'index_counts', json.dumps(counts))
+            write_setting(con, 'index_source', source)
+            con.execute("UPDATE import_batches SET status = 'committed' WHERE id = ?", (batch,))
+            con.execute('DELETE FROM staging_rows WHERE batch_id = ?', (batch,))
+            con.execute('COMMIT')
+            log('index received (%s): %d councils, %d camps, %d lodges, %d states, %d links, %d posts' % (
+                source, counts['councils'], counts['camps'], counts['lodges'], counts['states'],
+                counts['links'], counts['posts']))
+            return counts
+        except BaseException:
+            try:
+                con.execute('ROLLBACK')
+            except sqlite3.Error:
+                pass
+            raise
+
+    @staticmethod
+    def abort(con, batch):
+        Importer.open_batch(con, batch)
+        con.execute("UPDATE import_batches SET status = 'aborted' WHERE id = ?", (batch,))
+        con.execute('DELETE FROM staging_rows WHERE batch_id = ?', (batch,))
+
+
+TAXONOMY_ROW = 'SELECT id, name, number, code, slug, start_year, end_year, status FROM entities'
+
+
+def taxonomy_rows(con, kind, state_id=None, council_id=None):
+    """What a dropdown shows: the entities of one kind, narrowed by state or council"""
+    sql, values = TAXONOMY_ROW + ' WHERE type = ?', [kind]
+    if state_id is not None:
+        sql += ' AND id IN (SELECT id FROM entity_states WHERE type = ? AND state_id = ?)'
+        values += [kind, state_id]
+    if council_id is not None:
+        sql += ' AND id IN (SELECT id FROM entity_councils WHERE type = ? AND council_id = ?)'
+        values += [kind, council_id]
+    sql += ' ORDER BY name, number LIMIT 4000'
+    return [{'id': row['id'], 'name': row['name'], 'number': row['number'], 'code': row['code'],
+             'slug': row['slug'], 'start_year': row['start_year'], 'end_year': row['end_year'],
+             'status': row['status']} for row in con.execute(sql, values)]
+
+
 # ---- The pages and their files -------------------------------------------------------------
 
 STATIC_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -584,13 +853,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         con = connect()
         try:
             try:
-                return self.routes(method, path, body, con)
+                return self.routes(method, path, query, body, con)
             except Refused as refusal:
                 return self.reply(refusal.status, {'error': refusal.code})
         finally:
             con.close()
 
-    def routes(self, method, path, body, con):
+    @staticmethod
+    def query_value(query, name, most=200):
+        for part in query.split('&'):
+            key, _, value = part.partition('=')
+            if key == name:
+                return urllib.parse.unquote_plus(value)[:most]
+        return None
+
+    def routes(self, method, path, query, body, con):
         # -- signed-in people --
         if method == 'POST' and path == '/v1/session':
             payload = parse_login_token(self.body_json(body).get('token'))
@@ -638,6 +915,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 Sessions.drop(con, self.session_value())
                 return self.reply(200, {'ok': True}, cookie=Sessions.cookie('', clear=True))
 
+        if person is not None and method == 'GET' and path == '/v1/taxonomy':
+            kind = self.query_value(query, 'type')
+            if kind not in ENTITY_KINDS:
+                return self.reply(400, {'error': 'bad_type'})
+            state = clean_entry_id(self.query_value(query, 'state'))
+            council = clean_entry_id(self.query_value(query, 'council'))
+            return self.reply(200, {'entities': taxonomy_rows(con, kind, state, council)})
+
         # -- WordPress (signed server-to-server calls) --
         if path.startswith('/v1/index/'):
             problem = self.signature_problem(method, self.path, body)
@@ -645,7 +930,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.reply(401, {'error': problem})
             if method == 'GET' and path == '/v1/index/status':
                 return self.reply(200, index_summary(con))
-            # begin / chunk / commit / abort arrive in the next step
+            if method == 'POST' and path == '/v1/index/begin':
+                asked = self.body_json(body)
+                if asked.get('source') not in IMPORT_SOURCES:
+                    return self.reply(400, {'error': 'bad_request'})
+                expected = asked.get('counts') if isinstance(asked.get('counts'), dict) else {}
+                return self.reply(200, {'batch': Importer.begin(con, asked['source'], expected)})
+            if method == 'POST' and path == '/v1/index/chunk':
+                asked = self.body_json(body)
+                received = Importer.chunk(con, asked.get('batch'), asked.get('type'), asked.get('rows'))
+                return self.reply(200, {'received': received})
+            if method == 'POST' and path == '/v1/index/commit':
+                return self.reply(200, {'counts': Importer.commit(con, self.body_json(body).get('batch'))})
+            if method == 'POST' and path == '/v1/index/abort':
+                Importer.abort(con, self.body_json(body).get('batch'))
+                return self.reply(200, {'ok': True})
             return self.reply(404, {'error': 'not_found'})
 
         if person is None and path.startswith('/v1/'):

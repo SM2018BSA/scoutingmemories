@@ -55,6 +55,80 @@ const Session = {
   },
 };
 
+// The State -> Council -> Camp/Lodge dropdowns, fed by the index WordPress pushed.
+const Taxonomy = {
+  pick(name) { return document.getElementById('pick-' + name); },
+
+  label(kind, entity) {
+    if (kind === 'state') return entity.name + (entity.code ? ' (' + entity.code + ')' : '');
+    let text = entity.name + (entity.number ? ' (#' + entity.number + ')' : '');
+    if (entity.start_year) {
+      text += ', ' + entity.start_year + '–' + (entity.status === 'active' ? 'present' : (entity.end_year || '?'));
+    }
+    return text;
+  },
+
+  fill(kind, entities, emptyText) {
+    const select = this.pick(kind === 'state' ? 'state' : kind);
+    select.textContent = '';
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = entities.length ? '— choose —' : (emptyText || '— none —');
+    select.appendChild(first);
+    for (const entity of entities) {
+      const option = document.createElement('option');
+      option.value = entity.id;
+      option.dataset.slug = entity.slug || '';
+      option.textContent = this.label(kind, entity);
+      select.appendChild(option);
+    }
+    select.disabled = entities.length === 0;
+  },
+
+  async load(kind, params) {
+    const search = new URLSearchParams(Object.assign({ type: kind }, params || {}));
+    const result = await Session.api('/v1/taxonomy?' + search);
+    return result.status === 200 ? result.answer.entities : [];
+  },
+
+  async start() {
+    this.fill('state', await this.load('state'));
+    this.fill('council', [], '— pick a state first —');
+    this.fill('camp', [], '— pick a council first —');
+    this.fill('lodge', [], '— pick a council first —');
+    this.pick('state').addEventListener('change', () => this.stateChanged());
+    this.pick('council').addEventListener('change', () => this.councilChanged());
+  },
+
+  async stateChanged() {
+    const state = this.pick('state').value;
+    this.fill('council', state ? await this.load('council', { state: state }) : [],
+      '— pick a state first —');
+    this.fill('camp', [], '— pick a council first —');
+    this.fill('lodge', [], '— pick a council first —');
+  },
+
+  async councilChanged() {
+    const council = this.pick('council').value;
+    const [camps, lodges] = council
+      ? await Promise.all([this.load('camp', { council: council }), this.load('lodge', { council: council })])
+      : [[], []];
+    this.fill('camp', camps, council ? '— none recorded for this council —' : '— pick a council first —');
+    this.fill('lodge', lodges, council ? '— none recorded for this council —' : '— pick a council first —');
+  },
+
+  // What the historian picked, for the suggestion request (used from step 5 on)
+  picked() {
+    const chosen = {};
+    for (const kind of ['state', 'council', 'camp', 'lodge']) {
+      const select = this.pick(kind);
+      const option = select.selectedOptions[0];
+      if (select.value && option) chosen[kind] = { id: select.value, slug: option.dataset.slug || '' };
+    }
+    return chosen;
+  },
+};
+
 const Pages = {
   show(id, visible) { const node = document.getElementById(id); if (node) node.hidden = !visible; },
   status(kind, text) {
@@ -89,7 +163,10 @@ const Pages = {
     document.getElementById('who-name').textContent = me.user;
     document.getElementById('who-role').textContent = me.role.replace(/_/g, ' ');
     const line = this.indexLine(me);
-    if (line) document.getElementById('index-note').textContent = line;
+    if (line) {
+      document.getElementById('index-note').textContent = line;
+      await Taxonomy.start();
+    }
   },
 
   async settings() {
