@@ -945,3 +945,7 @@ Scouting_PDF_OCR::get_instance();
 // Background reading: the document queue (runs only while the setting is on)
 require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-ocr-queue.php';
 Scouting_PDF_OCR_Queue::get_instance();
+
+// The PDF Text admin page, the PDF text box on the post edit screen, and their endpoints
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-ocr-admin.php';
+Scouting_PDF_OCR_Admin::get_instance();

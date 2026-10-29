@@ -565,6 +565,215 @@ try {
     wp_clear_scheduled_hook('scouting_pdf_ocr_tick');
 }
 
+// ---- The dashboard's endpoints: who may call what, and what they answer ----
+$admin_users = array();
+foreach (array('subscriber' => 'ocr-check-sub', 'editor' => 'ocr-check-ed', 'administrator' => 'ocr-check-adm') as $role => $login) {
+    $old = get_user_by('login', $login);
+    if ($old) {
+        wp_delete_user($old->ID);
+    }
+    $admin_users[$role] = wp_insert_user(array('user_login' => $login, 'user_pass' => wp_generate_password(), 'user_email' => $login . '@example.com', 'role' => $role));
+}
+$call = function($method, $path, $body = null, $query = array()) {
+    $r = new WP_REST_Request($method, $path);
+    if ($body !== null) {
+        $r->set_header('Content-Type', 'application/json');
+        $r->set_body(wp_json_encode($body));
+    }
+    foreach ($query as $k => $v) {
+        $r->set_param($k, $v);
+    }
+    $res = rest_do_request($r);
+    $data = $res->get_data();
+    return array($res->get_status(), is_array($data) && isset($data['code']) ? $data['code'] : '', $data, $res);
+};
+$seed_page = function($d, $page, $status, $review, $text = 'T', $source = 'bulk') use ($wpdb, $ocr_table) {
+    $wpdb->insert($ocr_table, array('doc_key' => $d->key, 'page' => $page, 'pdf_url' => $d->url, 'status' => $status,
+        'source' => $source, 'review_status' => $review, 'asks' => 0, 'text' => $status === 'done' ? $text : null,
+        'engine' => 'x', 'requested_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    return (int) $wpdb->insert_id;
+};
+update_option('scouting_pdf_ocr_queue_state', 'paused', false);
+$sent = array();
+$answers = array();
+$matrix_post = 0;
+
+try {
+    // One finished document: pages 1-3 read (waiting for a reviewer), page 4 failed
+    $d = $make_doc('admin-doc', array('status' => 'done', 'total_pages' => 4, 'pages_done' => 3, 'pages_failed' => 1,
+        'started_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $p1 = $seed_page($d, 1, 'done', 'pending', 'T');
+    $p2 = $seed_page($d, 2, 'done', 'pending', 'T');
+    $p3 = $seed_page($d, 3, 'done', 'pending', 'T');
+    $p4 = $seed_page($d, 4, 'failed', '', '');
+    $matrix_post = wp_insert_post(array('post_title' => 'OCR admin check', 'post_status' => 'publish', 'post_type' => 'post',
+        'post_content' => '<p><a href="' . "$S/php-checks/mx-1.pdf" . '">1</a></p><p><a href="' . "$S/php-checks/mx-2.pdf" . '">2</a></p>'));
+
+    // Who is let in: logged out 401, subscriber 403 everywhere, editor 403 on the queue
+    $v1 = '/scouting-pdf/v1';
+    $matrix = array(
+        array('GET',  "$v1/ocr/admin/status", null, array()),
+        array('POST', "$v1/ocr/admin/queue", array('action' => 'pause'), array()),
+        array('GET',  "$v1/ocr/admin/docs", null, array()),
+        array('POST', "$v1/ocr/admin/docs", array('url' => "$S/php-checks/matrix.pdf"), array()),
+        array('POST', "$v1/ocr/admin/docs/{$d->id}/retry", array(), array()),
+        array('POST', "$v1/ocr/admin/docs/{$d->id}/remove", array(), array()),
+        array('POST', "$v1/ocr/admin/scan", array('after_id' => 0), array()),
+        array('GET',  "$v1/ocr/admin/doc-text", null, array('doc_key' => $d->key)),
+        array('POST', "$v1/ocr/admin/approve/$p1", array(), array()),
+        array('POST', "$v1/ocr/admin/approve-doc", array('doc_key' => $d->key), array()),
+        array('POST', "$v1/ocr/admin/enqueue-post", array('post_id' => $matrix_post), array()),
+    );
+    wp_set_current_user(0);
+    foreach ($matrix as $i => $m) {
+        check("admin endpoints: logged out refused ($i)", $call($m[0], $m[1], $m[2], $m[3])[0], 401);
+    }
+    wp_set_current_user($admin_users['subscriber']);
+    foreach ($matrix as $i => $m) {
+        check("admin endpoints: a subscriber is refused ($i)", $call($m[0], $m[1], $m[2], $m[3])[0], 403);
+    }
+    wp_set_current_user($admin_users['editor']);
+    foreach (array(1, 3, 4, 5, 6) as $i) {
+        $m = $matrix[$i];
+        check("admin endpoints: an editor cannot run the queue ($i)", $call($m[0], $m[1], $m[2], $m[3])[0], 403);
+    }
+
+    // The Queue tab's list: order, filter, the checked count (as a reviewer)
+    $d_q = $make_doc('admin-waiting', array('priority' => 1));
+    $d_w = $make_doc('admin-working', array('status' => 'working', 'started_at' => current_time('mysql')));
+    $r = $call('GET', "$v1/ocr/admin/docs");
+    check('docs list: total and order', array($r[2]['total'], $r[2]['docs'][0]['label'], $r[2]['docs'][1]['label'], $r[2]['docs'][2]['label']),
+        array(3, 'admin-working', 'admin-waiting', 'admin-doc'));
+    check('docs list: counters carried over', array($r[2]['docs'][2]['pages_done'], $r[2]['docs'][2]['pages_failed'], $r[2]['docs'][2]['pages_checked']), array(3, 1, 0));
+    $r = $call('GET', "$v1/ocr/admin/docs", null, array('status' => 'queued'));
+    check('docs list: the status filter', array($r[2]['total'], $r[2]['docs'][0]['label']), array(1, 'admin-waiting'));
+    $drop_doc($d_q);
+    $drop_doc($d_w);
+
+    // The status poll (as a reviewer)
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('GET', "$v1/ocr/admin/status"); });
+    check('status answers a reviewer', $r[0], 200);
+    check('status shape', array_keys($r[2]), array('queue', 'backoff_until', 'last_tick', 'docs', 'current', 'pages_unchecked', 'today'));
+    check('status: paused', $r[2]['queue'], 'paused');
+    check('status: the waiting text is counted', $r[2]['pages_unchecked'], 3);
+    check('status: not cached', $r[3]->get_headers()['Cache-Control'], 'no-store');
+
+    // Checking text (as a reviewer)
+    $r = $call('GET', "$v1/ocr/admin/doc-text", null, array('doc_key' => $d->key));
+    check('doc-text: the document and its pages', array($r[2]['doc']['label'], $r[2]['total_rows'], count($r[2]['pages'])), array('admin-doc', 4, 4));
+    check('doc-text: a page row', array($r[2]['pages'][0]['page'], $r[2]['pages'][0]['status'], $r[2]['pages'][0]['review_status'], $r[2]['pages'][0]['text'], $r[2]['pages'][0]['edited']),
+        array(1, 'done', 'pending', 'T', false));
+    $r = $call('GET', "$v1/ocr/admin/doc-text", null, array('doc_key' => str_repeat('f', 32)));
+    check('doc-text: a document never queued', array($r[2]['doc'], $r[2]['pages']), array(null, array()));
+
+    $r = $call('POST', "$v1/ocr/admin/approve/$p1", array('text' => 'Corrected'));
+    check('approve: with a correction', array($r[0], $r[2]['review_status']), array(200, 'approved'));
+    $row = $wpdb->get_row($wpdb->prepare("SELECT text, text_original, review_status, reviewed_by FROM $ocr_table WHERE id = %d", $p1));
+    check('approve: the correction saved, the machine text kept', array($row->text, $row->text_original, $row->review_status, (int) $row->reviewed_by),
+        array('Corrected', 'T', 'approved', $admin_users['editor']));
+    $call('POST', "$v1/ocr/admin/approve/$p1", array('text' => 'Corrected again'));
+    $row = $wpdb->get_row($wpdb->prepare("SELECT text, text_original FROM $ocr_table WHERE id = %d", $p1));
+    check('approve: a second correction keeps the first machine text', array($row->text, $row->text_original), array('Corrected again', 'T'));
+    $call('POST', "$v1/ocr/admin/approve/$p2", array());
+    $row = $wpdb->get_row($wpdb->prepare("SELECT text, text_original, review_status FROM $ocr_table WHERE id = %d", $p2));
+    check('approve: unedited leaves the text alone', array($row->text, $row->text_original, $row->review_status), array('T', null, 'approved'));
+    check('approve: text too long refused', $call('POST', "$v1/ocr/admin/approve/$p3", array('text' => str_repeat('a', 200001)))[1], 'text_too_long');
+    check('approve: no such page', $call('POST', "$v1/ocr/admin/approve/999999", array())[1], 'no_such_page');
+    check('approve: a failed page cannot be approved', $call('POST', "$v1/ocr/admin/approve/$p4", array())[1], 'no_such_page');
+    $r = $call('POST', "$v1/ocr/admin/approve-doc", array('doc_key' => $d->key));
+    check('approve-doc: approves what still waits', $r[2]['approved'], 1);
+    $r = $call('GET', "$v1/ocr/admin/docs");
+    check('docs list: the checked count follows', $r[2]['docs'][0]['pages_checked'], 3);
+
+    // "Read this document" from the post's edit screen (as a reviewer)
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $matrix_post) {
+        return $call('POST', "$v1/ocr/admin/enqueue-post", array('post_id' => $matrix_post));
+    });
+    check('enqueue-post: both documents queued', array($r[2]['added'], $r[2]['existing']), array(2, 0));
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $matrix_post) {
+        return $call('POST', "$v1/ocr/admin/enqueue-post", array('post_id' => $matrix_post));
+    });
+    check('enqueue-post: asking again adds nothing', array($r[2]['added'], $r[2]['existing']), array(0, 2));
+    check('enqueue-post: no such post', $with(array('queue_enabled' => 1), function() use ($call, $v1) {
+        return $call('POST', "$v1/ocr/admin/enqueue-post", array('post_id' => 999999));
+    })[1], 'no_such_post');
+
+    // The queue's controls (as an administrator)
+    wp_set_current_user($admin_users['administrator']);
+    check('queue control: refused while background reading is off', $call('POST', "$v1/ocr/admin/queue", array('action' => 'pause'))[1], 'queue_off');
+    set_transient('scouting_pdf_ocr_backoff', time() + 600, 600);
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/queue", array('action' => 'resume')); });
+    check('queue control: resume', $r[2]['queue'], 'running');
+    check('queue control: resume clears the backoff', Scouting_PDF_OCR_Queue::backoff_until(), 0);
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/queue", array('action' => 'pause')); });
+    check('queue control: pause', $r[2]['queue'], 'paused');
+    $before = count($sent);
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/queue", array('action' => 'tick')); });
+    check('queue control: run once now', array($r[2]['ticked'], count($sent) - $before), array(true, 0));
+    check('queue control: a made-up action is refused', $call('POST', "$v1/ocr/admin/queue", array('action' => 'explode'))[0], 400);
+
+    // Add one document by its link (as an administrator)
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $S) { return $call('POST', "$v1/ocr/admin/docs", array('url' => "$S/php-checks/add-one.pdf")); });
+    check('add by link: added to the front', $r[0], 201);
+    $added_doc = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE doc_key = %s", $O::doc_key("$S/php-checks/add-one.pdf")));
+    check('add by link: the row', array($added_doc->source, (int) $added_doc->priority, (int) $added_doc->enqueued_by, $added_doc->label),
+        array('bulk', 1, $admin_users['administrator'], 'add-one.pdf'));
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $S) { return $call('POST', "$v1/ocr/admin/docs", array('url' => "$S/php-checks/add-one.pdf")); });
+    check('add by link: already in the queue', array($r[0], $r[2]['status']), array(200, 'already_queued'));
+    $wpdb->update($docs_table, array('status' => 'done'), array('id' => $added_doc->id));
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $S) { return $call('POST', "$v1/ocr/admin/docs", array('url' => "$S/php-checks/add-one.pdf")); });
+    check('add by link: already read', $r[2]['status'], 'already_read');
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/docs", array('url' => 'https://evil.example.com/a.pdf')); });
+    check('add by link: the link check speaks', $r[1], 'bad_host');
+
+    // Try again and Remove (as an administrator)
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $d) { return $call('POST', "$v1/ocr/admin/docs/{$d->id}/retry", array()); });
+    check('retry: a done document with failures goes back in line', $r[2]['status'], 'queued');
+    $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE id = %d", $d->id));
+    check('retry: counters and page count kept', array($row->status, (int) $row->pages_done, (int) $row->pages_failed, (int) $row->total_pages, $row->started_at, $row->finished_at),
+        array('queued', 3, 0, 4, null, null));
+    check('retry: the failed page rows are gone', (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $ocr_table WHERE doc_key = %s AND status = 'failed'", $d->key)), 0);
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $d) { return $call('POST', "$v1/ocr/admin/docs/{$d->id}/retry", array()); });
+    check('retry: nothing to try again', array($r[0], $r[1]), array(409, 'not_retryable'));
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $d) { return $call('POST', "$v1/ocr/admin/docs/{$d->id}/remove", array()); });
+    check('remove: a waiting document leaves the queue', $r[2]['removed'], true);
+    check('remove: its text stays', (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $ocr_table WHERE doc_key = %s", $d->key)), 3);
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $added_doc) { return $call('POST', "$v1/ocr/admin/docs/{$added_doc->id}/remove", array()); });
+    check('remove: a read document is refused', array($r[0], $r[1]), array(409, 'already_started'));
+    check('remove: no such document', $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/docs/999999/remove", array()); })[1], 'no_such_doc');
+
+    // The scan endpoint answers batch bookkeeping (as an administrator)
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/scan", array('after_id' => 999999999)); });
+    check('scan endpoint: past the last post', array($r[2]['done'], $r[2]['posts_scanned']), array(true, 0));
+
+    // The status poll keeps the queue moving when cron is late
+    $wpdb->query("DELETE FROM $docs_table WHERE status = 'queued'");
+    update_option('scouting_pdf_ocr_queue_state', 'running', false);
+    $stale_tick = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - 120);
+    update_option('scouting_pdf_ocr_last_tick', $stale_tick, false);
+    $with(array('queue_enabled' => 1), function() use ($call, $v1) { $call('GET', "$v1/ocr/admin/status"); });
+    check('status: a late queue is ticked in passing', get_option('scouting_pdf_ocr_last_tick') !== $stale_tick, true);
+    update_option('scouting_pdf_ocr_queue_state', 'paused', false);
+
+    // The whole surface is off with the feature
+    check('admin endpoints: off with the feature', $with(array('enabled' => 0), function() use ($call, $v1) { return $call('GET', "$v1/ocr/admin/status"); })[1], 'ocr_off');
+} finally {
+    wp_set_current_user(0);
+    foreach ($admin_users as $id) {
+        if ($id && !is_wp_error($id)) {
+            wp_delete_user($id);
+        }
+    }
+    if ($matrix_post && !is_wp_error($matrix_post)) {
+        wp_delete_post($matrix_post, true);
+    }
+    $wpdb->query("DELETE FROM $docs_table");
+    $wpdb->query("DELETE FROM $ocr_table WHERE $ours");
+    delete_option('scouting_pdf_ocr_queue_state');
+    delete_option('scouting_pdf_ocr_last_tick');
+    delete_transient('scouting_pdf_ocr_backoff');
+}
+
 if ($failures) {
     echo "$failures PHP CHECK(S) FAILED\n";
     exit(1);
