@@ -52,6 +52,18 @@ stops the test site's stream endpoint from downloading anything from the real st
 The real OCR app is tested end to end separately, on the `sm-ocr` dev site and on the
 development server.
 
+## Background reading (the queue and the PDF Text page)
+
+`dashboard.spec.mjs` drives the PDF Text page (wp-admin > PDF Text, as `admin` /
+`admin-pass-123`) and the "PDF text" box on the post edit screen against the same stand-in
+service: documents added by link and by the site scan, the queue walking a 12-page document
+to the end one tick at a time, Pause and Resume, the busy backoff, checking, correcting and
+approving text in the box, and the auto-approve setting. `ocr-state.php` gained the commands
+it needs (`queue-on`, `queue-off`, `auto-approve`, `docs`, `approve`, `page-row`,
+`post-id`). The two spec files share the service and the settings, so Playwright runs with
+one worker. The queue's dispatcher itself (page 1 first, three in flight, the backoff, the
+lock, the 404 and failure paths) is covered in `php-checks.php` against a mocked service.
+
 ## What's covered
 
 Loading with PDF.js 6.3, printed page numbers, `#page=` links, citations (Chicago, MLA, APA,
@@ -62,8 +74,12 @@ rotate, zoom, fullscreen, hints, page references in comments, small screens, sec
 hosts, `javascript:` URLs, escaping, and the stream endpoint's refusals), and page OCR: the Text
 button on and off, logged out, reading a page, saved text for everyone, Copy text, nothing
 readable, failed and retried reads, the service down or busy, daily limits, slow reads, closing
-the window, the 10-minute retry, the top bar at five screen widths, and in PHP the one spelling
-per document, refused links, signed requests, one row per page, limits and the off switch.
+the window, the 10-minute retry, the reviewer-checked wording, the top bar at five screen
+widths, and in PHP the one spelling per document, refused links, signed requests, one row per
+page, limits and the off switch. For background reading: the document queue's whole life, the
+dispatcher's bounds and failure paths, finding every PDF in a post, auto-queueing submissions,
+the site scan, the eleven admin endpoints at four capability levels, text corrections keeping
+the machine text, and the dashboard and PDF text box in the browser.
 
 Nothing here runs on the live site: the PHP files exit unless run from the command line (or,
 for `router.php`, PHP's built-in server).

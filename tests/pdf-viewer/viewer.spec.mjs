@@ -836,6 +836,19 @@ test.describe('page OCR (Text button)', () => {
         expect(savedRows()[0]).toMatchObject({ status: 'done', asks: 2 });
     });
 
+    test('text a reviewer has checked says so', async ({ page }) => {
+        await logIn(page);
+        const { viewer, dialog } = await openText(page);
+        await readButton(dialog).click();
+        await expect(dialog).toContainText('Machine-read text. It may contain mistakes, so check it against the page.', { timeout: 15000 });
+        await closeDialog(viewer);
+
+        ocrState('approve', '4');
+        await button(viewer, 'ocr').click();
+        await expect(dialog).toContainText('Machine-read text, checked by a reviewer.');
+        await expect(dialog.getByRole('button', { name: 'Copy text' })).toBeVisible();
+    });
+
     // The top bar with the Text button: every button whole, inside the bar, its label next to
     // its icon, and none on top of another, from a wide screen down to a small phone
     for (const [size, width] of [['lg', 1280], ['md', 992], ['sm', 768], ['xs', 576], ['xxs', 360]]) {

@@ -622,8 +622,9 @@ class Scouting_PDF_OCR_Admin {
                 <p id="sm-ocr-lastrun"></p>
                 <p>
                     <?php if ($is_admin) : ?>
-                        <button type="button" class="button button-primary" id="sm-ocr-resume" hidden>Resume the queue</button>
-                        <button type="button" class="button" id="sm-ocr-pause" hidden>Pause the queue</button>
+                        <?php // display:none, not [hidden]: wp-admin's .button rule outranks the hidden attribute ?>
+                        <button type="button" class="button button-primary" id="sm-ocr-resume" style="display:none">Resume the queue</button>
+                        <button type="button" class="button" id="sm-ocr-pause" style="display:none">Pause the queue</button>
                         <button type="button" class="button" id="sm-ocr-tick">Run once now</button>
                         <?php if (Scouting_PDF_OCR::enabled()) : ?>
                             <a href="<?php echo esc_url($test_url); ?>" class="button">Test connection</a>

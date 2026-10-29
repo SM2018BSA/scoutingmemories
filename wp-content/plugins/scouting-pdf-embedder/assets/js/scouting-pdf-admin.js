@@ -37,18 +37,20 @@
         return node;
     }
 
+    // Explicit display, not the hidden attribute: wp-admin's own ".button { display:
+    // inline-block }" outranks the browser's [hidden] rule and would keep buttons visible
     function setText(id, text) {
         var node = document.getElementById(id);
         if (node) {
             node.textContent = text;
-            node.hidden = text === '';
+            node.style.display = text === '' ? 'none' : '';
         }
     }
 
     function toggle(id, show) {
         var node = document.getElementById(id);
         if (node) {
-            node.hidden = !show;
+            node.style.display = show ? '' : 'none';
         }
     }
 
@@ -433,7 +435,7 @@
                     });
                 });
                 var saveApprove = smallButton('Save changes and approve', false);
-                saveApprove.hidden = true;
+                saveApprove.style.display = 'none';
                 saveApprove.addEventListener('click', function() {
                     withButton(saveApprove, function() {
                         return api('POST', 'approve/' + page.id, { text: area.value }).then(function(r) {
@@ -443,7 +445,7 @@
                     });
                 });
                 area.addEventListener('input', function() {
-                    saveApprove.hidden = false;
+                    saveApprove.style.display = '';
                 });
                 buttons.appendChild(approve);
                 buttons.appendChild(document.createTextNode(' '));

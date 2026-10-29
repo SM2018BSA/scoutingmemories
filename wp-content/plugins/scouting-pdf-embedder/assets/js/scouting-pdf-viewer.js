@@ -2417,6 +2417,9 @@
                 method: method,
                 headers: headers,
                 credentials: 'same-origin',
+                // Logged-in readers always see the current text: finished answers are
+                // cacheable for five minutes, and a reviewer may just have corrected one
+                cache: config.ocrNonce ? 'no-cache' : 'default',
                 body: body ? JSON.stringify(body) : undefined
             }).then(function(r) {
                 return r.json().catch(function() { return { status: 'error' }; });
