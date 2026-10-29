@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Settings — AI Tagging Assistant</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600&display=swap">
+<style>
+  :root { --sm-green: #025600; }
+  h1, h2, h3, h4, h5, h6, .navbar-brand { font-family: 'Roboto Slab', serif; }
+  .navbar { background-color: var(--sm-green); }
+  .btn-primary { --bs-btn-bg: var(--sm-green); --bs-btn-border-color: var(--sm-green);
+                 --bs-btn-hover-bg: #013d00; --bs-btn-hover-border-color: #013d00;
+                 --bs-btn-active-bg: #013d00; --bs-btn-active-border-color: #013d00; }
+</style>
+</head>
+<body data-page="settings" class="bg-light">
+
+<nav class="navbar navbar-dark px-3">
+  <span class="navbar-brand mb-0 h1">AI Tagging Assistant — Settings</span>
+  <a class="btn btn-outline-light" href="/">Back to the app</a>
+</nav>
+
+<main class="container py-4" style="max-width: 960px">
+
+  <div class="alert alert-secondary" id="status" role="status">Connecting…</div>
+
+  <div id="settings-body" hidden>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">The index (RAG memory)</h2></div>
+      <div class="card-body">
+        <p class="mb-0" id="index-status">Nothing received yet.</p>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">AI provider</h2></div>
+      <div class="card-body">
+        <p class="text-body-secondary mb-0" id="provider-note">The provider, model, API key, system prompt and limits are set up in a later step of the build.</p>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

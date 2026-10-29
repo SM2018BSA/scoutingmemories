@@ -30,6 +30,7 @@
 /tagger-service/static/*
 !/tagger-service/static/app.html
 !/tagger-service/static/settings.html
+!/tagger-service/static/login.html
 !/tagger-service/static/app.js
 
 # ...and wp-content, where only our folders are allowed

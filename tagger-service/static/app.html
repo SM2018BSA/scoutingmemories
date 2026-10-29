@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>AI Tagging Assistant — Scouting Memories</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600&display=swap">
+<style>
+  :root { --sm-green: #025600; }
+  h1, h2, h3, h4, h5, h6, .navbar-brand { font-family: 'Roboto Slab', serif; }
+  .navbar { background-color: var(--sm-green); }
+  .btn-primary { --bs-btn-bg: var(--sm-green); --bs-btn-border-color: var(--sm-green);
+                 --bs-btn-hover-bg: #013d00; --bs-btn-hover-border-color: #013d00;
+                 --bs-btn-active-bg: #013d00; --bs-btn-active-border-color: #013d00; }
+  .text-sm-green { color: var(--sm-green); }
+</style>
+</head>
+<body data-page="app" class="bg-light">
+
+<nav class="navbar navbar-dark px-3">
+  <span class="navbar-brand mb-0 h1">AI Tagging Assistant</span>
+  <span class="text-white" id="who" hidden><i class="bi bi-person-circle"></i> <span id="who-name"></span>
+    <span class="badge text-bg-light ms-1" id="who-role"></span></span>
+</nav>
+
+<main class="container py-4" style="max-width: 960px">
+
+  <div class="alert alert-secondary" id="status" role="status">Connecting…</div>
+
+  <div id="app-body" hidden>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">Find in the index</h2></div>
+      <div class="card-body">
+        <p class="text-body-secondary mb-3" id="index-note">The index has not been received from WordPress yet.</p>
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="pick-state">State</label>
+            <select class="form-select" id="pick-state" disabled><option>—</option></select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="pick-council">Council</label>
+            <select class="form-select" id="pick-council" disabled><option>—</option></select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="pick-camp">Camp</label>
+            <select class="form-select" id="pick-camp" disabled><option>—</option></select>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="pick-lodge">Lodge</label>
+            <select class="form-select" id="pick-lodge" disabled><option>—</option></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">Document</h2></div>
+      <div class="card-body">
+        <p class="text-body-secondary mb-0" id="document-note">Uploading a PDF and pasting text arrive in a later step of the build.</p>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">Suggestions</h2></div>
+      <div class="card-body">
+        <p class="text-body-secondary mb-0">No suggestions yet — add a document above.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="text-body-secondary small">Scouting Memories — proof of concept. Suggestions are reviewed by a historian before anything is saved.</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
