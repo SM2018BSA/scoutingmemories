@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) exit;
         <div class="notice notice-success is-dismissible">
             <p>
                 <strong><?php esc_html_e('Batch Update Completed Successfully!', 'scouting-forms'); ?></strong><br>
-                <?php printf(esc_html__('Updated %d active Councils, %d active Camps, and %d active Lodges with end-date %s.', 'scouting-forms'), $councils_count, $camps_count, $lodges_count, esc_html($_GET['target_year'] ?? date('Y'))); ?>
+                <?php printf(esc_html__('Updated %d active Councils, %d active Camps, and %d active Lodges with end-date %s.', 'scouting-forms'), $councils_count, $camps_count, $lodges_count, esc_html($updated_year)); ?>
             </p>
         </div>
     <?php endif; ?>

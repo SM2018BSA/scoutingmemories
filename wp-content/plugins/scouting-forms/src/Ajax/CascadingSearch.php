@@ -7,33 +7,15 @@ use ScoutingMemories\Forms\Models\ArchiveRepository;
 /**
  * CascadingSearch
  *
- * Handles AJAX requests for cascading State -> Council -> Camp/Lodge selects.
+ * AJAX for the cascading State -> Council -> Camp/Lodge lookups of the User Guide's playground
+ * (assets/js/admin-guide.js on the wp-admin archive pages). Logged-in only; the site's own forms
+ * load their dependent choices through Ajax\DynamicFields instead.
  */
 class CascadingSearch {
 
     public static function registerHooks(): void {
         add_action('wp_ajax_sm_get_councils', [__CLASS__, 'getCouncils']);
-        add_action('wp_ajax_nopriv_sm_get_councils', [__CLASS__, 'getCouncils']);
-
         add_action('wp_ajax_sm_get_camps_lodges', [__CLASS__, 'getCampsAndLodges']);
-        add_action('wp_ajax_nopriv_sm_get_camps_lodges', [__CLASS__, 'getCampsAndLodges']);
-
-        add_action('wp_enqueue_scripts', [__CLASS__, 'enqueueScripts']);
-    }
-
-    public static function enqueueScripts(): void {
-        wp_register_script(
-            'sm-cascading-selects',
-            SM_FORMS_PLUGIN_URL . 'assets/js/cascading-selects.js',
-            ['jquery'],
-            SM_FORMS_VERSION,
-            true
-        );
-
-        wp_localize_script('sm-cascading-selects', 'smAjax', [
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce'    => wp_create_nonce('sm_cascading_nonce')
-        ]);
     }
 
     public static function getCouncils(): void {

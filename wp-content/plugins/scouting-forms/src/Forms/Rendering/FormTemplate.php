@@ -414,6 +414,7 @@ class FormTemplate {
                 'search' => __('Type to search', 'scouting-forms'),
                 'noResults' => __('No matches', 'scouting-forms'),
                 'remove' => __('Remove', 'scouting-forms'),
+                'blank' => __('cannot be blank.', 'scouting-forms'),
             ],
         ];
         return '<script type="application/json" class="sm-form-config">' . wp_json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP) . '</script>';

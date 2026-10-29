@@ -28,15 +28,4 @@ abstract class FormHandler {
         include $file;
         return ob_get_clean();
     }
-
-    /**
-     * Verify nonce
-     *
-     * @param string $action
-     * @param string $name
-     * @return bool
-     */
-    protected static function verifyNonce(string $action, string $name = '_sm_nonce'): bool {
-        return isset($_POST[$name]) && wp_verify_nonce($_POST[$name], $action);
-    }
 }

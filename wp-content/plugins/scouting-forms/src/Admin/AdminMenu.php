@@ -347,6 +347,7 @@ class AdminMenu {
         wp_safe_redirect(add_query_arg([
             'page'             => 'scouting-archives-tools',
             'dates_updated'    => '1',
+            'updated_year'     => $year,
             'updated_councils' => $counts['councils'],
             'updated_camps'    => $counts['camps'],
             'updated_lodges'   => $counts['lodges'],
@@ -366,7 +367,7 @@ class AdminMenu {
     }
 
     public static function renderCouncilsPage(): void {
-        $search = sanitize_text_field($_GET['s'] ?? '');
+        $search = sanitize_text_field(wp_unslash($_GET['s'] ?? ''));
         $page   = max(1, (int) ($_GET['paged'] ?? 1));
         $limit  = 30;
         $offset = ($page - 1) * $limit;
@@ -377,7 +378,7 @@ class AdminMenu {
     }
 
     public static function renderCampsPage(): void {
-        $search = sanitize_text_field($_GET['s'] ?? '');
+        $search = sanitize_text_field(wp_unslash($_GET['s'] ?? ''));
         $page   = max(1, (int) ($_GET['paged'] ?? 1));
         $limit  = 30;
         $offset = ($page - 1) * $limit;
@@ -388,7 +389,7 @@ class AdminMenu {
     }
 
     public static function renderLodgesPage(): void {
-        $search = sanitize_text_field($_GET['s'] ?? '');
+        $search = sanitize_text_field(wp_unslash($_GET['s'] ?? ''));
         $page   = max(1, (int) ($_GET['paged'] ?? 1));
         $limit  = 30;
         $offset = ($page - 1) * $limit;
@@ -400,6 +401,7 @@ class AdminMenu {
 
     public static function renderToolsPage(): void {
         $updated = isset($_GET['dates_updated']) && $_GET['dates_updated'] === '1';
+        $updated_year = preg_match('/^\d{4}$/', (string) ($_GET['updated_year'] ?? '')) ? (string) $_GET['updated_year'] : date('Y');
         $councils_count = (int) ($_GET['updated_councils'] ?? 0);
         $camps_count    = (int) ($_GET['updated_camps'] ?? 0);
         $lodges_count   = (int) ($_GET['updated_lodges'] ?? 0);

@@ -1,8 +1,8 @@
 # Scouting Forms: going live without Formidable
 
 For the site owner. Nothing here has been done on the live site; you decide when and do each step.
-Everything below was rehearsed on the local copy (http://localhost:8088) with Formidable and all its
-add-ons turned off.
+Everything below was rehearsed on the local copy (https://sm-forms.ddev.site, DDEV) with Formidable
+and all its add-ons turned off.
 
 ## What changes
 

@@ -116,7 +116,8 @@ class Permissions {
     public static function hasRole($needed): bool {
         if (is_array($needed)) {
             foreach ($needed as $role) {
-                if ($role === '' || self::hasRole((string) $role)) {
+                // '' in a list means the same as the scalar setting: any logged-in user
+                if (self::hasRole((string) $role)) {
                     return true;
                 }
             }

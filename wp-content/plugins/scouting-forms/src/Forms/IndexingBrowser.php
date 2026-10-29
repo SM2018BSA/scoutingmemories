@@ -46,8 +46,8 @@ class IndexingBrowser extends FormHandler {
     }
 
     public static function render(): string {
-        $search = sanitize_text_field($_GET['idx_search'] ?? '');
-        $tab    = sanitize_text_field($_GET['idx_tab'] ?? 'councils');
+        $search = sanitize_text_field(wp_unslash($_GET['idx_search'] ?? ''));
+        $tab    = sanitize_text_field(wp_unslash($_GET['idx_tab'] ?? 'councils'));
         $page   = max(1, (int) ($_GET['idx_paged'] ?? 1));
         $limit  = 25;
         $offset = ($page - 1) * $limit;

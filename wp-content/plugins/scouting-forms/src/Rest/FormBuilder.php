@@ -1008,7 +1008,8 @@ class FormBuilder {
         }
 
         $title = sanitize_text_field(self::str($data['name'] ?? $post->post_title)) ?: $post->post_title;
-        $status = !empty($data['active']) ? 'publish' : 'draft';
+        // A request that does not say keeps the action switched on or off as it is
+        $status = array_key_exists('active', $data) ? (!empty($data['active']) ? 'publish' : 'draft') : $post->post_status;
         if ($settings === $original && $title === $post->post_title && $status === $post->post_status) {
             return ['ok' => true, 'errors' => [], 'message' => __('Action saved.', 'scouting-forms')];
         }

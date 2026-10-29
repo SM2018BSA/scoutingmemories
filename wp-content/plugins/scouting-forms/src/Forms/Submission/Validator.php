@@ -260,14 +260,8 @@ class Validator {
     }
 
     /**
-     * @param mixed $value
-     */
-    /**
-     * Another entry already has this value (the entry being edited does not count).
+     * The entry already stores exactly this value for the field (an edit may keep it).
      *
-     * @param mixed $value
-     */
-    /**
      * @param mixed $value
      */
     private static function isStoredValue(int $entryId, int $fieldId, $value): bool {
@@ -284,6 +278,11 @@ class Validator {
         return $normalize(maybe_unserialize($stored)) === $normalize($value);
     }
 
+    /**
+     * Another entry already has this value (the entry being edited does not count).
+     *
+     * @param mixed $value
+     */
     private static function isDuplicate(array $field, $value, int $entryId = 0): bool {
         global $wpdb;
         $stored = is_array($value) ? maybe_serialize($value) : (string) $value;
