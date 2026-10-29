@@ -20,9 +20,9 @@ class Scouting_PDF_OCR {
 
     private static $instance = null;
 
-    // Bump this when the table layout changes; the table is (re)built by dbDelta on load,
+    // Bump this when the table layout changes; the tables are (re)built by dbDelta on load,
     // because the plugin is loaded from a must-use loader and has no activation hook
-    const TABLE_VERSION = 2;
+    const TABLE_VERSION = 3;
 
     // The one host the OCR service downloads from. Narrower on purpose than the viewer's
     // proxy_hosts(): the service refuses everything else, so the button is only offered
@@ -112,6 +112,14 @@ class Scouting_PDF_OCR {
         );
     }
 
+    /**
+     * When on, machine-read text is marked approved the moment it arrives and skips checking
+     */
+    public static function auto_approve() {
+        $s = self::settings();
+        return !empty($s['auto_approve']);
+    }
+
     // ---- One link, one spelling ------------------------------------------------
 
     /**
@@ -186,44 +194,93 @@ class Scouting_PDF_OCR {
         return sprintf(' data-pdf-ocr-key="%s"', esc_attr(self::doc_key($canonical)));
     }
 
-    // ---- The table --------------------------------------------------------------
+    // ---- The tables --------------------------------------------------------------
 
-    private static function table() {
+    public static function table() {
         global $wpdb;
         return $wpdb->prefix . 'scouting_pdf_ocr';
     }
 
+    public static function docs_table() {
+        global $wpdb;
+        return $wpdb->prefix . 'scouting_pdf_ocr_docs';
+    }
+
     public function maybe_create_table() {
-        if ((int) get_option(self::DB_OPTION) === self::TABLE_VERSION) {
+        $installed = (int) get_option(self::DB_OPTION);
+        if ($installed === self::TABLE_VERSION) {
             return;
         }
         global $wpdb;
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         $table = self::table();
+        $docs = self::docs_table();
         $charset_collate = $wpdb->get_charset_collate();
-        dbDelta("CREATE TABLE $table (
+        dbDelta(array(
+            // One row per read page. source: who caused the read (reader | bulk | auto).
+            // review_status: '' (nothing to check yet) | pending | approved | auto.
+            // text_original: the raw machine text, kept once a reviewer changes "text".
+            "CREATE TABLE $table (
   id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   doc_key char(32) NOT NULL,
   page smallint(5) unsigned NOT NULL,
   pdf_url varchar(1024) NOT NULL,
   status varchar(10) NOT NULL DEFAULT 'queued',
+  source varchar(10) NOT NULL DEFAULT 'reader',
+  review_status varchar(10) NOT NULL DEFAULT '',
   asks smallint(5) unsigned NOT NULL DEFAULT 1,
   job_id char(32) NOT NULL DEFAULT '',
   text longtext NULL,
+  text_original longtext NULL,
   words longtext NULL,
   engine varchar(60) NOT NULL DEFAULT '',
   requested_by bigint(20) unsigned NOT NULL DEFAULT 0,
   requested_at datetime NOT NULL,
   finished_at datetime NULL,
+  reviewed_by bigint(20) unsigned NOT NULL DEFAULT 0,
+  reviewed_at datetime NULL,
   PRIMARY KEY  (id),
   UNIQUE KEY doc_page (doc_key,page),
-  KEY requested_at (requested_at)
-) $charset_collate;");
-        // Record success only when the table is really there, so a failed CREATE is retried
+  KEY requested_at (requested_at),
+  KEY status (status),
+  KEY review_status (review_status)
+) $charset_collate;",
+            // One row per document in the background-reading queue. total_pages stays 0
+            // until the first finished page names the document's page count.
+            "CREATE TABLE $docs (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  doc_key char(32) NOT NULL,
+  pdf_url varchar(1024) NOT NULL,
+  post_id bigint(20) unsigned NOT NULL DEFAULT 0,
+  label varchar(200) NOT NULL DEFAULT '',
+  total_pages smallint(5) unsigned NOT NULL DEFAULT 0,
+  pages_done smallint(5) unsigned NOT NULL DEFAULT 0,
+  pages_failed smallint(5) unsigned NOT NULL DEFAULT 0,
+  status varchar(10) NOT NULL DEFAULT 'queued',
+  priority tinyint(3) unsigned NOT NULL DEFAULT 0,
+  source varchar(10) NOT NULL DEFAULT 'bulk',
+  enqueued_by bigint(20) unsigned NOT NULL DEFAULT 0,
+  enqueued_at datetime NOT NULL,
+  started_at datetime NULL,
+  finished_at datetime NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY doc_key (doc_key),
+  KEY status_order (status,priority,id)
+) $charset_collate;",
+        ));
+        // Record success only when both tables are really there, so a failed CREATE is retried
         // on the next load instead of being remembered as done
-        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table) {
-            update_option(self::DB_OPTION, self::TABLE_VERSION);
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table
+                || $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $docs)) !== $docs) {
+            return;
         }
+        if ($installed === 1 || $installed === 2) {
+            // Pages read before version 3: their text has not been checked by anyone, and
+            // empty pages have nothing to check
+            $wpdb->query("UPDATE $table SET review_status = 'pending' WHERE status = 'done' AND review_status = ''");
+            $wpdb->query("UPDATE $table SET review_status = 'auto' WHERE status = 'empty' AND review_status = ''");
+        }
+        update_option(self::DB_OPTION, self::TABLE_VERSION);
     }
 
     // ---- Talking to the service ---------------------------------------------------
@@ -270,20 +327,45 @@ class Scouting_PDF_OCR {
         }
         if ($job['status'] === 'done') {
             $text = isset($job['text']) ? (string) $job['text'] : '';
+            $empty = trim($text) === '';
             $wpdb->update(self::table(), array(
-                'status'      => trim($text) === '' ? 'empty' : 'done',
-                'text'        => $text,
-                'words'       => isset($job['words']) ? wp_json_encode($job['words']) : null,
-                'engine'      => isset($job['engine']) ? substr((string) $job['engine'], 0, 60) : '',
-                'finished_at' => current_time('mysql'),
-            ), array('id' => $row_id), array('%s', '%s', '%s', '%s', '%s'), array('%d'));
+                'status'        => $empty ? 'empty' : 'done',
+                // New text waits for a reviewer unless auto-approve is on; an empty page
+                // has nothing to check either way
+                'review_status' => ($empty || self::auto_approve()) ? 'auto' : 'pending',
+                'text'          => $text,
+                'words'         => isset($job['words']) ? wp_json_encode($job['words']) : null,
+                'engine'        => isset($job['engine']) ? substr((string) $job['engine'], 0, 60) : '',
+                'finished_at'   => current_time('mysql'),
+            ), array('id' => $row_id), array('%s', '%s', '%s', '%s', '%s', '%s'), array('%d'));
+            if (isset($job['pages'])) {
+                self::learn_total_pages($row_id, (int) $job['pages']);
+            }
         } elseif ($job['status'] === 'failed') {
             $wpdb->update(self::table(), array(
-                'status'      => 'failed',
-                'finished_at' => current_time('mysql'),
-            ), array('id' => $row_id), array('%s', '%s'), array('%d'));
+                'status'        => 'failed',
+                'review_status' => '',
+                'finished_at'   => current_time('mysql'),
+            ), array('id' => $row_id), array('%s', '%s', '%s'), array('%d'));
         }
         // queued and working: nothing to save yet
+    }
+
+    /**
+     * A finished job names the document's page count; the queue's docs row keeps it,
+     * because the background reading needs to know when a document is complete.
+     */
+    private static function learn_total_pages($row_id, $pages) {
+        global $wpdb;
+        if ($pages < 1 || $pages > 9999 || (int) get_option(self::DB_OPTION) !== self::TABLE_VERSION) {
+            return;
+        }
+        $doc_key = $wpdb->get_var($wpdb->prepare('SELECT doc_key FROM ' . self::table() . ' WHERE id = %d', $row_id));
+        if ($doc_key) {
+            $wpdb->query($wpdb->prepare(
+                'UPDATE ' . self::docs_table() . ' SET total_pages = %d WHERE doc_key = %s AND total_pages = 0', $pages, $doc_key
+            ));
+        }
     }
 
     /**
@@ -295,7 +377,9 @@ class Scouting_PDF_OCR {
     }
 
     /**
-     * Pages asked for today (site time): array(by this reader, by everyone)
+     * Pages asked for today (site time): array(by this reader, by everyone). Only readers'
+     * requests count: the background queue stores its rows with asks = 0 and another source,
+     * so it never eats into anyone's daily allowance.
      */
     private static function asks_today($user_id) {
         global $wpdb;
@@ -303,10 +387,10 @@ class Scouting_PDF_OCR {
         $today = current_time('Y-m-d') . ' 00:00:00';
         return array(
             (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_by = %d AND requested_at >= %s", $user_id, $today
+                "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_by = %d AND requested_at >= %s AND source = 'reader'", $user_id, $today
             )),
             (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_at >= %s", $today
+                "SELECT COALESCE(SUM(asks), 0) FROM $table WHERE requested_at >= %s AND source = 'reader'", $today
             )),
         );
     }
@@ -338,7 +422,7 @@ class Scouting_PDF_OCR {
      */
     // Row columns the routes read ("words" stays in the database: it is large and the
     // viewer does not use it yet)
-    const ROW_COLUMNS = 'id, doc_key, page, status, asks, job_id, text, engine, requested_by, requested_at, finished_at';
+    const ROW_COLUMNS = 'id, doc_key, page, status, review_status, asks, job_id, text, engine, requested_by, requested_at, finished_at';
 
     public function rest_get_text($request) {
         if (!self::enabled()) {
@@ -445,9 +529,11 @@ class Scouting_PDF_OCR {
         if ($row) {
             // A failed or stale row is asked for again, and the ask is counted. Of two readers
             // retrying at the same moment only one gets it; the other finds it queued again.
+            // A reader retrying a queue-read page takes it over (source becomes 'reader'), so
+            // the ask lands in their allowance and the queue simply sees the page finished.
             $stale_before = gmdate('Y-m-d H:i:s', strtotime($now) - 10 * MINUTE_IN_SECONDS);
             $updated = $wpdb->query($wpdb->prepare(
-                "UPDATE $table SET status = 'queued', asks = asks + 1, job_id = '', requested_by = %d, requested_at = %s, finished_at = NULL
+                "UPDATE $table SET status = 'queued', source = 'reader', asks = asks + 1, job_id = '', requested_by = %d, requested_at = %s, finished_at = NULL
                  WHERE id = %d AND (status = 'failed' OR (status = 'queued' AND requested_at < %s))", $user_id, $now, $row->id, $stale_before
             ));
             if (!$updated) {
@@ -546,7 +632,7 @@ class Scouting_PDF_OCR {
             return 0;
         }
         return (int) $wpdb->get_var($wpdb->prepare(
-            'SELECT COUNT(*) FROM ' . self::table() . ' WHERE requested_at >= %s', current_time('Y-m-d') . ' 00:00:00'
+            'SELECT COUNT(*) FROM ' . self::table() . " WHERE requested_at >= %s AND source = 'reader'", current_time('Y-m-d') . ' 00:00:00'
         ));
     }
 
