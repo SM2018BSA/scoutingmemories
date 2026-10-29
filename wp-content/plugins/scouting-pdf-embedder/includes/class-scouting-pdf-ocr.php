@@ -52,11 +52,14 @@ class Scouting_PDF_OCR {
 
     private static function settings() {
         $defaults = array(
-            'enabled'    => 0,
-            'url'        => '',
-            'secret'     => '',
-            'site_limit' => 100,
-            'user_limit' => 20,
+            'enabled'       => 0,
+            'url'           => '',
+            'secret'        => '',
+            'site_limit'    => 100,
+            'user_limit'    => 20,
+            'queue_enabled' => 0,
+            'auto_enqueue'  => 1,
+            'auto_approve'  => 0,
         );
         $saved = get_option(self::OPTION);
         return is_array($saved) ? array_merge($defaults, $saved) : $defaults;
@@ -118,6 +121,22 @@ class Scouting_PDF_OCR {
     public static function auto_approve() {
         $s = self::settings();
         return !empty($s['auto_approve']);
+    }
+
+    /**
+     * Background reading: whole documents read by the queue. Needs the feature itself on too.
+     */
+    public static function queue_enabled() {
+        $s = self::settings();
+        return !empty($s['queue_enabled']) && self::enabled();
+    }
+
+    /**
+     * Documents in new and submitted posts are queued as the posts are saved
+     */
+    public static function auto_enqueue() {
+        $s = self::settings();
+        return !empty($s['auto_enqueue']);
     }
 
     // ---- One link, one spelling ------------------------------------------------
@@ -289,8 +308,9 @@ class Scouting_PDF_OCR {
      * A signed request to the OCR service: HMAC-SHA256 with the shared secret over
      * time, method, path and the body's SHA-256, as the service's README describes.
      * Returns array('status' => HTTP status, 'json' => decoded answer or null).
+     * Public because the background queue (Scouting_PDF_OCR_Queue) sends the same requests.
      */
-    private static function call_service($method, $path, $body = '') {
+    public static function call_service($method, $path, $body = '') {
         $stamp = (string) time();
         $to_sign = $stamp . "\n" . $method . "\n" . $path . "\n" . hash('sha256', $body);
         $signature = hash_hmac('sha256', $to_sign, self::secret());
@@ -319,8 +339,9 @@ class Scouting_PDF_OCR {
     /**
      * Copy a finished job from the service's answer into our row. A page the service read
      * but found no words on is stored as "empty", so the viewer can say so.
+     * Public because the background queue saves its answers the same way.
      */
-    private static function save_job_answer($row_id, $job) {
+    public static function save_job_answer($row_id, $job) {
         global $wpdb;
         if (!is_array($job) || empty($job['status'])) {
             return;
@@ -617,12 +638,15 @@ class Scouting_PDF_OCR {
         $url = isset($input['url']) ? esc_url_raw(trim((string) $input['url'])) : '';
         $secret = isset($input['secret']) ? trim((string) $input['secret']) : '';
         return array(
-            'enabled'    => empty($input['enabled']) ? 0 : 1,
-            'url'        => $url,
+            'enabled'       => empty($input['enabled']) ? 0 : 1,
+            'url'           => $url,
             // An empty password box keeps the saved secret
-            'secret'     => $secret === '' ? $old['secret'] : $secret,
-            'site_limit' => max(1, min(10000, (int) ($input['site_limit'] ?? $old['site_limit']))),
-            'user_limit' => max(1, min(10000, (int) ($input['user_limit'] ?? $old['user_limit']))),
+            'secret'        => $secret === '' ? $old['secret'] : $secret,
+            'site_limit'    => max(1, min(10000, (int) ($input['site_limit'] ?? $old['site_limit']))),
+            'user_limit'    => max(1, min(10000, (int) ($input['user_limit'] ?? $old['user_limit']))),
+            'queue_enabled' => empty($input['queue_enabled']) ? 0 : 1,
+            'auto_enqueue'  => empty($input['auto_enqueue']) ? 0 : 1,
+            'auto_approve'  => empty($input['auto_approve']) ? 0 : 1,
         );
     }
 
@@ -677,6 +701,21 @@ class Scouting_PDF_OCR {
                     <tr>
                         <th scope="row"><label for="ocr-user-limit">Pages per day, per reader</label></th>
                         <td><input type="number" min="1" max="10000" id="ocr-user-limit" name="<?php echo esc_attr(self::OPTION); ?>[user_limit]" value="<?php echo (int) $s['user_limit']; ?>"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Background reading</th>
+                        <td><label><input type="checkbox" name="<?php echo esc_attr(self::OPTION); ?>[queue_enabled]" value="1" <?php checked($s['queue_enabled']); ?>> Switched on</label>
+                        <p class="description">Reads whole documents in the background and adds new documents from posts. Run it from the PDF Text page.</p></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">New posts</th>
+                        <td><label><input type="checkbox" name="<?php echo esc_attr(self::OPTION); ?>[auto_enqueue]" value="1" <?php checked($s['auto_enqueue']); ?>> Add documents from new and submitted posts automatically</label>
+                        <p class="description">Only while background reading is switched on.</p></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Review</th>
+                        <td><label><input type="checkbox" name="<?php echo esc_attr(self::OPTION); ?>[auto_approve]" value="1" <?php checked($s['auto_approve']); ?>> Approve machine-read text automatically (skip checking)</label>
+                        <p class="description">When this is off, reviewers check and approve the text in the PDF text box on each post's edit screen.</p></td>
                     </tr>
                     <tr>
                         <th scope="row">Today</th>

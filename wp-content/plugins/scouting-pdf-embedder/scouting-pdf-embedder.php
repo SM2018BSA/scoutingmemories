@@ -920,3 +920,7 @@ Scouting_PDF_Embedder::get_instance();
 // Page OCR: the "Text" button and its routes (off unless an address and secret are configured)
 require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-ocr.php';
 Scouting_PDF_OCR::get_instance();
+
+// Background reading: the document queue (runs only while the setting is on)
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-ocr-queue.php';
+Scouting_PDF_OCR_Queue::get_instance();

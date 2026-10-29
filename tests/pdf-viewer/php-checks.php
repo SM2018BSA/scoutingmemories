@@ -308,6 +308,196 @@ try {
     }
 }
 
+// ---- Background reading: the document queue and its dispatcher ----
+// Same mocked service; documents are seeded straight into the docs table
+$Q = Scouting_PDF_OCR_Queue::get_instance();
+$docs_table = $wpdb->prefix . 'scouting_pdf_ocr_docs';
+$sent = array();
+$answers = array();
+$make_doc = function($name, $extra = array()) use ($wpdb, $docs_table, $O, $S) {
+    $url = "$S/php-checks/$name.pdf";
+    $wpdb->insert($docs_table, array_merge(array(
+        'doc_key' => $O::doc_key($url), 'pdf_url' => $url, 'label' => $name,
+        'status' => 'queued', 'source' => 'bulk', 'enqueued_at' => current_time('mysql'),
+    ), $extra));
+    return (object) array('id' => (int) $wpdb->insert_id, 'url' => $url, 'key' => $O::doc_key($url));
+};
+$doc_row = function($d) use ($wpdb, $docs_table) {
+    return $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE id = %d", $d->id));
+};
+$drop_doc = function($d) use ($wpdb, $docs_table, $ocr_table) {
+    $wpdb->delete($docs_table, array('id' => $d->id));
+    $wpdb->delete($ocr_table, array('doc_key' => $d->key));
+};
+$qrows = function($d) use ($wpdb, $ocr_table) {
+    return $wpdb->get_results($wpdb->prepare("SELECT * FROM $ocr_table WHERE doc_key = %s ORDER BY page", $d->key));
+};
+$tick = function($changes = array()) use ($with, $Q) {
+    return $with(array_merge(array('queue_enabled' => 1), $changes), function() use ($Q) { return $Q->tick(); });
+};
+$jid = function($n) { return str_pad(dechex($n), 32, '0', STR_PAD_LEFT); };
+$page_of = function($req) { return json_decode($req['args']['body'], true)['page']; };
+update_option('scouting_pdf_ocr_queue_state', 'running', false);
+delete_transient('scouting_pdf_ocr_backoff');
+
+try {
+    // The whole life of one 3-page document: page 1 first, its answer names the count
+    $d = $make_doc('queue-life');
+    $answers[] = array(202, array('id' => $jid(1), 'status' => 'queued', 'page' => 1));
+    check('queue tick runs', $tick(), true);
+    check('queue takes the document', $doc_row($d)->status, 'working');
+    check('queue sent page 1 first', array(count($sent), json_decode($sent[0]['args']['body'], true)), array(1, array('url' => $d->url, 'page' => 1)));
+    $r = $qrows($d);
+    check('queue row: bulk, no ask, nobody', array($r[0]->source, (int) $r[0]->asks, (int) $r[0]->requested_by), array('bulk', 0, 0));
+
+    $answers[] = array(200, array('id' => $jid(1), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 3));
+    $answers[] = array(202, array('id' => $jid(2), 'status' => 'queued', 'page' => 2));
+    $answers[] = array(202, array('id' => $jid(3), 'status' => 'queued', 'page' => 3));
+    $tick();
+    check('queue learned the page count', (int) $doc_row($d)->total_pages, 3);
+    $r = $qrows($d);
+    check('queue page 1 saved, waiting for a reviewer', array($r[0]->status, $r[0]->review_status), array('done', 'pending'));
+    check('queue sent pages 2 and 3', array(count($sent), $page_of($sent[2]), $page_of($sent[3])), array(4, 2, 3));
+
+    $answers[] = array(200, array('id' => $jid(2), 'status' => 'done', 'page' => 2, 'text' => 'Two', 'words' => array(), 'engine' => 'x', 'pages' => 3));
+    $answers[] = array(200, array('id' => $jid(3), 'status' => 'done', 'page' => 3, 'text' => " \n", 'words' => array(), 'engine' => 'x', 'pages' => 3));
+    $tick();
+    $row = $doc_row($d);
+    check('queue document done with the right counters', array($row->status, (int) $row->pages_done, (int) $row->pages_failed, $row->finished_at !== null), array('done', 3, 0, true));
+    $r = $qrows($d);
+    check('queue empty page needs no checking', array($r[2]->status, $r[2]->review_status), array('empty', 'auto'));
+    $drop_doc($d);
+
+    // Never more than 3 pages in flight
+    $d = $make_doc('queue-cap', array('total_pages' => 5));
+    $answers[] = array(202, array('id' => $jid(11), 'status' => 'queued', 'page' => 1));
+    $answers[] = array(202, array('id' => $jid(12), 'status' => 'queued', 'page' => 2));
+    $answers[] = array(202, array('id' => $jid(13), 'status' => 'queued', 'page' => 3));
+    $before = count($sent);
+    $tick();
+    check('queue sends three pages at most', count($sent) - $before, 3);
+    $answers[] = array(200, array('id' => $jid(11), 'status' => 'working', 'page' => 1));
+    $answers[] = array(200, array('id' => $jid(12), 'status' => 'working', 'page' => 2));
+    $answers[] = array(200, array('id' => $jid(13), 'status' => 'working', 'page' => 3));
+    $before = count($sent);
+    $tick();
+    check('queue waits while three are in flight', count($sent) - $before, 3); // three polls, no new pages
+    check('queue pages 4 and 5 have no rows yet', count($qrows($d)), 3);
+    $drop_doc($d);
+
+    // Page 1 failing fails the whole document
+    $d = $make_doc('queue-first-fail');
+    $answers[] = array(202, array('id' => $jid(21), 'status' => 'queued', 'page' => 1));
+    $tick();
+    $answers[] = array(200, array('id' => $jid(21), 'status' => 'failed', 'page' => 1, 'error' => 'download_failed'));
+    $tick();
+    $row = $doc_row($d);
+    check('queue document failed when page 1 failed', array($row->status, $row->finished_at !== null), array('failed', true));
+    $drop_doc($d);
+
+    // A refusal sets the ten-minute backoff and takes the fresh row back
+    $d = $make_doc('queue-busy');
+    $answers[] = array(429, array('error' => 'hourly_limit'));
+    $tick();
+    check('queue refused: the fresh row is taken back', count($qrows($d)), 0);
+    check('queue refused: backing off', Scouting_PDF_OCR_Queue::backoff_until() > time(), true);
+    $before = count($sent);
+    check('queue backing off: tick stands back', $tick(), false);
+    check('queue backing off: nothing sent', count($sent) - $before, 0);
+    delete_transient('scouting_pdf_ocr_backoff');
+    $drop_doc($d);
+
+    // A job the service forgot: that page fails, the document still completes around it
+    $d = $make_doc('queue-forgot', array('total_pages' => 2));
+    $answers[] = array(202, array('id' => $jid(31), 'status' => 'queued', 'page' => 1));
+    $answers[] = array(202, array('id' => $jid(32), 'status' => 'queued', 'page' => 2));
+    $tick();
+    $answers[] = array(200, array('id' => $jid(31), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 2));
+    $answers[] = array(404, array('error' => 'not_found'));
+    $tick();
+    $row = $doc_row($d);
+    check('queue forgot job: page failed, document done', array($row->status, (int) $row->pages_done, (int) $row->pages_failed), array('done', 1, 1));
+    $drop_doc($d);
+
+    // The lock: a held one stands a tick down, a dead run's is taken over
+    $wpdb->query($wpdb->prepare("INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", 'scouting_pdf_ocr_tick_lock', (string) time()));
+    check('queue lock held: tick does nothing', $tick(), false);
+    $wpdb->query($wpdb->prepare("UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s", (string) (time() - 121), 'scouting_pdf_ocr_tick_lock'));
+    check('queue lock of a dead run is taken over', $tick(), true);
+    check('queue lock released after the tick', $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", 'scouting_pdf_ocr_tick_lock')), null);
+
+    // A reader already read page 1: the count is learned without a new row
+    $d = $make_doc('queue-prior');
+    $wpdb->insert($ocr_table, array('doc_key' => $d->key, 'page' => 1, 'pdf_url' => $d->url, 'status' => 'done', 'source' => 'reader', 'review_status' => 'pending', 'asks' => 1, 'text' => 'One', 'engine' => 'x', 'requested_by' => 1, 'requested_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $answers[] = array(200, array('id' => $jid(41), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 2));
+    $answers[] = array(202, array('id' => $jid(42), 'status' => 'queued', 'page' => 2));
+    $tick();
+    check('queue learned the count from a reader-read page 1', (int) $doc_row($d)->total_pages, 2);
+    $r = $qrows($d);
+    check('queue no second row for page 1, page 2 sent', array(count($r), (int) $r[1]->page, $r[1]->status), array(2, 2, 'queued'));
+    $drop_doc($d);
+
+    // Queue pages never touch readers' daily allowances
+    $wpdb->insert($ocr_table, array('doc_key' => str_repeat('9', 32), 'page' => 1, 'pdf_url' => "$S/php-checks/bulk-seed.pdf", 'status' => 'done', 'source' => 'bulk', 'asks' => 5, 'requested_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $quser = wp_insert_user(array('user_login' => 'ocr-check-q', 'user_pass' => wp_generate_password(), 'user_email' => 'ocr-check-q@example.com', 'role' => 'subscriber'));
+    wp_set_current_user($quser);
+    $answers[] = array(202, array('id' => $jid(51), 'status' => 'queued', 'page' => 1));
+    $with(array('user_limit' => 1, 'site_limit' => 1), function() use ($ask, $S) {
+        check('queue pages do not count against reader limits', $ask(array('url' => "$S/php-checks/fresh.pdf", 'page' => 1))[1], 'queued');
+    });
+    wp_set_current_user(0);
+
+    // Auto-approve: new text arrives already checked off
+    $d = $make_doc('queue-auto');
+    $answers[] = array(202, array('id' => $jid(61), 'status' => 'queued', 'page' => 1));
+    $tick(array('auto_approve' => 1));
+    $answers[] = array(200, array('id' => $jid(61), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 1));
+    $tick(array('auto_approve' => 1));
+    $r = $qrows($d);
+    check('queue auto-approve skips checking', $r[0]->review_status, 'auto');
+    check('queue one-page document done', $doc_row($d)->status, 'done');
+    $drop_doc($d);
+
+    // Paused: nothing taken, nothing sent (pages in flight would still be polled)
+    update_option('scouting_pdf_ocr_queue_state', 'paused', false);
+    $d = $make_doc('queue-paused');
+    $before = count($sent);
+    $tick();
+    check('queue paused: document left waiting, nothing sent', array($doc_row($d)->status, count($sent) - $before), array('queued', 0));
+    update_option('scouting_pdf_ocr_queue_state', 'running', false);
+    $drop_doc($d);
+
+    // Switched off
+    check('queue off: tick stands back', $with(array('queue_enabled' => 0), function() use ($Q) { return $Q->tick(); }), false);
+
+    // The cron event follows the setting
+    $with(array('queue_enabled' => 1), function() use ($Q) { $Q->maybe_schedule(); });
+    check('queue cron scheduled when on', (bool) wp_next_scheduled('scouting_pdf_ocr_tick'), true);
+    $with(array('queue_enabled' => 0), function() use ($Q) { $Q->maybe_schedule(); });
+    check('queue cron cleared when off', (bool) wp_next_scheduled('scouting_pdf_ocr_tick'), false);
+
+    // The dashboard's inline tick steps in when cron is late, and only then
+    $stale_tick = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - 120);
+    update_option('scouting_pdf_ocr_last_tick', $stale_tick, false);
+    $with(array('queue_enabled' => 1), function() use ($Q) { $Q->tick_if_overdue(); });
+    check('queue late: the dashboard tick steps in', get_option('scouting_pdf_ocr_last_tick') !== $stale_tick, true);
+    $fresh_tick = get_option('scouting_pdf_ocr_last_tick');
+    $with(array('queue_enabled' => 1), function() use ($Q) { $Q->tick_if_overdue(); });
+    check('queue fresh: the dashboard tick stands back', get_option('scouting_pdf_ocr_last_tick'), $fresh_tick);
+} finally {
+    wp_set_current_user(0);
+    if (!empty($quser)) {
+        wp_delete_user($quser);
+    }
+    $wpdb->query("DELETE FROM $docs_table WHERE " . $wpdb->prepare('pdf_url LIKE %s', "$S/php-checks/%"));
+    $wpdb->query("DELETE FROM $ocr_table WHERE $ours");
+    delete_option('scouting_pdf_ocr_queue_state');
+    delete_option('scouting_pdf_ocr_last_tick');
+    delete_transient('scouting_pdf_ocr_backoff');
+    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s", 'scouting_pdf_ocr_tick_lock'));
+    wp_clear_scheduled_hook('scouting_pdf_ocr_tick');
+}
+
 if ($failures) {
     echo "$failures PHP CHECK(S) FAILED\n";
     exit(1);
