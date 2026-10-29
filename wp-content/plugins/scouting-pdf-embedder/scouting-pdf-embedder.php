@@ -718,6 +718,27 @@ class Scouting_PDF_Embedder {
     }
 
     /**
+     * Every PDF shown in a post's content that the viewer would embed, in document order,
+     * each spelling once. The background reading queue is the caller. The extra `"url":`
+     * alternative reads block comments (a wp:scouting/pdf-viewer block keeps its link as
+     * JSON, which the other prefixes miss); legacy pdfemb block comments are turned into
+     * shortcodes by clean_shortcodes_in_content() first, exactly as rendering does.
+     */
+    public static function all_pdfs_in_content($content) {
+        $content = self::get_instance()->clean_shortcodes_in_content((string) $content);
+        $found = array();
+        if (preg_match_all('/(?:url=["\']|href=["\']|\[pdf[-_]embedder\s+|"url"\s*:\s*")(https?:\/\/[^"\'\s\]\\\\]+?\.pdf)(?=["\'\s\]?])/i', $content, $m)) {
+            foreach ($m[1] as $url) {
+                $url = html_entity_decode($url);
+                if (self::is_embeddable_url($url) && !in_array($url, $found, true)) {
+                    $found[] = $url;
+                }
+            }
+        }
+        return $found;
+    }
+
+    /**
      * Highwire Press tags, so reference managers (Zotero, Mendeley) save the post with
      * its title, date, publisher and PDF in one click
      */

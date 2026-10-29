@@ -484,12 +484,79 @@ try {
     $fresh_tick = get_option('scouting_pdf_ocr_last_tick');
     $with(array('queue_enabled' => 1), function() use ($Q) { $Q->tick_if_overdue(); });
     check('queue fresh: the dashboard tick stands back', get_option('scouting_pdf_ocr_last_tick'), $fresh_tick);
+
+    // ---- Finding documents: every PDF in a post, auto-enqueue, the site scan ----
+    $all = function($content) use ($E) { return $E::all_pdfs_in_content($content); };
+    check('finds shortcode url', $all('x [pdf-embedder url="' . "$S/a.pdf" . '" title="A"] y'), array("$S/a.pdf"));
+    check('finds underscore shortcode', $all('[pdf_embedder url="' . "$S/b.pdf" . '"]'), array("$S/b.pdf"));
+    check('finds entity-mangled shortcode', $all('&#91;pdf-embedder url=&#8220;' . "$S/c.pdf" . '&#8221;&#93;'), array("$S/c.pdf"));
+    check('finds legacy block comment', $all('<!-- wp:pdfemb/pdf-embedder-viewer {"url":"' . "$S/d.pdf" . '","title":"D"} --><div></div><!-- /wp:pdfemb/pdf-embedder-viewer -->'), array("$S/d.pdf"));
+    check('finds scouting block comment', $all('<!-- wp:scouting/pdf-viewer {"url":"' . "$S/e.pdf" . '"} /-->'), array("$S/e.pdf"));
+    check('finds old block markup', $all('<div class="wp-block-pdfemb-pdf-embedder-viewer"><a href="' . "$S/f.pdf" . '" class="pdfemb-viewer">F</a></div>'), array("$S/f.pdf"));
+    check('finds plain paragraph link', $all('<p><a href="' . "$S/g.pdf" . '">G</a></p>'), array("$S/g.pdf"));
+    check('keeps document order, each once', $all('<p><a href="' . "$S/one.pdf" . '">1</a></p>[pdf-embedder url="' . "$S/two.pdf" . '"]<a href="' . "$S/one.pdf" . '">again</a>'), array("$S/one.pdf", "$S/two.pdf"));
+    check('leaves other hosts out', $all('<a href="https://evil.example.com/x.pdf">x</a><a href="' . "$S/h.pdf" . '">h</a>'), array("$S/h.pdf"));
+
+    $test_posts = array();
+    $mk_post = function($content, $status = 'publish') use (&$test_posts, $with) {
+        return $with(array('queue_enabled' => 1), function() use ($content, $status, &$test_posts) {
+            $id = wp_insert_post(array('post_title' => 'OCR queue check', 'post_content' => $content, 'post_status' => $status, 'post_type' => 'post'));
+            $test_posts[] = $id;
+            return $id;
+        });
+    };
+    $doc_count = function() use ($wpdb, $docs_table, $S) {
+        return (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $docs_table WHERE pdf_url LIKE %s", "$S/php-checks/%"));
+    };
+    $pid = $mk_post('<p><a href="' . "$S/php-checks/auto-a.pdf" . '">A</a></p><p><a href="http://storage.scoutingmemories.org/php-checks/auto-b.pdf">B</a></p>');
+    check('posts: two documents queued on save', $doc_count(), 2);
+    $front = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE pdf_url = %s", "$S/php-checks/auto-a.pdf"));
+    check('posts: queued like a submission', array($front->source, (int) $front->priority, $front->status, (int) $front->post_id), array('auto', 1, 'queued', $pid));
+    check('posts: http spelling stored once, as https', (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $docs_table WHERE doc_key = %s", $O::doc_key("$S/php-checks/auto-b.pdf"))), 1);
+    $with(array('queue_enabled' => 1), function() use ($pid) {
+        wp_update_post(array('ID' => $pid, 'post_title' => 'OCR queue check again'));
+    });
+    check('posts: saving again adds nothing', $doc_count(), 2);
+    $mk_post('<p><a href="' . "$S/php-checks/auto-c.pdf" . '">C</a></p>', 'pending');
+    check('posts: a pending submission is queued too', $doc_count(), 3);
+    $mk_post('<p><a href="' . "$S/php-checks/auto-d.pdf" . '">D</a></p>', 'draft');
+    check('posts: a draft is not queued', $doc_count(), 3);
+    $with(array('queue_enabled' => 1, 'auto_enqueue' => 0), function() use (&$test_posts, $S) {
+        $test_posts[] = wp_insert_post(array('post_title' => 'OCR queue check', 'post_content' => '<p><a href="' . "$S/php-checks/auto-e.pdf" . '">E</a></p>', 'post_status' => 'publish', 'post_type' => 'post'));
+    });
+    check('posts: nothing queued with the setting off', $doc_count(), 3);
+
+    $wpdb->query("DELETE FROM $docs_table");
+    $b1 = Scouting_PDF_OCR_Queue::scan_batch(0, 2);
+    check('scan: a batch walks its two posts', $b1['posts_scanned'], 2);
+    check('scan: not done after one batch', $b1['done'], false);
+    $b2 = Scouting_PDF_OCR_Queue::scan_batch($b1['last_id'], 2);
+    check('scan: the next batch starts after the first', $b2['last_id'] > $b1['last_id'], true);
+    $after = 0;
+    $guard = 0;
+    do {
+        $b = Scouting_PDF_OCR_Queue::scan_batch($after, 50);
+        $after = $b['last_id'];
+    } while (!$b['done'] && ++$guard < 200);
+    check('scan: finishes', $b['done'], true);
+    // auto-a, auto-b and the pending auto-c again, plus auto-e, whose post was published
+    // while auto-enqueue was off: the scan reads every published and pending post
+    check('scan: found every storage document in the posts', $doc_count(), 4);
+    $scanned = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE pdf_url = %s", "$S/php-checks/auto-a.pdf"));
+    check('scan: waits its turn behind submissions', array($scanned->source, (int) $scanned->priority), array('bulk', 0));
 } finally {
     wp_set_current_user(0);
     if (!empty($quser)) {
         wp_delete_user($quser);
     }
-    $wpdb->query("DELETE FROM $docs_table WHERE " . $wpdb->prepare('pdf_url LIKE %s', "$S/php-checks/%"));
+    if (!empty($test_posts)) {
+        foreach ($test_posts as $id) {
+            if ($id && !is_wp_error($id)) {
+                wp_delete_post($id, true);
+            }
+        }
+    }
+    $wpdb->query("DELETE FROM $docs_table");
     $wpdb->query("DELETE FROM $ocr_table WHERE $ours");
     delete_option('scouting_pdf_ocr_queue_state');
     delete_option('scouting_pdf_ocr_last_tick');

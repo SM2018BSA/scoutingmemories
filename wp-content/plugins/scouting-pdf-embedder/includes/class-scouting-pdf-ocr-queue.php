@@ -55,6 +55,120 @@ class Scouting_PDF_OCR_Queue {
         // After Scouting_PDF_OCR::maybe_create_table(), which also runs on init
         add_action('init', array($this, 'maybe_schedule'), 20);
         add_action(self::CRON_HOOK, array($this, 'tick'));
+        add_action('wp_after_insert_post', array($this, 'auto_enqueue_post'), 10, 2);
+    }
+
+    // ---- Filling the queue ------------------------------------------------------------
+
+    /**
+     * Put one document in the queue. $canonical must already be canonical_url()'s spelling,
+     * so http and https spellings of one file make one document. Returns 'added' or 'exists'.
+     */
+    public static function enqueue($canonical, $source, $post_id = 0, $label = '', $priority = 0) {
+        global $wpdb;
+        if ((int) get_option(Scouting_PDF_OCR::DB_OPTION) !== Scouting_PDF_OCR::TABLE_VERSION) {
+            return 'exists'; // the tables are not ready yet; the site keeps trying on load
+        }
+        if ($label === '') {
+            $label = rawurldecode(basename((string) wp_parse_url($canonical, PHP_URL_PATH)));
+        }
+        $inserted = $wpdb->query($wpdb->prepare(
+            'INSERT IGNORE INTO ' . Scouting_PDF_OCR::docs_table() .
+            ' (doc_key, pdf_url, post_id, label, status, priority, source, enqueued_by, enqueued_at)' .
+            " VALUES (%s, %s, %d, %s, 'queued', %d, %s, %d, %s)",
+            Scouting_PDF_OCR::doc_key($canonical), $canonical, $post_id,
+            mb_substr($label, 0, 200), $priority, $source,
+            get_current_user_id(), current_time('mysql')
+        ));
+        return $inserted ? 'added' : 'exists';
+    }
+
+    /**
+     * Documents in new and submitted posts are queued as the posts are saved. A submission
+     * from the Add a Post form arrives as a PENDING post, so its document goes to the front
+     * of the queue (priority 1) and its text is usually ready when a reviewer opens the post.
+     */
+    public function auto_enqueue_post($post_id, $post) {
+        if (!Scouting_PDF_OCR::queue_enabled() || !Scouting_PDF_OCR::auto_enqueue()) {
+            return;
+        }
+        if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
+            return;
+        }
+        if (!$post || !in_array($post->post_status, array('pending', 'publish'), true)) {
+            return;
+        }
+        $type = get_post_type_object($post->post_type);
+        if (!$type || empty($type->public)) {
+            return;
+        }
+        self::enqueue_post_documents($post_id, $post->post_content, 'auto', 1);
+    }
+
+    /**
+     * Queue every readable document in one post's content. Returns array(added, existing);
+     * links the archive storage cannot serve are left out.
+     */
+    public static function enqueue_post_documents($post_id, $content, $source, $priority) {
+        $added = 0;
+        $existing = 0;
+        $label = mb_substr(wp_strip_all_tags((string) get_the_title($post_id)), 0, 200);
+        foreach (Scouting_PDF_Embedder::all_pdfs_in_content($content) as $url) {
+            $canonical = Scouting_PDF_OCR::canonical_url($url);
+            if (is_wp_error($canonical)) {
+                continue; // not on the archive storage, so the service could not read it
+            }
+            if (self::enqueue($canonical, $source, $post_id, $label, $priority) === 'added') {
+                $added++;
+            } else {
+                $existing++;
+            }
+        }
+        return array($added, $existing);
+    }
+
+    const SCAN_BATCH = 200;
+
+    /**
+     * One batch of the whole-site scan: published and pending posts of public types after
+     * $after_id, in ID order, straight from the posts table — each batch is one bounded
+     * request, so the scan works behind the development server's gate too. The dashboard
+     * calls this until 'done'.
+     */
+    public static function scan_batch($after_id, $batch = self::SCAN_BATCH) {
+        global $wpdb;
+        $types = array_values(array_diff(get_post_types(array('public' => true)), array('attachment')));
+        if (!$types) {
+            return array('last_id' => (int) $after_id, 'done' => true, 'posts_scanned' => 0, 'docs_added' => 0);
+        }
+        $type_list = implode(',', array_fill(0, count($types), '%s'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, post_title, post_content FROM {$wpdb->posts}
+             WHERE ID > %d AND post_status IN ('publish', 'pending') AND post_type IN ($type_list)
+             ORDER BY ID LIMIT %d",
+            array_merge(array((int) $after_id), $types, array((int) $batch))
+        ));
+        $added = 0;
+        $last = (int) $after_id;
+        foreach ($rows as $row) {
+            $last = (int) $row->ID;
+            $label = mb_substr(wp_strip_all_tags((string) $row->post_title), 0, 200);
+            foreach (Scouting_PDF_Embedder::all_pdfs_in_content($row->post_content) as $url) {
+                $canonical = Scouting_PDF_OCR::canonical_url($url);
+                if (is_wp_error($canonical)) {
+                    continue;
+                }
+                if (self::enqueue($canonical, 'bulk', (int) $row->ID, $label, 0) === 'added') {
+                    $added++;
+                }
+            }
+        }
+        return array(
+            'last_id'       => $last,
+            'done'          => count($rows) < (int) $batch,
+            'posts_scanned' => count($rows),
+            'docs_added'    => $added,
+        );
     }
 
     // ---- Cron ---------------------------------------------------------------------
