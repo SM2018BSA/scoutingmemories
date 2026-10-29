@@ -164,3 +164,52 @@ same page is interrupted a second time it is marked failed, so one bad page cann
   deleted while the service is stopped; it starts fresh.
 - The web server passes `/v1/…` on the OCR address to the service and refuses request bodies over 8 KB:
   `ProxyPass /v1/ http://127.0.0.1:8000/v1/ retry=0 timeout=20`
+- For background reading (the WordPress plugin's queue, which reads whole documents one page
+  at a time through the same `/v1/jobs` requests), the development server's `ocr.env` raises
+  the hourly cap: `OCR_PAGES_PER_HOUR=300`. The app itself is unchanged; WordPress holds the
+  queue and sends at most 3 pages at a time.
+
+## WordPress cron on the development server
+
+The plugin's queue runs on WP-Cron, and on the development server WordPress's own cron
+trigger cannot fire: `wp-cron.php` sits behind the password gate. One systemd timer runs it
+instead, once a minute, from the command line (no password needed there). The two unit files
+live only on the droplet, in `/etc/systemd/system/`; this is their exact text, kept here so
+git remembers it. They only run WordPress's own cron — whether the queue does anything is
+governed by the plugin's Background reading setting and the dashboard's Pause, and with the
+setting off every run is a no-op.
+
+`/etc/systemd/system/scouting-wp-cron.service`:
+
+```ini
+[Unit]
+Description=Scouting Memories development server: run WordPress cron once
+After=network.target mysql.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/php /var/www/scoutingmemories/wp-cron.php
+TimeoutStartSec=120
+Nice=10
+```
+
+`/etc/systemd/system/scouting-wp-cron.timer`:
+
+```ini
+[Unit]
+Description=Scouting Memories development server: WordPress cron every minute
+
+[Timer]
+OnCalendar=*:*:00
+AccuracySec=10
+Persistent=false
+
+[Install]
+WantedBy=timers.target
+```
+
+Install: `systemctl daemon-reload && systemctl enable --now scouting-wp-cron.timer`.
+Check: `systemctl list-timers 'scouting-wp-cron*'`.
+Undo: `systemctl disable --now scouting-wp-cron.timer`, delete both files, `systemctl daemon-reload`.
