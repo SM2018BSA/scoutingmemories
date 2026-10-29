@@ -350,4 +350,237 @@
             }
         });
     }
+
+    // ================= The PDF text box on the post edit screen =================
+
+    var box = document.getElementById('scouting-pdf-text-box');
+    if (box) {
+        var boxPostId = parseInt(box.getAttribute('data-post-id'), 10);
+        Array.prototype.forEach.call(box.querySelectorAll('.sm-ocr-box-doc'), function(section) {
+            initBoxDoc(section, boxPostId);
+        });
+    }
+
+    function initBoxDoc(section, postId) {
+        var key = section.getAttribute('data-doc-key');
+        var viewUrl = section.getAttribute('data-view-url');
+        var body = section.querySelector('.sm-ocr-box-body');
+        var rowPage = 1;
+        var watch = null;    // refreshes the box while the document is being read
+        var notice = '';
+
+        function load() {
+            return api('GET', 'doc-text?doc_key=' + key + '&page=' + rowPage).then(function(r) {
+                if (!r.ok) {
+                    body.textContent = errorText(r, 'This could not be loaded.');
+                    return;
+                }
+                render(r.data);
+            });
+        }
+
+        function watchWhileReading(on) {
+            if (on && !watch) {
+                watch = setInterval(function() {
+                    if (!document.hidden) {
+                        load();
+                    }
+                }, POLL_MS);
+            } else if (!on && watch) {
+                clearInterval(watch);
+                watch = null;
+            }
+        }
+
+        function smallButton(label, primary) {
+            var button = el('button', label);
+            button.type = 'button';
+            button.className = primary ? 'button button-primary' : 'button';
+            return button;
+        }
+
+        function say(message) {
+            notice = message;
+        }
+
+        function editorFor(page, alreadyApproved) {
+            var holder = el('div');
+            var area = el('textarea');
+            area.value = page.text;
+            area.rows = 8;
+            area.style.width = '100%';
+            holder.appendChild(area);
+            var buttons = el('p');
+            if (alreadyApproved) {
+                var save = smallButton('Save changes', false);
+                save.addEventListener('click', function() {
+                    withButton(save, function() {
+                        return api('POST', 'approve/' + page.id, { text: area.value }).then(function(r) {
+                            say(r.ok ? 'Saved.' : errorText(r, 'That did not work.'));
+                            return load();
+                        });
+                    });
+                });
+                buttons.appendChild(save);
+            } else {
+                var approve = smallButton('Approve', true);
+                approve.addEventListener('click', function() {
+                    withButton(approve, function() {
+                        return api('POST', 'approve/' + page.id, {}).then(function(r) {
+                            say(r.ok ? 'Approved.' : errorText(r, 'That did not work.'));
+                            return load();
+                        });
+                    });
+                });
+                var saveApprove = smallButton('Save changes and approve', false);
+                saveApprove.hidden = true;
+                saveApprove.addEventListener('click', function() {
+                    withButton(saveApprove, function() {
+                        return api('POST', 'approve/' + page.id, { text: area.value }).then(function(r) {
+                            say(r.ok ? 'Approved.' : errorText(r, 'That did not work.'));
+                            return load();
+                        });
+                    });
+                });
+                area.addEventListener('input', function() {
+                    saveApprove.hidden = false;
+                });
+                buttons.appendChild(approve);
+                buttons.appendChild(document.createTextNode(' '));
+                buttons.appendChild(saveApprove);
+            }
+            holder.appendChild(buttons);
+            return holder;
+        }
+
+        function pageBlock(page) {
+            var wrap = el('div');
+            wrap.className = 'sm-ocr-box-page';
+            wrap.style.marginBottom = '12px';
+            if (page.status === 'empty') {
+                wrap.appendChild(el('p', 'Page ' + page.page + ' — nothing readable on this page.'));
+            } else if (page.status === 'failed') {
+                wrap.appendChild(el('p', 'Page ' + page.page + ' — could not be read.'));
+            } else if (page.status === 'queued') {
+                wrap.appendChild(el('p', 'Page ' + page.page + ' — being read…'));
+            } else if (page.review_status === 'approved') {
+                var line = el('p', 'Page ' + page.page + ' — checked by ' + (page.reviewed_by_name || 'a reviewer') +
+                    (page.reviewed_at ? ' on ' + page.reviewed_at.slice(0, 10) : '') +
+                    (page.edited ? ' (corrected)' : '') + '. ');
+                var show = el('a', 'Show text');
+                show.href = '#';
+                line.appendChild(show);
+                wrap.appendChild(line);
+                var editor = editorFor(page, true);
+                editor.hidden = true;
+                show.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    editor.hidden = !editor.hidden;
+                });
+                wrap.appendChild(editor);
+            } else {
+                var head = el('p');
+                head.appendChild(el('strong', 'Page ' + page.page));
+                if (viewUrl) {
+                    head.appendChild(document.createTextNode(' — '));
+                    var open = el('a', 'Open this page');
+                    open.href = viewUrl + '#page=' + page.page;
+                    open.target = '_blank';
+                    head.appendChild(open);
+                }
+                wrap.appendChild(head);
+                wrap.appendChild(editorFor(page, false));
+            }
+            return wrap;
+        }
+
+        function render(data) {
+            body.textContent = '';
+            if (notice) {
+                var flash = el('div');
+                flash.className = 'notice notice-success inline';
+                flash.appendChild(el('p', notice));
+                body.appendChild(flash);
+                notice = '';
+            }
+            var doc = data.doc;
+            if (!doc) {
+                watchWhileReading(false);
+                body.appendChild(el('p', 'This document has not been read yet.'));
+                var read = smallButton('Read this document', true);
+                read.addEventListener('click', function() {
+                    withButton(read, function() {
+                        return api('POST', 'enqueue-post', { post_id: postId }).then(function(r) {
+                            say(r.ok ? '' : errorText(r, 'That did not work.'));
+                            return load();
+                        });
+                    });
+                });
+                var line = el('p');
+                line.appendChild(read);
+                line.appendChild(document.createTextNode(' '));
+                var note = el('span', 'It goes to the front of the queue.');
+                note.className = 'description';
+                line.appendChild(note);
+                body.appendChild(line);
+                return;
+            }
+            if (doc.status === 'queued' || doc.status === 'working') {
+                body.appendChild(el('p', 'Being read: ' + doc.pages_done + ' of ' +
+                    (doc.total_pages || '?') + ' pages so far.'));
+                watchWhileReading(true);
+            } else {
+                watchWhileReading(false);
+            }
+            if (doc.status === 'failed') {
+                body.appendChild(el('p', 'This document could not be read. You can try again from the PDF Text page.'));
+            }
+            data.pages.forEach(function(page) {
+                body.appendChild(pageBlock(page));
+            });
+            if (doc.pages_unchecked > 0) {
+                var all = smallButton('Approve all ' + doc.pages_unchecked + ' unchecked pages of this document', false);
+                all.addEventListener('click', function() {
+                    withButton(all, function() {
+                        return api('POST', 'approve-doc', { doc_key: key }).then(function(r) {
+                            say(r.ok ? 'Approved.' : errorText(r, 'That did not work.'));
+                            return load();
+                        });
+                    });
+                });
+                var allLine = el('p');
+                allLine.appendChild(all);
+                body.appendChild(allLine);
+            }
+            if (data.total_rows > data.per_page) {
+                var nav = el('p');
+                if (rowPage > 1) {
+                    var earlier = el('a', 'Earlier pages');
+                    earlier.href = '#';
+                    earlier.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        rowPage--;
+                        load();
+                    });
+                    nav.appendChild(earlier);
+                }
+                if (rowPage * data.per_page < data.total_rows) {
+                    if (nav.firstChild) {
+                        nav.appendChild(document.createTextNode(' · '));
+                    }
+                    var later = el('a', 'Later pages');
+                    later.href = '#';
+                    later.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        rowPage++;
+                        load();
+                    });
+                    nav.appendChild(later);
+                }
+                body.appendChild(nav);
+            }
+        }
+
+        load();
+    }
 })();

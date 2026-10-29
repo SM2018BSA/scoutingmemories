@@ -32,6 +32,7 @@ class Scouting_PDF_OCR_Admin {
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_assets'));
+        add_action('add_meta_boxes', array($this, 'add_meta_boxes'), 10, 2);
     }
 
     /**
@@ -429,12 +430,15 @@ class Scouting_PDF_OCR_Admin {
         }
         $response = rest_ensure_response(array(
             'doc' => $doc ? array(
-                'doc_key'      => $doc->doc_key,
-                'label'        => $doc->label,
-                'status'       => $doc->status,
-                'total_pages'  => (int) $doc->total_pages,
-                'pages_done'   => (int) $doc->pages_done,
-                'pages_failed' => (int) $doc->pages_failed,
+                'doc_key'         => $doc->doc_key,
+                'label'           => $doc->label,
+                'status'          => $doc->status,
+                'total_pages'     => (int) $doc->total_pages,
+                'pages_done'      => (int) $doc->pages_done,
+                'pages_failed'    => (int) $doc->pages_failed,
+                'pages_unchecked' => (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM $pages WHERE doc_key = %s AND status = 'done' AND review_status = 'pending'", $key
+                )),
             ) : null,
             'total_rows' => $total,
             'per_page'   => self::TEXT_ROWS_PER_PAGE,
@@ -497,6 +501,63 @@ class Scouting_PDF_OCR_Admin {
         return rest_ensure_response(array('approved' => $approved));
     }
 
+    // ---- The "PDF text" box on the post edit screen ---------------------------------------
+
+    /**
+     * The review lives where pending submissions are already reviewed: the post's edit
+     * screen. The box appears on every post that embeds a storage PDF — pending or long
+     * since published — and only for reviewers; the submitting historian doesn't see it.
+     */
+    public function add_meta_boxes($post_type, $post) {
+        if (!Scouting_PDF_OCR::enabled() || !self::can_review() || !($post instanceof WP_Post)) {
+            return;
+        }
+        $type = get_post_type_object($post_type);
+        if (!$type || empty($type->public) || $post_type === 'attachment') {
+            return;
+        }
+        if (!self::post_documents($post)) {
+            return;
+        }
+        add_meta_box('scouting-pdf-text', 'PDF text', array($this, 'render_meta_box'), $post_type, 'normal');
+    }
+
+    /**
+     * The post's readable documents: doc_key => canonical link, each document once
+     */
+    private static function post_documents($post) {
+        $docs = array();
+        foreach (Scouting_PDF_Embedder::all_pdfs_in_content((string) $post->post_content) as $url) {
+            $canonical = Scouting_PDF_OCR::canonical_url($url);
+            if (!is_wp_error($canonical)) {
+                $docs[Scouting_PDF_OCR::doc_key($canonical)] = $canonical;
+            }
+        }
+        return $docs;
+    }
+
+    /**
+     * A skeleton per document; scouting-pdf-admin.js fills each from GET /ocr/admin/doc-text.
+     * It never blocks saving or publishing the post: WordPress's own Publish button stays the
+     * approval for the post itself.
+     */
+    public function render_meta_box($post) {
+        $docs = self::post_documents($post);
+        $view = $post->post_status === 'publish' ? get_permalink($post) : get_preview_post_link($post);
+        ?>
+        <div id="scouting-pdf-text-box" data-post-id="<?php echo (int) $post->ID; ?>">
+            <?php foreach ($docs as $key => $url) : ?>
+                <div class="sm-ocr-box-doc" data-doc-key="<?php echo esc_attr($key); ?>" data-view-url="<?php echo esc_url((string) $view); ?>">
+                    <?php if (count($docs) > 1) : ?>
+                        <h4><?php echo esc_html($url); ?></h4>
+                    <?php endif; ?>
+                    <div class="sm-ocr-box-body"><p>Loading…</p></div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php
+    }
+
     // ---- The PDF Text page --------------------------------------------------------------
 
     /**
@@ -515,6 +576,13 @@ class Scouting_PDF_OCR_Admin {
     public function enqueue_assets($hook) {
         if ($hook === 'toplevel_page_scouting-pdf-text') {
             self::enqueue_admin_script();
+            return;
+        }
+        if ($hook === 'post.php') {
+            global $post;
+            if ($post instanceof WP_Post && Scouting_PDF_OCR::enabled() && self::can_review() && self::post_documents($post)) {
+                self::enqueue_admin_script();
+            }
         }
     }
 
