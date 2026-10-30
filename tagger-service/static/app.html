@@ -60,7 +60,35 @@
     <div class="card mb-4">
       <div class="card-header"><h2 class="h5 card-title mb-0">Document</h2></div>
       <div class="card-body">
-        <p class="text-body-secondary mb-0" id="document-note">Uploading a PDF and pasting text arrive in a later step of the build.</p>
+        <p class="text-body-secondary" id="document-note">Upload a scanned PDF and its first pages are read with the archive's
+          OCR tools, or paste the document's text below.</p>
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="doc-file">Scanned PDF</label>
+            <input class="form-control" type="file" id="doc-file" accept=".pdf,application/pdf">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="doc-pages">Pages to read</label>
+            <select class="form-select" id="doc-pages"></select>
+          </div>
+          <div class="col-6 col-md-3">
+            <button type="button" class="btn btn-primary w-100" id="doc-read">Read the PDF</button>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="doc-url">&hellip;or a link on storage.scoutingmemories.org</label>
+            <input class="form-control" type="url" id="doc-url"
+              placeholder="https://storage.scoutingmemories.org/wp-content/uploads/....pdf">
+          </div>
+        </div>
+        <div class="progress mt-3" id="doc-progress-wrap" hidden role="progressbar" aria-label="Reading progress">
+          <div class="progress-bar" id="doc-progress" style="width: 0%"></div>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0" id="doc-error" hidden></div>
+        <hr>
+        <label class="form-label" for="doc-text">Document text</label>
+        <textarea class="form-control font-monospace" id="doc-text" rows="8"
+          placeholder="Paste the document's text here, or read it from a PDF above."></textarea>
+        <div class="form-text" id="doc-status"></div>
       </div>
     </div>
 

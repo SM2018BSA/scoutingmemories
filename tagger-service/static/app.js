@@ -129,6 +129,126 @@ const Taxonomy = {
   },
 };
 
+// The Document card: a PDF goes to the service and comes back as text; pasting works too.
+const Doc = {
+  node(id) { return document.getElementById(id); },
+
+  REASONS: {
+    ocr_unavailable: 'PDF reading is switched off on this server.',
+    too_large: 'That PDF is bigger than the app accepts.',
+    not_pdf: 'That file does not look like a PDF.',
+    host_not_allowed: 'Only links on storage.scoutingmemories.org work here.',
+    hourly_limit: 'The hourly page limit is used up. Try again in an hour.',
+    queue_full: 'Too many documents are waiting. Try again in a few minutes.',
+    paused: 'The app is paused.',
+    download_failed: 'The PDF could not be fetched from the storage site.',
+    render_failed: 'That page could not be turned into a picture.',
+    ocr_failed: 'The reading tool failed on that page.',
+    page_too_large: 'That page is too large to read.',
+    timeout: 'Reading took too long and was stopped.',
+    internal: 'Something went wrong on the server.',
+  },
+
+  init(me) {
+    const pages = this.node('doc-pages');
+    pages.textContent = '';
+    for (let n = 1; n <= me.limits.max_ocr_pages; n += 1) {
+      const option = document.createElement('option');
+      option.value = n;
+      option.textContent = n === 1 ? 'first page' : 'first ' + n + ' pages';
+      if (n === me.limits.ocr_pages) option.selected = true;
+      pages.appendChild(option);
+    }
+    if (!me.ocr_ready) {
+      for (const id of ['doc-file', 'doc-pages', 'doc-read', 'doc-url']) this.node(id).disabled = true;
+      this.node('document-note').textContent =
+        'PDF reading is off on this server (the OCR tools are not installed here). Paste the document’s text below instead.';
+    }
+    this.node('doc-read').addEventListener('click', () => this.read());
+  },
+
+  error(code) {
+    const box = this.node('doc-error');
+    box.textContent = this.REASONS[code] || ('Reading failed (' + code + ').');
+    box.hidden = false;
+  },
+
+  progress(done, total) {
+    const wrap = this.node('doc-progress-wrap');
+    const bar = this.node('doc-progress');
+    wrap.hidden = false;
+    const percent = total ? Math.round((100 * done) / total) : 5;
+    bar.style.width = Math.max(5, percent) + '%';
+    bar.textContent = total ? done + ' of ' + total : '';
+  },
+
+  async read() {
+    this.node('doc-error').hidden = true;
+    this.node('doc-status').textContent = '';
+    const file = this.node('doc-file').files[0];
+    const url = this.node('doc-url').value.trim();
+    if (!file && !url) {
+      this.error('not_pdf');
+      this.node('doc-error').textContent = 'Choose a PDF file or give a storage link first.';
+      return;
+    }
+    this.node('doc-read').disabled = true;
+    let started;
+    if (file) {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('page_limit', this.node('doc-pages').value);
+      started = await Session.api('/v1/upload', { method: 'POST', body: form });
+    } else {
+      started = await Session.api('/v1/upload', {
+        method: 'POST',
+        json: { url: url, page_limit: Number(this.node('doc-pages').value) },
+      });
+    }
+    if (started.status !== 202) {
+      this.error(started.answer.error || started.status);
+      this.node('doc-read').disabled = false;
+      return;
+    }
+    this.progress(0, 0);
+    this.node('doc-status').textContent = 'Waiting in line…';
+    await this.poll(started.answer.id);
+    this.node('doc-read').disabled = false;
+  },
+
+  async poll(job) {
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const result = await Session.api('/v1/jobs/' + job);
+      if (result.status !== 200) {
+        this.node('doc-progress-wrap').hidden = true;
+        this.error(result.answer.error || result.status);
+        return;
+      }
+      const answer = result.answer;
+      if (answer.status === 'queued') {
+        this.node('doc-status').textContent = 'Waiting in line (number ' + answer.position + ')…';
+      } else if (answer.status === 'working') {
+        this.progress(answer.pages_done, answer.pages_total);
+        this.node('doc-status').textContent = answer.pages_total
+          ? 'Reading page ' + Math.min(answer.pages_done + 1, answer.pages_total) + ' of ' + answer.pages_total + '…'
+          : 'Opening the PDF…';
+      } else if (answer.status === 'done') {
+        this.node('doc-progress-wrap').hidden = true;
+        this.node('doc-text').value = answer.text;
+        this.node('doc-status').textContent = 'Read ' + answer.pages_done + ' of ' +
+          (answer.pages_total || answer.pages_done) + ' pages' +
+          (answer.filename ? ' of ' + answer.filename : '') + '. Look the text over, then ask for suggestions.';
+        return;
+      } else {
+        this.node('doc-progress-wrap').hidden = true;
+        this.error(answer.error || 'internal');
+        return;
+      }
+    }
+  },
+};
+
 const Pages = {
   show(id, visible) { const node = document.getElementById(id); if (node) node.hidden = !visible; },
   status(kind, text) {
@@ -162,6 +282,7 @@ const Pages = {
     this.show('who', true);
     document.getElementById('who-name').textContent = me.user;
     document.getElementById('who-role').textContent = me.role.replace(/_/g, ' ');
+    Doc.init(me);
     const line = this.indexLine(me);
     if (line) {
       document.getElementById('index-note').textContent = line;

@@ -18,22 +18,30 @@ Settings come from the environment (see README.md).
 """
 
 import base64
+import email
 import hashlib
 import hmac
+import http.client
 import http.server
+import ipaddress
 import json
+import math
 import os
 import re
 import secrets
 import shutil
+import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
 import unicodedata
+import urllib.error
 import urllib.parse
+import urllib.request
 
 
 def log(message):
@@ -101,10 +109,13 @@ KEEP_DAYS = env_int('TAGGER_KEEP_DAYS', 7, 1, 365)
 SESSION_HOURS = env_int('TAGGER_SESSION_HOURS', 12, 1, 168)
 INSECURE_COOKIE = env_switch('TAGGER_INSECURE_COOKIE')  # local testing over plain http only
 
+MAX_PIXELS = env_int('TAGGER_MAX_PIXELS', 40000000, 1000000, 200000000)
+
 STATE_DIR = first_dir('STATE_DIRECTORY', 'TAGGER_STATE_DIR') or os.path.abspath('state')
 CACHE_DIR = first_dir('CACHE_DIRECTORY', 'TAGGER_CACHE_DIR') or os.path.abspath('cache')
 DB_PATH = os.path.join(STATE_DIR, 'tagger.sqlite3')
-UPLOAD_DIR = os.path.join(CACHE_DIR, 'uploads')
+UPLOAD_DIR = os.path.join(CACHE_DIR, 'uploads')   # PDFs people upload, named <job>.pdf
+PDF_DIR = os.path.join(CACHE_DIR, 'pdf')          # PDFs fetched from the storage host
 WORK_DIR = os.path.join(CACHE_DIR, 'work')
 OWN_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -112,22 +123,31 @@ MAX_PDF_BYTES = MAX_PDF_MB * 1024 * 1024
 CACHE_BYTES = CACHE_MB * 1024 * 1024
 MAX_BODY = 8192             # most requests are a short piece of JSON
 MAX_CHUNK_BODY = 512 * 1024  # one batch of index rows pushed by WordPress
+MAX_UPLOAD_BODY = MAX_PDF_BYTES + 2 * 1024 * 1024  # the PDF plus the form wrapping
+MAX_URL = 1024
+MIN_DPI = 72                # a page that would need less than this to fit MAX_PIXELS is refused
 SIGNATURE_WINDOW = 300      # seconds a signed request stays valid
 TOKEN_LIFE_MAX = 600        # a login link's expiry may be at most this far in the future
 LOGIN_FAILS_PER_HOUR = 20
 MAX_HANDLERS = 16           # requests answered at the same time
+DOWNLOAD_SECONDS = 60
+PDFINFO_SECONDS = 20
+RENDER_SECONDS = 60
+OCR_SECONDS = 120           # per page
+MAX_TEXT_TOTAL = 150000     # characters of text kept for one document
 INSTALLED_UNIT = '/etc/systemd/system/scouting-tagger.service'
+WAKE = threading.Event()    # set when a job is added, so the worker does not wait
 
 # Who may use the app at all; "admin" (the settings dashboard) is a separate flag on the login link
 ALLOWED_ROLES = ('administrator', 'manager', 'historian', 'regional', 'index_contributor')
 
-VERSION = '0.3.0'           # step 3: the index arrives from WordPress; the dropdowns work
+VERSION = '0.4.0'           # step 4: uploaded PDFs are read with Poppler + Tesseract
 OCR_READY = False           # set in main(); on this PC the OCR tools may be missing
 
 
 # ---- The database --------------------------------------------------------------------------
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # These tables hold what people gave the app; a program update must never wipe them.
 DURABLE_SCHEMA = """
@@ -215,7 +235,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     session    TEXT NOT NULL,            -- sha256 of the owning session: people see their own jobs only
     user_login TEXT NOT NULL DEFAULT '',
     filename   TEXT NOT NULL DEFAULT '',
-    pages      INTEGER,
+    pages      INTEGER,                   -- pages in the whole document
+    pages_total INTEGER,                  -- pages being read (the smaller of pages and page_limit)
     page_limit INTEGER,
     pages_done INTEGER NOT NULL DEFAULT 0,
     input      TEXT,
@@ -691,6 +712,385 @@ def taxonomy_rows(con, kind, state_id=None, council_id=None):
              'status': row['status']} for row in con.execute(sql, values)]
 
 
+# ---- Reading PDFs (the same tools and rules as the OCR app) ----------------------------------
+
+class OcrError(Exception):
+    """A document could not be read; the code is what the caller is told"""
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None  # a redirect becomes an error: the download never leaves the storage host
+
+
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect)
+PATH_SAFE = "/-._~!$&'()*+,;=:@"
+
+
+def clean_url(value):
+    """The link in one fixed form (https, the storage host, the path percent-encoded), or None.
+    Only a .pdf on the archive's storage is accepted. A query string is dropped: stored files
+    need none, and this way one file always has one link."""
+    if not isinstance(value, str) or not value or len(value) > MAX_URL:
+        return None
+    if re.search(r'[\x00-\x20\x7f\\]', value):
+        return None
+    try:
+        value.encode('utf-8')
+        parts = urllib.parse.urlsplit(value)
+        port = parts.port
+    except (UnicodeError, ValueError):
+        return None
+    if parts.scheme != 'https' or parts.username is not None or parts.password is not None:
+        return None
+    if (parts.hostname or '').lower() != ALLOWED_HOST or port not in (None, 443):
+        return None
+    if parts.fragment:
+        return None
+    try:
+        path = urllib.parse.unquote(parts.path, errors='strict')
+    except UnicodeError:
+        return None
+    if re.search(r'[\x00-\x1f\x7f\\]', path) or not path.startswith('/') or not path.lower().endswith('.pdf'):
+        return None
+    if any(segment in ('', '.', '..') for segment in path.split('/')[1:]):
+        return None
+    return 'https://%s%s' % (ALLOWED_HOST, urllib.parse.quote(path, safe=PATH_SAFE))
+
+
+def cache_path(url):
+    return os.path.join(PDF_DIR, hashlib.sha256(url.encode()).hexdigest() + '.pdf')
+
+
+def fetch_pdf(url):
+    """Download the PDF (or reuse the copy kept on disk) and return its path"""
+    path = cache_path(url)
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
+        return path
+
+    # The storage host must be a public address (never this machine or a private network)
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(ALLOWED_HOST, 443, type=socket.SOCK_STREAM)}
+    except OSError:
+        raise OcrError('download_failed')
+    if not addresses or not all(ipaddress.ip_address(a).is_global for a in addresses):
+        raise OcrError('download_failed')
+
+    request = urllib.request.Request(url, headers={'User-Agent': 'ScoutingMemoriesTagger/1.0', 'Accept': 'application/pdf'})
+    partial = path + '.part'
+    deadline = time.monotonic() + DOWNLOAD_SECONDS
+    try:
+        with OPENER.open(request, timeout=30) as response:
+            if response.status != 200:
+                raise OcrError('download_failed')
+            length = response.headers.get('Content-Length') or ''
+            expected = int(length) if re.fullmatch(r'[0-9]{1,12}', length) else None
+            if expected is not None and expected > MAX_PDF_BYTES:
+                raise OcrError('too_large')
+            size = 0
+            head = b''
+            with open(partial, 'wb') as out:
+                while True:
+                    chunk = response.read1(65536)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > MAX_PDF_BYTES:
+                        raise OcrError('too_large')
+                    if time.monotonic() > deadline:
+                        raise OcrError('timeout')
+                    if len(head) < 1024:
+                        head += chunk[:1024 - len(head)]
+                    out.write(chunk)
+        if expected is not None and size != expected:
+            raise OcrError('download_failed')  # the download was cut short
+        if b'%PDF-' not in head:
+            raise OcrError('not_pdf')
+        os.replace(partial, path)
+    except OcrError:
+        raise
+    except TimeoutError:
+        raise OcrError('timeout')
+    except urllib.error.URLError as problem:
+        raise OcrError('timeout' if isinstance(problem.reason, TimeoutError) else 'download_failed')
+    except (http.client.HTTPException, OSError, ValueError):
+        raise OcrError('download_failed')
+    finally:
+        if os.path.exists(partial):
+            os.remove(partial)
+    trim_pdf_folders(keep=path)
+    return path
+
+
+def trim_pdf_folders(keep=None):
+    """Delete PDFs kept longer than TAGGER_KEEP_DAYS, then the oldest while over the size limit"""
+    too_old = time.time() - KEEP_DAYS * 86400
+    files = []
+    for folder in (PDF_DIR, UPLOAD_DIR):
+        for name in os.listdir(folder):
+            full = os.path.join(folder, name)
+            try:
+                info = os.stat(full)
+                if full != keep and info.st_mtime < too_old:
+                    os.remove(full)
+                    continue
+            except OSError:
+                continue
+            files.append((info.st_mtime, info.st_size, full))
+    total = sum(size for _, size, _ in files)
+    for _, size, full in sorted(files):
+        if total <= CACHE_BYTES:
+            break
+        if full == keep:
+            continue
+        try:
+            os.remove(full)
+            total -= size
+        except OSError:
+            pass
+
+
+def run(command, seconds, code, env=None):
+    """Run one tool. Its output goes to temporary files, so a tool that prints a lot cannot use up memory."""
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        try:
+            done = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=out, stderr=err, timeout=seconds, env=env)
+        except subprocess.TimeoutExpired:
+            raise OcrError('timeout')
+        except OSError as problem:
+            log('%s could not be started: %s' % (command[0], problem))
+            raise OcrError('internal')
+        if done.returncode != 0:
+            end = err.seek(0, os.SEEK_END)
+            err.seek(max(0, end - 300))
+            log('%s failed (%d): %s' % (command[0], done.returncode, err.read().decode('utf-8', 'replace').strip()))
+            raise OcrError(code)
+        out.seek(0)
+        return out.read(65536).decode('utf-8', 'replace')
+
+
+NUMBER = r'([0-9.]+(?:e[+-]?[0-9]+)?)'
+PAGE_SIZE = re.compile(r'^Page\s+\d+\s+size:\s+' + NUMBER + r'\s+x\s+' + NUMBER + r'\s+pts', re.M | re.I)
+
+
+def pdf_pages(pdf):
+    """How many pages the document has"""
+    info = run(['pdfinfo', pdf], PDFINFO_SECONDS, 'not_pdf')
+    counts = re.findall(r'^Pages:\s+(\d+)\s*$', info, re.M)  # the last match: document details print first
+    if not counts or int(counts[-1]) < 1:
+        raise OcrError('not_pdf')
+    return int(counts[-1])
+
+
+def page_dpi(pdf, page):
+    """The resolution to render this page at (an oversized page gets a lower one)"""
+    info = run(['pdfinfo', '-f', str(page), '-l', str(page), pdf], PDFINFO_SECONDS, 'not_pdf')
+    sizes = PAGE_SIZE.findall(info)
+    if not sizes:
+        raise OcrError('render_failed')
+    square_inches = (float(sizes[-1][0]) / 72.0) * (float(sizes[-1][1]) / 72.0)
+    if not square_inches > 0:
+        raise OcrError('render_failed')
+    dpi = DPI
+    if square_inches * dpi * dpi > MAX_PIXELS:
+        dpi = int(math.sqrt(MAX_PIXELS / square_inches))
+    if dpi < MIN_DPI:
+        raise OcrError('page_too_large')
+    return dpi
+
+
+def read_one_page(work, pdf, page):
+    """One page's text, through Poppler and Tesseract exactly like the OCR app"""
+    dpi = page_dpi(pdf, page)
+    # -cropbox: the same part of the page that pdfinfo measured and that PDF viewers show
+    run(['pdftoppm', '-f', str(page), '-l', str(page), '-r', str(dpi), '-cropbox', '-gray', '-png', '-singlefile',
+         pdf, os.path.join(work, 'page')], RENDER_SECONDS, 'render_failed')
+    picture = os.path.join(work, 'page.png')
+    if not os.path.isfile(picture):
+        raise OcrError('render_failed')
+    environment = dict(os.environ, OMP_THREAD_LIMIT='1')  # one page at a time, one processor thread
+    # --psm 1: find the layout and which way up the page is
+    run(['tesseract', picture, os.path.join(work, 'out'), '-l', 'eng', '--psm', '1', '--dpi', str(dpi), 'txt'],
+        OCR_SECONDS, 'ocr_failed', env=environment)
+    try:
+        with open(os.path.join(work, 'out.txt'), 'r', encoding='utf-8', errors='replace') as handle:
+            return handle.read().replace('\f', '').strip()
+    except FileNotFoundError:
+        raise OcrError('ocr_failed')
+
+
+# ---- Jobs (OCR now; the AI jobs join in the next step) ---------------------------------------
+
+def queue_job(con, person, kind, filename, page_limit, input_values, pdf_bytes=None):
+    """A new job for this person, or a refusal. An uploaded PDF is written before the job
+    becomes visible, so the worker never sees a job whose file is still arriving."""
+    now = int(time.time())
+    con.execute('BEGIN IMMEDIATE')
+    try:
+        if PAUSED:
+            raise Refused(503, 'paused')
+        waiting = con.execute("SELECT COUNT(*) FROM jobs WHERE status IN ('queued', 'working')").fetchone()[0]
+        if waiting >= QUEUE_MAX:
+            raise Refused(429, 'queue_full')
+        if kind == 'ocr':
+            recent = con.execute("SELECT COUNT(*) FROM accepted WHERE kind = 'page' AND at > ?", (now - 3600,)).fetchone()[0]
+            if recent + page_limit > PAGES_PER_HOUR:
+                raise Refused(429, 'hourly_limit')
+            con.executemany("INSERT INTO accepted (at, kind) VALUES (?, 'page')", [(now,)] * page_limit)
+        job_id = secrets.token_hex(16)
+        if pdf_bytes is not None:
+            with open(os.path.join(UPLOAD_DIR, job_id + '.pdf'), 'wb') as out:
+                out.write(pdf_bytes)
+        con.execute('INSERT INTO jobs (id, kind, status, created, session, user_login, filename, page_limit, input) '
+                    "VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?)",
+                    (job_id, kind, now, person['sid'], person['user'], filename, page_limit,
+                     json.dumps(input_values, ensure_ascii=False)))
+        con.execute('COMMIT')
+    except BaseException:
+        try:
+            con.execute('ROLLBACK')
+        except sqlite3.Error:
+            pass
+        raise
+    WAKE.set()
+    return job_id
+
+
+def job_answer(con, row):
+    """What the owner of a job is told about it"""
+    answer = {'id': row['id'], 'kind': row['kind'], 'status': row['status']}
+    if row['status'] == 'queued':
+        ahead = con.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('queued', 'working') AND (created < ? OR (created = ? AND id < ?))",
+            (row['created'], row['created'], row['id'])).fetchone()[0]
+        answer['position'] = ahead + 1
+    elif row['status'] == 'working':
+        answer.update({'pages_done': row['pages_done'], 'pages_total': row['pages_total']})
+    elif row['status'] == 'done':
+        if row['kind'] == 'ocr':
+            answer.update({'text': row['text'] or '', 'pages_done': row['pages_done'],
+                           'pages_total': row['pages_total'], 'filename': row['filename']})
+        else:
+            answer['result'] = json.loads(row['result'] or '{}')
+    elif row['status'] == 'failed':
+        answer['error'] = row['error'] or 'internal'
+    return answer
+
+
+def do_ocr_job(con, row):
+    """Read the first pages of the job's PDF; the text lands on the job row"""
+    values = json.loads(row['input'] or '{}')
+    if values.get('url'):
+        pdf = fetch_pdf(values['url'])
+    else:
+        pdf = os.path.join(UPLOAD_DIR, row['id'] + '.pdf')
+        if not os.path.isfile(pdf):
+            raise OcrError('internal')
+    pages = pdf_pages(pdf)
+    reading = min(pages, row['page_limit'] or 1)
+    con.execute('UPDATE jobs SET pages_total = ?, pages = ? WHERE id = ?', (reading, pages, row['id']))
+    work = os.path.join(WORK_DIR, row['id'])
+    pieces = []
+    try:
+        for page in range(1, reading + 1):
+            shutil.rmtree(work, ignore_errors=True)
+            os.makedirs(work)
+            text = read_one_page(work, pdf, page)
+            pieces.append('--- page %d ---\n%s' % (page, text))
+            con.execute('UPDATE jobs SET pages_done = ? WHERE id = ?', (page, row['id']))
+            if sum(len(piece) for piece in pieces) > MAX_TEXT_TOTAL:
+                break
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return '\n\n'.join(pieces)[:MAX_TEXT_TOTAL]
+
+
+def worker(kinds, handler):
+    """Reads the waiting jobs of these kinds one at a time, oldest first"""
+    con = connect(wait=10)
+    marks = ','.join('?' * len(kinds))
+    tidied = 0.0
+    while True:
+        try:
+            now = int(time.time())
+            if time.time() - tidied > 3600:
+                for old in con.execute("SELECT id FROM jobs WHERE status IN ('done', 'failed') AND finished < ?",
+                                       (now - KEEP_DAYS * 86400,)):
+                    try:
+                        os.remove(os.path.join(UPLOAD_DIR, old['id'] + '.pdf'))
+                    except OSError:
+                        pass
+                con.execute("DELETE FROM jobs WHERE status IN ('done', 'failed') AND finished < ?", (now - KEEP_DAYS * 86400,))
+                con.execute('DELETE FROM accepted WHERE at < ?', (now - 7200,))
+                con.execute('DELETE FROM sessions WHERE expires < ?', (now,))
+                trim_pdf_folders()
+                tidied = time.time()
+            row = None if PAUSED else con.execute(
+                'SELECT * FROM jobs WHERE status = %r AND kind IN (%s) ORDER BY created, id LIMIT 1'
+                % ('queued', marks), kinds).fetchone()
+            if row is None:
+                WAKE.wait(5)
+                WAKE.clear()
+                continue
+            con.execute("UPDATE jobs SET status = 'working', started = ? WHERE id = ?", (now, row['id']))
+            began = time.monotonic()
+            try:
+                outcome = handler(con, row)
+                column = 'text' if row['kind'] == 'ocr' else 'result'
+                con.execute('UPDATE jobs SET status = %r, finished = ?, %s = ?, error = NULL WHERE id = ?'
+                            % ('done', column), (int(time.time()), outcome, row['id']))
+                log('done: %s %s (%s) in %.1f s' % (row['kind'], row['id'][:8], row['filename'] or 'text',
+                                                    time.monotonic() - began))
+            except (OcrError, Refused) as problem:
+                code = problem.code if isinstance(problem, Refused) else str(problem)
+                con.execute("UPDATE jobs SET status = 'failed', finished = ?, error = ? WHERE id = ?",
+                            (int(time.time()), code, row['id']))
+                log('failed: %s %s: %s' % (row['kind'], row['id'][:8], code))
+            except Exception:
+                log('failed: %s %s: internal\n%s' % (row['kind'], row['id'][:8], traceback.format_exc()))
+                con.execute("UPDATE jobs SET status = 'failed', finished = ?, error = 'internal' WHERE id = ?",
+                            (int(time.time()), row['id']))
+        except Exception:
+            log('worker problem:\n' + traceback.format_exc())
+            time.sleep(5)
+
+
+def page_limit_value(value, fallback):
+    """How many pages to read: what was asked, within 1..TAGGER_MAX_OCR_PAGES, else the setting"""
+    if isinstance(value, str) and value.isdigit():
+        value = int(value)
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_OCR_PAGES:
+        return fallback
+    return value
+
+
+def parse_upload(content_type, body):
+    """The uploaded file and the small text fields of a multipart form"""
+    if not isinstance(content_type, str) or not content_type.lower().startswith('multipart/form-data'):
+        raise Refused(400, 'bad_request')
+    try:
+        message = email.message_from_bytes(
+            b'Content-Type: ' + content_type.encode('latin-1') + b'\r\nMIME-Version: 1.0\r\n\r\n' + body)
+    except (UnicodeError, ValueError):
+        raise Refused(400, 'bad_request')
+    if not message.is_multipart():
+        raise Refused(400, 'bad_request')
+    fields, file_name, file_bytes = {}, '', None
+    for part in message.walk():
+        if part.is_multipart():
+            continue
+        name = part.get_param('name', header='content-disposition')
+        if not isinstance(name, str):
+            continue
+        payload = part.get_payload(decode=True) or b''
+        if part.get_filename():
+            if name == 'file' and file_bytes is None:
+                file_name, file_bytes = str(part.get_filename())[:80], payload
+        elif len(payload) <= 1000:
+            fields[name] = payload.decode('utf-8', 'replace').strip()
+    return fields, file_name, file_bytes
+
+
 # ---- The pages and their files -------------------------------------------------------------
 
 STATIC_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -845,8 +1245,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if method == 'GET' and path == '/v1/health':
             return self.reply(200, {'ok': True})
 
+        limit = MAX_BODY
+        if path == '/v1/index/chunk':
+            limit = MAX_CHUNK_BODY
+        elif path == '/v1/upload':
+            limit = MAX_UPLOAD_BODY
         try:
-            body = self.read_body(method, MAX_CHUNK_BODY if path == '/v1/index/chunk' else MAX_BODY)
+            body = self.read_body(method, limit)
         except Refused as refusal:
             return self.reply(refusal.status, {'error': refusal.code})
 
@@ -914,6 +1319,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self.reply(403, {'error': 'bad_csrf'})
                 Sessions.drop(con, self.session_value())
                 return self.reply(200, {'ok': True}, cookie=Sessions.cookie('', clear=True))
+
+            if method == 'POST' and path == '/v1/upload':
+                if not self.csrf_ok(person):
+                    return self.reply(403, {'error': 'bad_csrf'})
+                if not OCR_READY:
+                    return self.reply(503, {'error': 'ocr_unavailable'})
+                fallback = min(int(read_settings(con)['ocr_pages']), MAX_OCR_PAGES)
+                content_type = self.headers.get('Content-Type', '')
+                if content_type.lower().startswith('multipart/'):
+                    fields, name, data = parse_upload(content_type, body)
+                    if not data:
+                        return self.reply(400, {'error': 'bad_request'})
+                    if len(data) > MAX_PDF_BYTES:
+                        return self.reply(413, {'error': 'too_large'})
+                    if b'%PDF-' not in data[:1024]:
+                        return self.reply(400, {'error': 'not_pdf'})
+                    pages = page_limit_value(fields.get('page_limit'), fallback)
+                    job = queue_job(con, person, 'ocr', name, pages, {}, pdf_bytes=data)
+                else:
+                    asked = self.body_json(body)
+                    url = clean_url(asked.get('url'))
+                    if url is None:
+                        return self.reply(403, {'error': 'host_not_allowed'})
+                    pages = page_limit_value(asked.get('page_limit'), fallback)
+                    name = urllib.parse.unquote(url.rsplit('/', 1)[-1])[:80]
+                    job = queue_job(con, person, 'ocr', name, pages, {'url': url})
+                row = con.execute('SELECT * FROM jobs WHERE id = ?', (job,)).fetchone()
+                return self.reply(202, job_answer(con, row))
+
+            found = re.fullmatch(r'/v1/jobs/([0-9a-f]{32})', path)
+            if method == 'GET' and found:
+                row = con.execute('SELECT * FROM jobs WHERE id = ?', (found.group(1),)).fetchone()
+                if row is None or (row['session'] != person['sid'] and not person['is_admin']):
+                    return self.reply(404, {'error': 'not_found'})
+                return self.reply(200, job_answer(con, row))
 
         if person is not None and method == 'GET' and path == '/v1/taxonomy':
             kind = self.query_value(query, 'type')
@@ -1007,7 +1447,7 @@ def main():
     if INSECURE_COOKIE:
         log('TAGGER_INSECURE_COOKIE=1: cookies without Secure, for local testing only')
 
-    for folder in (STATE_DIR, UPLOAD_DIR, WORK_DIR):
+    for folder in (STATE_DIR, UPLOAD_DIR, PDF_DIR, WORK_DIR):
         os.makedirs(folder, exist_ok=True)
     shutil.rmtree(WORK_DIR, ignore_errors=True)  # leftovers of a page that was being read at a restart
     os.makedirs(WORK_DIR, exist_ok=True)
@@ -1025,6 +1465,7 @@ def main():
     except OSError:
         pass
 
+    threading.Thread(target=worker, args=(('ocr',), do_ocr_job), name='ocr-worker', daemon=True).start()
     server = Server((LISTEN_HOST, PORT), Handler)
     log('scouting-tagger %s listening on %s:%d (%s; frame ancestors %s)' % (
         VERSION, LISTEN_HOST, PORT,
