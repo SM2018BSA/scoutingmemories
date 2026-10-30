@@ -14,7 +14,8 @@
   .navbar { background-color: var(--sm-green); }
   .btn-primary { --bs-btn-bg: var(--sm-green); --bs-btn-border-color: var(--sm-green);
                  --bs-btn-hover-bg: #013d00; --bs-btn-hover-border-color: #013d00;
-                 --bs-btn-active-bg: #013d00; --bs-btn-active-border-color: #013d00; }
+                 --bs-btn-active-bg: #013d00; --bs-btn-active-border-color: #013d00;
+                 --bs-btn-disabled-bg: var(--sm-green); --bs-btn-disabled-border-color: var(--sm-green); }
   .text-sm-green { color: var(--sm-green); }
 </style>
 </head>
@@ -93,9 +94,49 @@
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><h2 class="h5 card-title mb-0">Suggestions</h2></div>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="h5 card-title mb-0">Suggestions</h2>
+        <button type="button" class="btn btn-primary" id="suggest-go">Suggest the tags</button>
+      </div>
       <div class="card-body">
-        <p class="text-body-secondary mb-0">No suggestions yet — add a document above.</p>
+        <p class="text-body-secondary mb-0" id="suggest-empty">No suggestions yet. Add a document above, then press
+          "Suggest the tags". A historian decides what is right; the assistant only drafts.</p>
+        <div class="alert alert-danger mb-0" id="suggest-error" hidden></div>
+        <div id="suggest-wait" hidden>
+          <div class="d-flex align-items-center gap-2">
+            <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+            <span id="suggest-wait-text">Asking the assistant…</span>
+          </div>
+        </div>
+        <div id="suggest-result" hidden>
+          <p id="suggest-summary" class="fw-bold"></p>
+          <div class="alert alert-warning" id="suggest-reviewer" hidden></div>
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead><tr><th>Field</th><th>Suggestion</th><th>Sure?</th><th>Evidence from the text</th><th></th></tr></thead>
+              <tbody id="suggest-rows"></tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <button type="button" class="btn btn-outline-secondary" id="suggest-download">Download as JSON</button>
+            <span class="text-body-secondary small" id="suggest-provider"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">Ask about the index</h2></div>
+      <div class="card-body">
+        <label class="form-label" for="ask-question">A question about this document, or about the councils, camps and
+          lodges in the index</label>
+        <div class="input-group">
+          <input class="form-control" id="ask-question"
+            placeholder="Which councils ran Camp Russell, and when?">
+          <button type="button" class="btn btn-primary" id="ask-go">Ask</button>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0" id="ask-error" hidden></div>
+        <div class="border rounded p-3 bg-white mt-3" id="ask-answer" hidden style="white-space: pre-wrap"></div>
       </div>
     </div>
 

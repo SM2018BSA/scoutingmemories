@@ -14,7 +14,8 @@
   .navbar { background-color: var(--sm-green); }
   .btn-primary { --bs-btn-bg: var(--sm-green); --bs-btn-border-color: var(--sm-green);
                  --bs-btn-hover-bg: #013d00; --bs-btn-hover-border-color: #013d00;
-                 --bs-btn-active-bg: #013d00; --bs-btn-active-border-color: #013d00; }
+                 --bs-btn-active-bg: #013d00; --bs-btn-active-border-color: #013d00;
+                 --bs-btn-disabled-bg: var(--sm-green); --bs-btn-disabled-border-color: var(--sm-green); }
 </style>
 </head>
 <body data-page="settings" class="bg-light">
@@ -31,6 +32,75 @@
   <div id="settings-body" hidden>
 
     <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">AI provider</h2></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label class="form-label" for="set-provider">Provider to use</label>
+            <select class="form-select" id="set-provider">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+              <option value="grok">Grok (xAI)</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive mt-3">
+          <table class="table align-middle">
+            <thead><tr><th>Provider</th><th>Model</th><th>API key</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Claude</td>
+                <td><input class="form-control" id="set-model-claude"></td>
+                <td><input class="form-control" type="password" id="set-key-claude" autocomplete="off"></td>
+                <td><button type="button" class="btn btn-outline-secondary" id="test-claude">Test</button></td>
+              </tr>
+              <tr>
+                <td>Gemini</td>
+                <td><input class="form-control" id="set-model-gemini"></td>
+                <td><input class="form-control" type="password" id="set-key-gemini" autocomplete="off"></td>
+                <td><button type="button" class="btn btn-outline-secondary" id="test-gemini">Test</button></td>
+              </tr>
+              <tr>
+                <td>Grok</td>
+                <td><input class="form-control" id="set-model-grok"></td>
+                <td><input class="form-control" type="password" id="set-key-grok" autocomplete="off"></td>
+                <td><button type="button" class="btn btn-outline-secondary" id="test-grok">Test</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="form-text">A key is saved when the box holds one and Save is pressed; an empty box keeps the
+          saved key. Keys are stored on the server, shown only as their last characters, and never leave it
+          except to their own provider. <span id="set-usage"></span></p>
+        <div class="row g-3">
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="set-ocr-pages">Pages read per PDF</label>
+            <input class="form-control" type="number" min="1" id="set-ocr-pages">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="set-daily-cap">AI calls a day</label>
+            <input class="form-control" type="number" min="1" id="set-daily-cap">
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="form-label" for="set-prompt">System prompt (what the assistant is told it is)</label>
+          <textarea class="form-control font-monospace" id="set-prompt" rows="6"
+            placeholder="Empty = the built-in instructions below are used as they are."></textarea>
+          <details class="mt-2">
+            <summary>The built-in instructions (used when the box above is empty)</summary>
+            <pre class="border rounded p-3 bg-white mt-2" style="white-space: pre-wrap" id="set-default-prompt"></pre>
+          </details>
+        </div>
+        <div class="mt-3 d-flex align-items-center gap-3">
+          <button type="button" class="btn btn-primary" id="set-save">Save settings</button>
+          <span id="set-saved" class="text-success" hidden>Saved.</span>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0" id="set-error" hidden></div>
+        <div class="alert alert-success mt-3 mb-0" id="set-test-ok" hidden></div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
       <div class="card-header"><h2 class="h5 card-title mb-0">The index (RAG memory)</h2></div>
       <div class="card-body">
         <p class="mb-0" id="index-status">Nothing received yet.</p>
@@ -38,9 +108,26 @@
     </div>
 
     <div class="card mb-4">
-      <div class="card-header"><h2 class="h5 card-title mb-0">AI provider</h2></div>
+      <div class="card-header"><h2 class="h5 card-title mb-0">Reference material</h2></div>
       <div class="card-body">
-        <p class="text-body-secondary mb-0" id="provider-note">The provider, model, API key, system prompt and limits are set up in a later step of the build.</p>
+        <p class="text-body-secondary">Notes and documents the assistant may quote when they match a document:
+          naming habits, council history write-ups, indexing rules. Spreadsheets (.xlsx, .csv) are kept as
+          their text.</p>
+        <ul class="list-group mb-3" id="notes-list"></ul>
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="note-title">Add a note</label>
+            <input class="form-control mb-2" id="note-title" placeholder="Title">
+            <textarea class="form-control mb-2" id="note-body" rows="4" placeholder="The note itself"></textarea>
+            <button type="button" class="btn btn-outline-secondary" id="note-add">Add the note</button>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label" for="note-file">Add a document (.txt, .md, .csv, .xlsx)</label>
+            <input class="form-control mb-2" type="file" id="note-file" accept=".txt,.md,.csv,.xlsx">
+            <button type="button" class="btn btn-outline-secondary" id="note-upload">Add the document</button>
+          </div>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0" id="note-error" hidden></div>
       </div>
     </div>
 

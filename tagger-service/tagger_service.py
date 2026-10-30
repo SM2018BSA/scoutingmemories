@@ -18,7 +18,9 @@ Settings come from the environment (see README.md).
 """
 
 import base64
+import difflib
 import email
+import io
 import hashlib
 import hmac
 import http.client
@@ -42,6 +44,8 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree
+import zipfile
 
 
 def log(message):
@@ -74,9 +78,13 @@ def env_switch(name):
 
 
 def first_dir(*names):
-    """systemd passes STATE_DIRECTORY / CACHE_DIRECTORY; the TAGGER_* names are for running by hand"""
+    """systemd passes STATE_DIRECTORY / CACHE_DIRECTORY; the TAGGER_* names are for running by hand.
+    systemd separates several directories with ':', which would cut a Windows drive letter off,
+    so the split happens only where systemd exists."""
     for name in names:
-        value = os.environ.get(name, '').split(':')[0]
+        value = os.environ.get(name, '')
+        if os.name == 'posix':
+            value = value.split(':')[0]
         if value:
             return value
     return None
@@ -123,6 +131,8 @@ MAX_PDF_BYTES = MAX_PDF_MB * 1024 * 1024
 CACHE_BYTES = CACHE_MB * 1024 * 1024
 MAX_BODY = 8192             # most requests are a short piece of JSON
 MAX_CHUNK_BODY = 512 * 1024  # one batch of index rows pushed by WordPress
+MAX_TEXT_BODY = 256 * 1024   # pasted text, settings, notes
+MAX_FILE_BODY = 12 * 1024 * 1024  # a reference document for the RAG memory
 MAX_UPLOAD_BODY = MAX_PDF_BYTES + 2 * 1024 * 1024  # the PDF plus the form wrapping
 MAX_URL = 1024
 MIN_DPI = 72                # a page that would need less than this to fit MAX_PIXELS is refused
@@ -141,7 +151,7 @@ WAKE = threading.Event()    # set when a job is added, so the worker does not wa
 # Who may use the app at all; "admin" (the settings dashboard) is a separate flag on the login link
 ALLOWED_ROLES = ('administrator', 'manager', 'historian', 'regional', 'index_contributor')
 
-VERSION = '0.4.0'           # step 4: uploaded PDFs are read with Poppler + Tesseract
+VERSION = '0.5.0'           # step 5: the AI suggests the tags; the settings dashboard works
 OCR_READY = False           # set in main(); on this PC the OCR tools may be missing
 
 
@@ -676,6 +686,7 @@ class Importer:
             con.execute("UPDATE import_batches SET status = 'committed' WHERE id = ?", (batch,))
             con.execute('DELETE FROM staging_rows WHERE batch_id = ?', (batch,))
             con.execute('COMMIT')
+            VOCABULARY['words'] = None  # the fuzzy matcher re-reads the new index's words
             log('index received (%s): %d councils, %d camps, %d lodges, %d states, %d links, %d posts' % (
                 source, counts['councils'], counts['camps'], counts['lodges'], counts['states'],
                 counts['links'], counts['posts']))
@@ -1091,6 +1102,547 @@ def parse_upload(content_type, body):
     return fields, file_name, file_bytes
 
 
+# ---- The AI providers ------------------------------------------------------------------------
+
+AI_TIMEOUT = 120
+AI_MAX_ANSWER = 1024 * 1024
+AI_PROVIDERS = ('claude', 'gemini', 'grok')
+
+
+class AiError(Exception):
+    """The provider could not answer; code and a short plain detail for the historian"""
+
+    def __init__(self, code, detail=''):
+        super().__init__(code)
+        self.code = code
+        self.detail = str(detail)[:300]
+
+
+def http_json(url, headers, payload):
+    """One POST of JSON to a provider, its JSON answer back"""
+    body = json.dumps(payload).encode()
+    request = urllib.request.Request(url, data=body, method='POST',
+                                     headers=dict(headers, **{'Content-Type': 'application/json'}))
+    try:
+        with OPENER.open(request, timeout=AI_TIMEOUT) as response:
+            raw = response.read(AI_MAX_ANSWER)
+    except urllib.error.HTTPError as problem:
+        detail = b''
+        try:
+            detail = problem.read(4096)
+        except OSError:
+            pass
+        raise AiError('ai_failed', '%d %s' % (problem.code, detail.decode('utf-8', 'replace')))
+    except TimeoutError:
+        raise AiError('ai_timeout', 'no answer within %d seconds' % AI_TIMEOUT)
+    except (urllib.error.URLError, http.client.HTTPException, OSError) as problem:
+        raise AiError('ai_unreachable', getattr(problem, 'reason', problem))
+    try:
+        return json.loads(raw.decode('utf-8'))
+    except (UnicodeDecodeError, ValueError):
+        raise AiError('ai_failed', 'the provider answered with something that is not JSON')
+
+
+def ai_complete(provider, model, key, system, user_text, want_json):
+    """The model's text for one system+user exchange, whoever the provider is"""
+    if provider == 'claude':
+        answer = http_json('https://api.anthropic.com/v1/messages',
+                           {'x-api-key': key, 'anthropic-version': '2023-06-01'},
+                           {'model': model, 'max_tokens': 3000, 'system': system,
+                            'messages': [{'role': 'user', 'content': user_text}]})
+        text = ''.join(piece.get('text', '') for piece in answer.get('content', []) if isinstance(piece, dict))
+    elif provider == 'gemini':
+        payload = {'system_instruction': {'parts': [{'text': system}]},
+                   'contents': [{'role': 'user', 'parts': [{'text': user_text}]}],
+                   'generationConfig': {'maxOutputTokens': 3000}}
+        if want_json:
+            payload['generationConfig']['responseMimeType'] = 'application/json'
+        answer = http_json('https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent'
+                           % urllib.parse.quote(model), {'x-goog-api-key': key}, payload)
+        candidates = answer.get('candidates') or [{}]
+        parts = (candidates[0].get('content') or {}).get('parts') or []
+        text = ''.join(piece.get('text', '') for piece in parts if isinstance(piece, dict))
+    elif provider == 'grok':
+        answer = http_json('https://api.x.ai/v1/chat/completions',
+                           {'Authorization': 'Bearer ' + key},
+                           {'model': model, 'messages': [{'role': 'system', 'content': system},
+                                                         {'role': 'user', 'content': user_text}]})
+        choices = answer.get('choices') or [{}]
+        text = ((choices[0].get('message') or {}).get('content')) or ''
+    else:
+        raise AiError('ai_failed', 'unknown provider')
+    if not isinstance(text, str) or not text.strip():
+        raise AiError('ai_failed', 'the provider sent an empty answer')
+    return text.strip()
+
+
+def provider_setup(con, merged=None):
+    """(provider, model, key) from the settings, or a refusal when no key is saved"""
+    merged = merged or read_settings(con)
+    provider = merged.get('provider', 'claude')
+    if provider not in AI_PROVIDERS:
+        provider = 'claude'
+    model = (merged.get('model_' + provider) or SETTING_DEFAULTS['model_' + provider]).strip()[:80]
+    key = (merged.get('api_key_' + provider) or '').strip()
+    if not key:
+        raise Refused(409, 'no_api_key')
+    return provider, model, key
+
+
+def calls_today(con):
+    """AI calls since local midnight"""
+    now = time.localtime()
+    midnight = int(time.mktime((now.tm_year, now.tm_mon, now.tm_mday, 0, 0, 0, 0, 0, -1)))
+    return con.execute('SELECT COUNT(*) FROM ai_calls WHERE at > ?', (midnight,)).fetchone()[0]
+
+
+def daily_cap(merged):
+    try:
+        return min(int(merged.get('ai_calls_per_day', '0') or 0), AI_CALLS_PER_DAY)
+    except ValueError:
+        return AI_CALLS_PER_DAY
+
+
+# ---- Finding the document in the index (the retrieval half of the RAG) -----------------------
+
+GENERIC_TOKENS = frozenset(('camp', 'council', 'lodge', 'scout', 'scouts', 'scouting', 'boy', 'boys',
+                            'bsa', 'america', 'american', 'area', 'the', 'of', 'and', 'new'))
+RETRIEVAL_CHARS = 60000     # how much of the document the matching reads
+PROMPT_TEXT_CHARS = 12000   # how much of the document the model reads
+CANDIDATES_PER_KIND = 15
+FUZZY_TOKENS_MAX = 40       # how many misread-looking words get a second, fuzzy look
+
+VOCABULARY = {'words': None}  # every distinct index token, loaded once, dropped on import
+
+
+def index_vocabulary(con):
+    if VOCABULARY['words'] is None:
+        VOCABULARY['words'] = [row['token'] for row in con.execute('SELECT DISTINCT token FROM name_tokens')]
+    return VOCABULARY['words']
+
+
+def find_candidates(con, text):
+    """The index entries a document's text points at, scored, the best first"""
+    sample = text[:RETRIEVAL_CHARS]
+    token_set = set(tokens_of(sample))
+    found = {kind: [] for kind in ENTITY_KINDS}
+    if not token_set:
+        return found
+    tokens_list = list(token_set)
+    known = set()
+    for start in range(0, len(tokens_list), 400):
+        piece = tokens_list[start:start + 400]
+        marks = ','.join('?' * len(piece))
+        known |= {row['token'] for row in
+                  con.execute('SELECT DISTINCT token FROM name_tokens WHERE token IN (%s)' % marks, piece)}
+
+    # OCR misreads names ("Herkinier" for "Herkimer"): unknown longer words get a fuzzy look
+    # against the index's own words, and a near miss counts as the word it resembles.
+    unknown = sorted((token for token in token_set - known if len(token) >= 5 and token.isalpha()),
+                     key=len, reverse=True)[:FUZZY_TOKENS_MAX]
+    repaired = set()
+    if unknown:
+        words = index_vocabulary(con)
+        for token in unknown:
+            close = difflib.get_close_matches(token, words, n=1, cutoff=0.8)
+            if close and close[0] not in GENERIC_TOKENS:
+                repaired.add(close[0])
+    token_set |= repaired
+
+    matched = {}
+    lookups = list(known | repaired)
+    for start in range(0, len(lookups), 400):
+        piece = lookups[start:start + 400]
+        marks = ','.join('?' * len(piece))
+        for row in con.execute('SELECT token, type, id FROM name_tokens WHERE token IN (%s)' % marks, piece):
+            matched.setdefault((row['type'], row['id']), set()).add(row['token'])
+
+    padded = ' ' + normalize_text(sample) + ' '
+    state_ids = set()
+    for kind in ENTITY_KINDS:
+        ids = [entity_id for (entity_kind, entity_id) in matched if entity_kind == kind]
+        rows = []
+        for start in range(0, len(ids), 400):
+            piece = ids[start:start + 400]
+            marks = ','.join('?' * len(piece))
+            rows += list(con.execute(TAXONOMY_ROW + ' WHERE type = ? AND id IN (%s)' % marks, [kind] + piece))
+        scored = []
+        for row in rows:
+            tokens_matched = matched[(kind, row['id'])]
+            name_words = set(tokens_of(row['name']))
+            meaningful = name_words - GENERIC_TOKENS
+            coverage = len(tokens_matched & meaningful) / len(meaningful) if meaningful else 0.0
+            whole_name = len(name_words) >= 2 and (' ' + normalize_text(row['name']) + ' ') in padded
+            number_seen = bool(row['number']) and row['number'] in token_set
+            code_seen = kind == 'state' and bool(row['code']) and row['code'].lower() in token_set
+            score = 5 * coverage + (4 if whole_name else 0) + (3 if number_seen else 0) + (2 if code_seen else 0)
+            if (meaningful and coverage >= 0.5) or whole_name or number_seen or (kind == 'state' and code_seen):
+                scored.append((round(score, 2), dict(row), sorted(tokens_matched)))
+        scored.sort(key=lambda item: (-item[0], item[1]['name']))
+        for score, entity, words in scored[:CANDIDATES_PER_KIND]:
+            entity.update({'score': score, 'matched': words})
+            found[kind].append(entity)
+            if kind == 'state':
+                state_ids.add(entity['id'])
+
+    if state_ids:  # a council in a state the text names is likelier than one elsewhere
+        for entity in found['council']:
+            own = set(row['state_id'] for row in con.execute(
+                "SELECT state_id FROM entity_states WHERE type = 'council' AND id = ?", (entity['id'],)))
+            if own & state_ids:
+                entity['score'] = round(entity['score'] + 1, 2)
+        found['council'].sort(key=lambda entity: -entity['score'])
+    return found
+
+
+def lineage_lines(con, council_ids):
+    """Short 'came from / merged into' lines for the candidate councils"""
+    if not council_ids:
+        return {}
+    marks = ','.join('?' * len(council_ids))
+    rows = list(con.execute(
+        "SELECT parent_id, child_id FROM links WHERE relation = 'lineage' AND (parent_id IN (%s) OR child_id IN (%s))"
+        % (marks, marks), list(council_ids) * 2))
+    named = {}
+    for other in set(row['parent_id'] for row in rows) | set(row['child_id'] for row in rows):
+        entity = con.execute("SELECT name, number FROM entities WHERE type = 'council' AND id = ?", (other,)).fetchone()
+        if entity:
+            named[other] = entity['name'] + (' (#%s)' % entity['number'] if entity['number'] else '')
+    lines = {}
+    for council in council_ids:
+        earlier = [named[row['child_id']] for row in rows if row['parent_id'] == council and row['child_id'] in named][:4]
+        later = [named[row['parent_id']] for row in rows if row['child_id'] == council and row['parent_id'] in named][:4]
+        pieces = []
+        if earlier:
+            pieces.append('came from ' + '; '.join(earlier))
+        if later:
+            pieces.append('merged into ' + '; '.join(later))
+        if pieces:
+            lines[council] = ', '.join(pieces)
+    return lines
+
+
+def similar_posts(con, candidates):
+    """Up to five already-tagged documents sharing the strongest candidates"""
+    slugs = [entity['slug'] for kind in ('council', 'camp', 'lodge') for entity in candidates[kind][:3] if entity['slug']]
+    if not slugs:
+        return []
+    marks = ','.join('?' * len(slugs))
+    rows = con.execute('SELECT * FROM posts WHERE council IN (%s) OR camp IN (%s) OR lodge IN (%s) LIMIT 5'
+                       % (marks, marks, marks), slugs * 3)
+    return [{'title': row['title'], 'category': row['category'], 'states': json.loads(row['states'] or '[]'),
+             'council': row['council'], 'camp': row['camp'], 'lodge': row['lodge'],
+             'start_date': row['start_date'], 'end_date': row['end_date'],
+             'publisher_of_digital': row['publisher'], 'meta_subject': row['subject'],
+             'identifier': row['identifier']} for row in rows]
+
+
+def matching_notes(con, text):
+    """The three reference notes that share the most words with the document"""
+    token_set = set(tokens_of(text[:RETRIEVAL_CHARS]))
+    scored = []
+    for row in con.execute('SELECT id, title, body FROM notes'):
+        overlap = len(token_set & set(tokens_of(row['body'][:20000]))) if token_set else 0
+        if overlap >= 3:
+            scored.append((overlap, row['title'], row['body'][:1200]))
+    scored.sort(key=lambda item: -item[0])
+    return [{'title': title, 'text': body} for _, title, body in scored[:3]]
+
+
+# ---- Asking the model and checking its answer -------------------------------------------------
+
+AI_FIELDS = ('category', 'state', 'council', 'camp', 'lodge', 'start_date', 'end_date',
+             'publisher_of_digital', 'date_of_original', 'date_of_digital', 'identifier',
+             'meta_subject', 'meta_location', 'meta_physical_description',
+             'author', 'photographer', 'contributors')
+CATEGORIES = ('History', 'Memorabilia', 'Photographs', 'Museums', 'Oral History', 'Movies')
+
+OUTPUT_SHAPE = '''{"fields": {
+  "category":  {"value": "History", "confidence": 0.9, "evidence": "a short quote from the document"},
+  "state":     {"value": ["NY"], "confidence": 0.9, "evidence": "..."},
+  "council":   {"value": "a_slug_from_the_candidates_or_null", "confidence": 0.8, "evidence": "..."},
+  "camp":      {"value": null, "confidence": 0, "evidence": ""},
+  "lodge":     {"value": null, "confidence": 0, "evidence": ""},
+  "start_date": {"value": "1952", "confidence": 0.8, "evidence": "..."},
+  "end_date":   {"value": "1952", "confidence": 0.8, "evidence": "..."},
+  "publisher_of_digital": {"value": null, "confidence": 0, "evidence": ""},
+  "date_of_original":     {"value": null, "confidence": 0, "evidence": ""},
+  "date_of_digital":      {"value": null, "confidence": 0, "evidence": ""},
+  "identifier":           {"value": null, "confidence": 0, "evidence": ""},
+  "meta_subject":         {"value": "a few words a researcher would search for", "confidence": 0.7, "evidence": "..."},
+  "meta_location":        {"value": null, "confidence": 0, "evidence": ""},
+  "meta_physical_description": {"value": null, "confidence": 0, "evidence": ""},
+  "author":       {"value": null, "confidence": 0, "evidence": ""},
+  "photographer": {"value": null, "confidence": 0, "evidence": ""},
+  "contributors": {"value": [], "confidence": 0, "evidence": ""}},
+ "summary": "one sentence saying what the document is",
+ "notes_for_reviewer": "anything ambiguous, in plain sentences"}'''
+
+SKILLS_TEXT = ''            # the skills/*.md files, read once at start
+
+
+def load_skills():
+    global SKILLS_TEXT
+    folder = os.path.join(OWN_DIR, 'skills')
+    pieces = []
+    for name in sorted(os.listdir(folder)):
+        if name.endswith('.md'):
+            with open(os.path.join(folder, name), 'r', encoding='utf-8') as handle:
+                pieces.append(handle.read().strip())
+    SKILLS_TEXT = '\n\n'.join(pieces)
+    if not SKILLS_TEXT:
+        sys.exit('skills/ is empty. Nothing was started.')
+
+
+def build_system(merged):
+    """The skills files are the instructions; a saved system prompt replaces the first (role) part"""
+    custom = (merged.get('system_prompt') or '').strip()
+    if not custom:
+        return SKILLS_TEXT
+    rest = SKILLS_TEXT.split('\n\n', 1)
+    following = SKILLS_TEXT[SKILLS_TEXT.find('# The archive'):] if '# The archive' in SKILLS_TEXT else (rest[1] if len(rest) > 1 else '')
+    return custom + '\n\n' + following
+
+
+def entity_line(kind, entity, lineages):
+    years = ''
+    if entity['start_year']:
+        years = ', %d-%s' % (entity['start_year'],
+                             'present' if entity['status'] == 'active' else (entity['end_year'] or '?'))
+    extra = ' [%s]' % lineages[entity['id']] if lineages and entity['id'] in lineages else ''
+    if kind == 'state':
+        return '- %s = %s' % (entity['code'], entity['name'])
+    number = ' (#%s)' % entity['number'] if entity['number'] else ''
+    return '- slug %s = %s%s%s%s' % (entity['slug'], entity['name'], number, years, extra)
+
+
+def build_user(con, text, candidates, hints):
+    lineages = lineage_lines(con, [entity['id'] for entity in candidates['council']])
+    blocks = []
+    for kind, title in (('state', 'STATES'), ('council', 'COUNCILS'), ('camp', 'CAMPS'), ('lodge', 'LODGES')):
+        if candidates[kind]:
+            blocks.append(title + ':\n' + '\n'.join(entity_line(kind, entity, lineages if kind == 'council' else None)
+                                                    for entity in candidates[kind]))
+    candidate_text = '\n\n'.join(blocks) or '(nothing in the index matched this text)'
+
+    examples = similar_posts(con, candidates)
+    example_text = '\n'.join(json.dumps(post, ensure_ascii=False) for post in examples) or '(none found)'
+    notes = matching_notes(con, text)
+    notes_text = '\n\n'.join('%s:\n%s' % (note['title'], note['text']) for note in notes) or '(none)'
+    hint_text = '\n'.join('- the historian picked %s: %s' % (kind, value) for kind, value in hints.items()) or '(none)'
+
+    years = sorted(set(re.findall(r'\b(19[0-9][0-9]|20[0-2][0-9])\b', text[:RETRIEVAL_CHARS])))
+    return '\n\n'.join([
+        '## Candidate index entries (choose council, camp, lodge and state ONLY from these)\n' + candidate_text,
+        '## Similar already-tagged documents\n' + example_text,
+        '## Reference notes\n' + notes_text,
+        '## Historian hints\n' + hint_text,
+        '## Years seen in the text\n' + (', '.join(years) or '(none)'),
+        '## Document text (OCR, may hold misreadings)\n' + text[:PROMPT_TEXT_CHARS],
+        'Fill the archive fields for THIS document. Answer with ONE JSON object of exactly this shape, nothing else:\n'
+        + OUTPUT_SHAPE,
+    ])
+
+
+def parse_model_json(text):
+    """The JSON object in the model's answer, fences and chatter stripped"""
+    start, end = text.find('{'), text.rfind('}')
+    if start < 0 or end <= start:
+        raise AiError('bad_answer', 'the model sent no JSON object')
+    try:
+        parsed = json.loads(text[start:end + 1])
+    except ValueError:
+        raise AiError('bad_answer', 'the model sent JSON that does not parse')
+    if not isinstance(parsed, dict) or not isinstance(parsed.get('fields'), dict):
+        raise AiError('bad_answer', 'the model left out the fields object')
+    return parsed
+
+
+def match_slug(con, kind, value, candidates):
+    """The model's string resolved to a real slug: exact first, then close names; numbers must agree"""
+    given = clean_str(value, 160)
+    if not given:
+        return None, None
+    lowered = given.lower()
+    for entity in candidates.get(kind, []):
+        if entity['slug'] == lowered:
+            return entity, None
+    row = con.execute('SELECT id, name, number, slug FROM entities WHERE type = ? AND slug = ?',
+                      (kind, lowered)).fetchone()
+    if row:
+        return dict(row), None
+    names = {normalize_text(entity['name']): entity for entity in candidates.get(kind, [])}
+    close = difflib.get_close_matches(normalize_text(given), list(names), n=1, cutoff=0.8)
+    if close:
+        entity = names[close[0]]
+        digits = re.findall(r'[0-9]+', given)
+        if digits and entity.get('number') and digits[-1] != entity['number']:
+            return None, given  # a number is identity; a near name with the wrong number is a different thing
+        return entity, None
+    return None, given
+
+
+def validate_result(con, parsed, candidates):
+    """The model's fields checked against the index and the format rules"""
+    fields = {}
+    state_codes = {row['code'] for row in con.execute("SELECT code FROM entities WHERE type = 'state'")}
+    for name in AI_FIELDS:
+        given = parsed['fields'].get(name)
+        given = given if isinstance(given, dict) else {}
+        value = given.get('value')
+        try:
+            confidence = max(0.0, min(1.0, float(given.get('confidence', 0))))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        field = {'value': None, 'confidence': round(confidence, 2),
+                 'evidence': clean_str(given.get('evidence'), 300)}
+        if name in ('council', 'camp', 'lodge'):
+            entity, unmatched = match_slug(con, name, value, candidates)
+            if entity:
+                field.update({'value': entity['slug'], 'name': entity['name'],
+                              'entity_id': entity['id'], 'validated': True})
+                if entity.get('number'):
+                    field['number'] = entity['number']
+            elif unmatched:
+                field.update({'validated': False, 'model_value': unmatched})
+        elif name == 'state':
+            codes = value if isinstance(value, list) else ([value] if isinstance(value, str) else [])
+            field['value'] = [clean_str(code, 8).upper() for code in codes[:5]
+                              if clean_str(code, 8).upper() in state_codes] or None
+        elif name in ('start_date', 'end_date'):
+            text_value = clean_str(value, 10)
+            field['value'] = text_value if re.fullmatch(r'(19|20)[0-9][0-9]', text_value) else None
+        elif name == 'category':
+            text_value = clean_str(value, 40)
+            field['value'] = text_value if text_value in CATEGORIES else None
+        elif name == 'contributors':
+            names = value if isinstance(value, list) else []
+            field['value'] = [clean_str(person, 120) for person in names[:10] if clean_str(person, 120)]
+        else:
+            field['value'] = clean_str(value, 300) or None
+        fields[name] = field
+    return {'fields': fields,
+            'summary': clean_str(parsed.get('summary'), 300),
+            'notes_for_reviewer': clean_str(parsed.get('notes_for_reviewer'), 1000)}
+
+
+def xml_named(node, name):
+    """Elements with this tag name, whatever XML namespace the file uses"""
+    return [child for child in node.iter() if isinstance(child.tag, str) and child.tag.rsplit('}', 1)[-1] == name]
+
+
+def xlsx_to_text(data):
+    """A spreadsheet's cells as plain tab-separated text (standard library only)"""
+    try:
+        book = zipfile.ZipFile(io.BytesIO(data))
+        shared = []
+        if 'xl/sharedStrings.xml' in book.namelist():
+            tree = xml.etree.ElementTree.fromstring(book.read('xl/sharedStrings.xml'))
+            for item in xml_named(tree, 'si'):
+                shared.append(''.join(piece.text or '' for piece in xml_named(item, 't')))
+        lines = []
+        sheets = sorted(name for name in book.namelist()
+                        if re.fullmatch(r'xl/worksheets/sheet[0-9]+\.xml', name))[:3]
+        for sheet in sheets:
+            tree = xml.etree.ElementTree.fromstring(book.read(sheet))
+            for spreadsheet_row in xml_named(tree, 'row'):
+                cells = []
+                for cell in xml_named(spreadsheet_row, 'c'):
+                    kind = cell.get('t', '')
+                    values = xml_named(cell, 'v')
+                    if kind == 's':
+                        try:
+                            cells.append(shared[int(values[0].text)] if values else '')
+                        except (TypeError, ValueError, IndexError):
+                            cells.append('')
+                    elif kind == 'inlineStr':
+                        cells.append(''.join(piece.text or '' for piece in xml_named(cell, 't')))
+                    else:
+                        cells.append(values[0].text if values and values[0].text else '')
+                line = '\t'.join(cells).rstrip()
+                if line:
+                    lines.append(line)
+                if sum(len(piece) for piece in lines) > 200000:
+                    return '\n'.join(lines)[:200000]
+        if not lines:
+            raise Refused(400, 'empty_file')
+        return '\n'.join(lines)[:200000]
+    except (zipfile.BadZipFile, KeyError, xml.etree.ElementTree.ParseError):
+        raise Refused(400, 'bad_file')
+
+
+def file_to_note_text(name, data):
+    """An uploaded reference document as searchable text"""
+    ending = os.path.splitext(name.lower())[1]
+    if ending == '.xlsx':
+        return xlsx_to_text(data)
+    if ending in ('.txt', '.md', '.csv'):
+        text = data.decode('utf-8-sig', 'replace').strip()[:200000]
+        if not text:
+            raise Refused(400, 'empty_file')
+        return text
+    raise Refused(400, 'bad_file')
+
+
+def do_ai_job(con, row):
+    """A suggest or ask job: retrieval, one model call, and the checked answer"""
+    values = json.loads(row['input'] or '{}')
+    text = values.get('text') or ''
+    if values.get('source_job'):
+        source = con.execute("SELECT text FROM jobs WHERE id = ? AND kind = 'ocr' AND status = 'done'",
+                             (values['source_job'],)).fetchone()
+        text = (source['text'] if source else '') or text
+    merged = read_settings(con)
+    if calls_today(con) >= daily_cap(merged):
+        raise Refused(429, 'daily_limit')
+    provider, model, key = provider_setup(con, merged)
+    candidates = find_candidates(con, text)
+    system = build_system(merged)
+    if row['kind'] == 'suggest':
+        user_text = build_user(con, text, candidates, values.get('hints') or {})
+    else:
+        user_text = '\n\n'.join([
+            '## Candidate index entries\n' + ('\n'.join(
+                entity_line(kind, entity, None) for kind in ENTITY_KINDS for entity in candidates[kind])
+                or '(nothing matched)'),
+            '## Reference notes\n' + ('\n\n'.join('%s:\n%s' % (note['title'], note['text'])
+                                                  for note in matching_notes(con, text + ' ' + values.get('question', '')))
+                                      or '(none)'),
+            ('## Document text\n' + text[:PROMPT_TEXT_CHARS]) if text else '',
+            'QUESTION from the historian: ' + values.get('question', ''),
+            'Answer in plain text, two to six sentences, naming index entries by their full names. '
+            'If the index does not say, say so.',
+        ])
+    began = time.monotonic()
+    try:
+        answer_text = ai_complete(provider, model, key, system, user_text, row['kind'] == 'suggest')
+        if row['kind'] == 'suggest':
+            try:
+                parsed = parse_model_json(answer_text)
+            except AiError:
+                answer_text = ai_complete(provider, model, key, system,
+                                          user_text + '\n\nReturn ONLY the JSON object, with no other text.', True)
+                parsed = parse_model_json(answer_text)
+        ok = 1
+    except AiError as problem:
+        con.execute('INSERT INTO ai_calls (at, user, provider, model, ok, seconds) VALUES (?, ?, ?, ?, 0, ?)',
+                    (int(time.time()), row['user_login'], provider, model, round(time.monotonic() - began, 1)))
+        detail = (' - ' + problem.detail) if problem.detail else ''
+        raise Refused(502, (problem.code + detail)[:400])
+    con.execute('INSERT INTO ai_calls (at, user, provider, model, ok, seconds, chars_in, chars_out) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                (int(time.time()), row['user_login'], provider, model, ok,
+                 round(time.monotonic() - began, 1), len(system) + len(user_text), len(answer_text)))
+    if row['kind'] == 'ask':
+        result = {'answer': answer_text[:4000], 'provider': provider, 'model': model}
+    else:
+        result = validate_result(con, parsed, candidates)
+        result.update({'provider': provider, 'model': model,
+                       'candidates': {kind: [{'slug': entity['slug'], 'name': entity['name'], 'score': entity['score']}
+                                             for entity in candidates[kind][:5]] for kind in ENTITY_KINDS}})
+    return json.dumps(result, ensure_ascii=False, separators=(',', ':'))
+
+
 # ---- The pages and their files -------------------------------------------------------------
 
 STATIC_TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -1215,6 +1767,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if method not in ('POST', 'DELETE'):
             return b''
         length = self.headers.get('Content-Length', '')
+        if '' == length and method == 'DELETE':
+            return b''  # a DELETE usually has no body at all
         if not re.fullmatch(r'[0-9]{1,9}', length):
             raise Refused(411, 'bad_request')
         if int(length) > limit:
@@ -1250,6 +1804,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             limit = MAX_CHUNK_BODY
         elif path == '/v1/upload':
             limit = MAX_UPLOAD_BODY
+        elif path == '/v1/admin/files':
+            limit = MAX_FILE_BODY
+        elif path in ('/v1/suggest', '/v1/ask', '/v1/admin/settings', '/v1/admin/notes'):
+            limit = MAX_TEXT_BODY
         try:
             body = self.read_body(method, limit)
         except Refused as refusal:
@@ -1355,6 +1913,47 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self.reply(404, {'error': 'not_found'})
                 return self.reply(200, job_answer(con, row))
 
+            if method == 'POST' and path in ('/v1/suggest', '/v1/ask'):
+                if not self.csrf_ok(person):
+                    return self.reply(403, {'error': 'bad_csrf'})
+                asked = self.body_json(body)
+                merged = read_settings(con)
+                if calls_today(con) >= daily_cap(merged):
+                    return self.reply(429, {'error': 'daily_limit'})
+                provider_setup(con, merged)  # refuses now, not after queuing, when no key is saved
+                kind = 'suggest' if path == '/v1/suggest' else 'ask'
+                values = {}
+                text = asked.get('text')
+                if isinstance(text, str) and text.strip():
+                    values['text'] = text.strip()[:MAX_TEXT_TOTAL]
+                source = asked.get('job')
+                if isinstance(source, str) and re.fullmatch(r'[0-9a-f]{32}', source):
+                    owned = con.execute("SELECT 1 FROM jobs WHERE id = ? AND kind = 'ocr' AND status = 'done' AND session = ?",
+                                        (source, person['sid'])).fetchone()
+                    if owned:
+                        values['source_job'] = source
+                if kind == 'suggest':
+                    if 'text' not in values and 'source_job' not in values:
+                        return self.reply(400, {'error': 'no_text'})
+                    hints = asked.get('hints')
+                    if isinstance(hints, dict):
+                        values['hints'] = {name: clean_str(hints[name], 160)
+                                           for name in ('state', 'council', 'camp', 'lodge')
+                                           if clean_str(hints.get(name), 160)}
+                else:
+                    question = clean_str(asked.get('question'), 500)
+                    if not question:
+                        return self.reply(400, {'error': 'no_question'})
+                    values['question'] = question
+                job = queue_job(con, person, kind, '', 0, values)
+                row = con.execute('SELECT * FROM jobs WHERE id = ?', (job,)).fetchone()
+                return self.reply(202, job_answer(con, row))
+
+            if person['is_admin'] and path.startswith('/v1/admin/'):
+                answer = self.admin_routes(method, path, body, con, person)
+                if answer is not None:
+                    return answer
+
         if person is not None and method == 'GET' and path == '/v1/taxonomy':
             kind = self.query_value(query, 'type')
             if kind not in ENTITY_KINDS:
@@ -1390,6 +1989,101 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if person is None and path.startswith('/v1/'):
             return self.reply(401, {'error': 'no_session'})
         return self.reply(404, {'error': 'not_found'})
+
+    def settings_answer(self, con):
+        """What the dashboard shows; the API keys only as their last characters"""
+        merged = read_settings(con)
+        shown = {'provider': merged['provider'] if merged['provider'] in AI_PROVIDERS else 'claude',
+                 'system_prompt': merged['system_prompt'],
+                 'default_prompt': SKILLS_TEXT,
+                 'ocr_pages': int(merged['ocr_pages']),
+                 'max_ocr_pages': MAX_OCR_PAGES,
+                 'ai_calls_per_day': daily_cap(merged),
+                 'max_ai_calls_per_day': AI_CALLS_PER_DAY,
+                 'calls_today': calls_today(con),
+                 'index': index_summary(con),
+                 'notes': [{'id': row['id'], 'title': row['title'], 'chars': len(row['body']),
+                            'added_at': row['added_at']}
+                           for row in con.execute('SELECT id, title, body, added_at FROM notes ORDER BY id')]}
+        for provider in AI_PROVIDERS:
+            shown['model_' + provider] = merged['model_' + provider] or SETTING_DEFAULTS['model_' + provider]
+            key = (merged.get('api_key_' + provider) or '').strip()
+            shown['key_' + provider] = ('…' + key[-4:] + ' (saved)') if key else ''
+        return shown
+
+    def admin_routes(self, method, path, body, con, person):
+        if method == 'GET' and path == '/v1/admin/settings':
+            return self.reply(200, self.settings_answer(con))
+        if method in ('POST', 'DELETE') and not self.csrf_ok(person):
+            return self.reply(403, {'error': 'bad_csrf'})
+
+        if method == 'POST' and path == '/v1/admin/settings':
+            asked = self.body_json(body)
+            if asked.get('provider') in AI_PROVIDERS:
+                write_setting(con, 'provider', asked['provider'])
+            for provider in AI_PROVIDERS:
+                model = asked.get('model_' + provider)
+                if isinstance(model, str) and model.strip():
+                    write_setting(con, 'model_' + provider, model.strip()[:80])
+                key = asked.get('api_key_' + provider)
+                if isinstance(key, str) and key.strip():  # an empty box keeps the saved key
+                    write_setting(con, 'api_key_' + provider, key.strip()[:300])
+                    log('the %s API key was replaced' % provider)
+            if isinstance(asked.get('system_prompt'), str):
+                write_setting(con, 'system_prompt', asked['system_prompt'].strip()[:20000])
+            pages = asked.get('ocr_pages')
+            if isinstance(pages, int) and not isinstance(pages, bool) and 1 <= pages <= MAX_OCR_PAGES:
+                write_setting(con, 'ocr_pages', str(pages))
+            cap = asked.get('ai_calls_per_day')
+            if isinstance(cap, int) and not isinstance(cap, bool) and 1 <= cap <= AI_CALLS_PER_DAY:
+                write_setting(con, 'ai_calls_per_day', str(cap))
+            return self.reply(200, self.settings_answer(con))
+
+        if method == 'POST' and path == '/v1/admin/test':
+            provider = self.body_json(body).get('provider')
+            if provider not in AI_PROVIDERS:
+                return self.reply(400, {'error': 'bad_request'})
+            merged = read_settings(con)
+            model = (merged.get('model_' + provider) or SETTING_DEFAULTS['model_' + provider]).strip()[:80]
+            key = (merged.get('api_key_' + provider) or '').strip()
+            if not key:
+                return self.reply(409, {'error': 'no_api_key'})
+            began = time.monotonic()
+            try:
+                answer = ai_complete(provider, model, key, 'You are a connection test.',
+                                     'Answer with the single word: ready', False)
+            except AiError as problem:
+                con.execute('INSERT INTO ai_calls (at, user, provider, model, ok, seconds) VALUES (?, ?, ?, ?, 0, ?)',
+                            (int(time.time()), person['user'], provider, model, round(time.monotonic() - began, 1)))
+                return self.reply(502, {'error': problem.code, 'detail': problem.detail})
+            con.execute('INSERT INTO ai_calls (at, user, provider, model, ok, seconds) VALUES (?, ?, ?, ?, 1, ?)',
+                        (int(time.time()), person['user'], provider, model, round(time.monotonic() - began, 1)))
+            return self.reply(200, {'ok': True, 'model': model, 'answer': answer[:100]})
+
+        if method == 'POST' and path == '/v1/admin/notes':
+            asked = self.body_json(body)
+            title = clean_str(asked.get('title'), 120)
+            note_body = asked.get('body')
+            if not title or not isinstance(note_body, str) or not note_body.strip():
+                return self.reply(400, {'error': 'bad_request'})
+            made = con.execute('INSERT INTO notes (title, body, added_at) VALUES (?, ?, ?)',
+                               (title, note_body.strip()[:200000], int(time.time())))
+            return self.reply(200, {'id': made.lastrowid, 'title': title})
+
+        found = re.fullmatch(r'/v1/admin/notes/([0-9]{1,9})', path)
+        if method == 'DELETE' and found:
+            con.execute('DELETE FROM notes WHERE id = ?', (int(found.group(1)),))
+            return self.reply(200, {'ok': True})
+
+        if method == 'POST' and path == '/v1/admin/files':
+            fields, name, data = parse_upload(self.headers.get('Content-Type', ''), body)
+            if not data or not name:
+                return self.reply(400, {'error': 'bad_request'})
+            text = file_to_note_text(name, data)
+            made = con.execute('INSERT INTO notes (title, body, added_at) VALUES (?, ?, ?)',
+                               (name, text, int(time.time())))
+            return self.reply(200, {'id': made.lastrowid, 'title': name, 'chars': len(text)})
+        return None
 
     def do_GET(self):
         self.handle_request('GET')
@@ -1453,6 +2147,7 @@ def main():
     os.makedirs(WORK_DIR, exist_ok=True)
 
     load_static()
+    load_skills()
     OCR_READY = check_ocr_tools()
     prepare_database()
 
@@ -1466,6 +2161,7 @@ def main():
         pass
 
     threading.Thread(target=worker, args=(('ocr',), do_ocr_job), name='ocr-worker', daemon=True).start()
+    threading.Thread(target=worker, args=(('suggest', 'ask'), do_ai_job), name='ai-worker', daemon=True).start()
     server = Server((LISTEN_HOST, PORT), Handler)
     log('scouting-tagger %s listening on %s:%d (%s; frame ancestors %s)' % (
         VERSION, LISTEN_HOST, PORT,
