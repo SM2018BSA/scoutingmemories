@@ -42,6 +42,14 @@ class Scouting_PDF_OCR_Queue {
     const BACKOFF_SECONDS = 600;
     const LOCK_STALE_SECONDS = 120;
     const OVERDUE_SECONDS    = 90;
+    // One post can name at most this many documents; more is a mistake or mischief
+    const MAX_DOCS_PER_POST = 20;
+    // A working document whose page count cannot be learned (page 1 read long ago, the
+    // service re-read keeps failing) is given up on after a day, so it cannot block the queue
+    const LEARN_GIVE_UP_SECONDS = 86400;
+
+    // The exact lock value this run inserted, so release touches no other run's lock
+    private static $lock_value = '';
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -67,7 +75,7 @@ class Scouting_PDF_OCR_Queue {
     public static function enqueue($canonical, $source, $post_id = 0, $label = '', $priority = 0) {
         global $wpdb;
         if ((int) get_option(Scouting_PDF_OCR::DB_OPTION) !== Scouting_PDF_OCR::TABLE_VERSION) {
-            return 'exists'; // the tables are not ready yet; the site keeps trying on load
+            return 'not_ready'; // the tables are missing; dbDelta retries on every load
         }
         if ($label === '') {
             $label = rawurldecode(basename((string) wp_parse_url($canonical, PHP_URL_PATH)));
@@ -113,10 +121,16 @@ class Scouting_PDF_OCR_Queue {
         $added = 0;
         $existing = 0;
         $label = mb_substr(wp_strip_all_tags((string) get_the_title($post_id)), 0, 200);
+        $taken = 0;
         foreach (Scouting_PDF_Embedder::all_pdfs_in_content($content) as $url) {
             $canonical = Scouting_PDF_OCR::canonical_url($url);
             if (is_wp_error($canonical)) {
                 continue; // not on the archive storage, so the service could not read it
+            }
+            // A cap per post: the archive's posts hold a handful of documents each, so
+            // hundreds of links in one post are a mistake or mischief, not work
+            if (++$taken > self::MAX_DOCS_PER_POST) {
+                break;
             }
             if (self::enqueue($canonical, $source, $post_id, $label, $priority) === 'added') {
                 $added++;
@@ -234,9 +248,12 @@ class Scouting_PDF_OCR_Queue {
      */
     private static function acquire_lock() {
         global $wpdb;
+        // time plus a random tail: two runs in the same second must not share a value,
+        // or release could free the other's lock
+        self::$lock_value = time() . '.' . wp_rand(100000, 999999);
         $inserted = $wpdb->query($wpdb->prepare(
             "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
-            self::LOCK_OPTION, (string) time()
+            self::LOCK_OPTION, self::$lock_value
         ));
         if ($inserted === 1) {
             return true;
@@ -255,14 +272,19 @@ class Scouting_PDF_OCR_Queue {
         ));
         return $wpdb->query($wpdb->prepare(
             "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
-            self::LOCK_OPTION, (string) time()
+            self::LOCK_OPTION, self::$lock_value
         )) === 1;
     }
 
+    /**
+     * Releases only this run's own lock: a run that stalled past the takeover and lost its
+     * lock must not free the lock of whoever took over.
+     */
     private static function release_lock() {
         global $wpdb;
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s", self::LOCK_OPTION
+            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+            self::LOCK_OPTION, self::$lock_value
         ));
     }
 
@@ -501,7 +523,10 @@ class Scouting_PDF_OCR_Queue {
             if ($was_insert) {
                 $wpdb->delete($pages, array('id' => $row_id), array('%d'));
             } else {
-                $wpdb->update($pages, array('status' => 'failed', 'finished_at' => $now), array('id' => $row_id));
+                // A taken-over reader row goes back the way it was found — failed, the
+                // reader's — so a busy hour cannot burn its one queue retry (or fail the
+                // whole document when it was page 1)
+                $wpdb->update($pages, array('status' => 'failed', 'source' => 'reader', 'finished_at' => $now), array('id' => $row_id));
             }
             self::start_backoff();
             return false;
@@ -534,6 +559,11 @@ class Scouting_PDF_OCR_Queue {
         $failed = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM $pages WHERE doc_key = %s AND status = 'failed'", $doc->doc_key
         ) . $bound);
+        // A reader's failed page still has its one queue takeover coming, so the document
+        // is not closed over it (it would silently skip that retry)
+        $reader_failed = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $pages WHERE doc_key = %s AND status = 'failed' AND source = 'reader'", $doc->doc_key
+        ) . $bound);
         $update = array('pages_done' => $done, 'pages_failed' => $failed);
         $first = $wpdb->get_row($wpdb->prepare(
             "SELECT status, source FROM $pages WHERE doc_key = %s AND page = 1", $doc->doc_key
@@ -543,7 +573,15 @@ class Scouting_PDF_OCR_Queue {
             // document has failed; the dashboard's Try again is its retry
             $update['status'] = 'failed';
             $update['finished_at'] = current_time('mysql');
-        } elseif ($total > 0 && $done + $failed >= $total) {
+        } elseif ($total === 0 && $first && ($first->status === 'done' || $first->status === 'empty')
+                && $doc->started_at && strtotime($doc->started_at) < strtotime(current_time('mysql')) - self::LEARN_GIVE_UP_SECONDS) {
+            // Page 1 was read long ago, the service has forgotten it, and re-reading it has
+            // not produced a page count for a whole day (the file is gone from storage, or
+            // that page no longer reads). Give up so the document cannot block the queue;
+            // the dashboard's Try again starts it afresh.
+            $update['status'] = 'failed';
+            $update['finished_at'] = current_time('mysql');
+        } elseif ($total > 0 && $done + $failed >= $total && $reader_failed === 0) {
             // Done, with its failures counted (the dashboard shows them)
             $update['status'] = 'done';
             $update['finished_at'] = current_time('mysql');

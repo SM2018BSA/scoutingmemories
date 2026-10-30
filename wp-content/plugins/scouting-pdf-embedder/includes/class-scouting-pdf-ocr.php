@@ -554,10 +554,15 @@ class Scouting_PDF_OCR {
             // retrying at the same moment only one gets it; the other finds it queued again.
             // A reader retrying a queue-read page takes it over (source becomes 'reader'), so
             // the ask lands in their allowance and the queue simply sees the page finished.
+            // Asks from EARLIER days start over at 1: requested_at moves to now, and carrying
+            // old asks forward would charge them to today (and to the new asker).
             $stale_before = gmdate('Y-m-d H:i:s', strtotime($now) - 10 * MINUTE_IN_SECONDS);
+            $today = current_time('Y-m-d') . ' 00:00:00';
             $updated = $wpdb->query($wpdb->prepare(
-                "UPDATE $table SET status = 'queued', source = 'reader', asks = asks + 1, job_id = '', requested_by = %d, requested_at = %s, finished_at = NULL
-                 WHERE id = %d AND (status = 'failed' OR (status = 'queued' AND requested_at < %s))", $user_id, $now, $row->id, $stale_before
+                "UPDATE $table SET status = 'queued', source = 'reader',
+                        asks = CASE WHEN requested_at >= %s THEN asks + 1 ELSE 1 END,
+                        job_id = '', requested_by = %d, requested_at = %s, finished_at = NULL
+                 WHERE id = %d AND (status = 'failed' OR (status = 'queued' AND requested_at < %s))", $today, $user_id, $now, $row->id, $stale_before
             ));
             if (!$updated) {
                 return rest_ensure_response(array('status' => 'queued', 'doc_key' => $doc_key));

@@ -458,6 +458,46 @@ try {
     check('queue one-page document done', $doc_row($d)->status, 'done');
     $drop_doc($d);
 
+    // A taken-over reader page hit by a refusal goes back the way it was found, and the
+    // document is neither failed nor closed over it
+    $d = $make_doc('queue-takeover-busy');
+    $wpdb->insert($ocr_table, array('doc_key' => $d->key, 'page' => 1, 'pdf_url' => $d->url, 'status' => 'failed', 'source' => 'reader', 'asks' => 1, 'requested_by' => 1, 'requested_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $answers[] = array(429, array('error' => 'queue_full'));
+    $tick();
+    $r = $qrows($d);
+    check('queue takeover refused: the reader keeps the page', array($r[0]->status, $r[0]->source), array('failed', 'reader'));
+    check('queue takeover refused: the document is not failed', $doc_row($d)->status, 'working');
+    delete_transient('scouting_pdf_ocr_backoff');
+    $drop_doc($d);
+
+    // A working document whose page count cannot be learned any more is given up on
+    $d = $make_doc('queue-learn-stuck', array('status' => 'working', 'started_at' => gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - 90000)));
+    $wpdb->insert($ocr_table, array('doc_key' => $d->key, 'page' => 1, 'pdf_url' => $d->url, 'status' => 'done', 'source' => 'reader', 'review_status' => 'pending', 'asks' => 1, 'text' => 'One', 'requested_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $tick(); // the learn POST gets no answer: refusal, backoff — and the give-up still closes it
+    check('queue learn given up after a day', $doc_row($d)->status, 'failed');
+    delete_transient('scouting_pdf_ocr_backoff');
+    $drop_doc($d);
+
+    // One post cannot flood the queue: at most 20 documents are taken from it
+    $many = '';
+    for ($n = 1; $n <= 22; $n++) {
+        $many .= '<p><a href="' . "$S/php-checks/flood-$n.pdf" . '">' . $n . '</a></p>';
+    }
+    $flood = $with(array('queue_enabled' => 1), function() use ($many) {
+        return Scouting_PDF_OCR_Queue::enqueue_post_documents(0, $many, 'auto', 1);
+    });
+    check('queue cap: twenty documents from one post, no more', array($flood[0], (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $docs_table WHERE pdf_url LIKE %s", "$S/php-checks/flood-%"))), array(20, 20));
+    $wpdb->query($wpdb->prepare("DELETE FROM $docs_table WHERE pdf_url LIKE %s", "$S/php-checks/flood-%"));
+
+    // A retry of a row asked for on an earlier day starts today's count at 1
+    $wpdb->insert($ocr_table, array('doc_key' => $O::doc_key("$S/php-checks/old-asks.pdf"), 'page' => 1, 'pdf_url' => "$S/php-checks/old-asks.pdf", 'status' => 'failed', 'source' => 'bulk', 'asks' => 3, 'requested_by' => 0, 'requested_at' => gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - 2 * DAY_IN_SECONDS), 'finished_at' => current_time('mysql')));
+    wp_set_current_user($quser = isset($quser) && $quser ? $quser : wp_insert_user(array('user_login' => 'ocr-check-q', 'user_pass' => wp_generate_password(), 'user_email' => 'ocr-check-q@example.com', 'role' => 'subscriber')));
+    $answers[] = array(202, array('id' => $jid(71), 'status' => 'queued', 'page' => 1));
+    check('queue old asks are not re-dated', $ask(array('url' => "$S/php-checks/old-asks.pdf", 'page' => 1))[1], 'queued');
+    $old_row = $wpdb->get_row($wpdb->prepare("SELECT asks, source FROM $ocr_table WHERE pdf_url = %s", "$S/php-checks/old-asks.pdf"));
+    check('queue retry counts one ask today, as the reader\'s', array((int) $old_row->asks, $old_row->source), array(1, 'reader'));
+    wp_set_current_user(0);
+
     // Paused: nothing taken, nothing sent (pages in flight would still be polled)
     update_option('scouting_pdf_ocr_queue_state', 'paused', false);
     $d = $make_doc('queue-paused');

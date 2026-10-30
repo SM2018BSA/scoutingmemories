@@ -304,6 +304,9 @@ class Scouting_PDF_OCR_Admin {
         }
         $key = Scouting_PDF_OCR::doc_key($canonical);
         $added = Scouting_PDF_OCR_Queue::enqueue($canonical, 'bulk', 0, '', 1);
+        if ($added === 'not_ready') {
+            return new WP_Error('tables_missing', 'The table that stores read pages could not be created yet. Reload the page and try again.', array('status' => 503));
+        }
         if ($added === 'added') {
             return new WP_REST_Response(array('status' => 'added', 'doc_key' => $key), 201);
         }
@@ -375,7 +378,14 @@ class Scouting_PDF_OCR_Admin {
         if ($doc->status !== 'queued' || $doc->started_at !== null) {
             return new WP_Error('already_started', 'This document has already been read, or is being read.', array('status' => 409));
         }
-        $wpdb->delete($docs, array('id' => $doc->id), array('%d'));
+        // Conditional again inside the DELETE: a tick between the check and here may just
+        // have taken the document; deleting it then would orphan its in-flight pages
+        $removed = $wpdb->query($wpdb->prepare(
+            "DELETE FROM $docs WHERE id = %d AND status = 'queued' AND started_at IS NULL", $doc->id
+        ));
+        if (!$removed) {
+            return new WP_Error('already_started', 'This document has already been read, or is being read.', array('status' => 409));
+        }
         return rest_ensure_response(array('removed' => true));
     }
 
@@ -512,6 +522,11 @@ class Scouting_PDF_OCR_Admin {
         if (!Scouting_PDF_OCR::enabled() || !self::can_review() || !($post instanceof WP_Post)) {
             return;
         }
+        // Submitted and published posts only, like every enqueue path: a draft's documents
+        // have no reader yet and its box would only offer a refusal
+        if (!in_array($post->post_status, array('pending', 'publish'), true)) {
+            return;
+        }
         $type = get_post_type_object($post_type);
         if (!$type || empty($type->public) || $post_type === 'attachment') {
             return;
@@ -580,7 +595,8 @@ class Scouting_PDF_OCR_Admin {
         }
         if ($hook === 'post.php') {
             global $post;
-            if ($post instanceof WP_Post && Scouting_PDF_OCR::enabled() && self::can_review() && self::post_documents($post)) {
+            if ($post instanceof WP_Post && in_array($post->post_status, array('pending', 'publish'), true)
+                    && Scouting_PDF_OCR::enabled() && self::can_review() && self::post_documents($post)) {
                 self::enqueue_admin_script();
             }
         }
@@ -677,6 +693,13 @@ class Scouting_PDF_OCR_Admin {
         }
         if (!current_user_can('edit_post', $post_id)) {
             return new WP_Error('rest_forbidden', 'Sorry, you are not allowed to do that.', array('status' => 403));
+        }
+        // The same gate every other enqueue path has: submitted or published posts of
+        // public types, where the box itself is offered
+        $type = get_post_type_object($post->post_type);
+        if (!in_array($post->post_status, array('pending', 'publish'), true)
+                || !$type || empty($type->public) || $post->post_type === 'attachment') {
+            return new WP_Error('not_reviewable', 'Only submitted or published posts can be read.', array('status' => 409));
         }
         list($added, $existing) = Scouting_PDF_OCR_Queue::enqueue_post_documents($post_id, $post->post_content, 'auto', 1);
         return rest_ensure_response(array('added' => $added, 'existing' => $existing));
