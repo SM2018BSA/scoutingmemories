@@ -169,8 +169,8 @@ same page is interrupted a second time it is marked failed, so one bad page cann
 - For background reading (the WordPress plugin's queue, which reads whole documents one page
   at a time through the same `/v1/jobs` requests), the development server's `ocr.env` raises
   the hourly cap and reads two pages at once (the server has two processors):
-  `OCR_PAGES_PER_HOUR=900` and `OCR_WORKERS=2`. WordPress holds the queue, works on up to 4
-  documents at once and keeps at most 4 of its pages at the service.
+  `OCR_PAGES_PER_HOUR=1500` and `OCR_WORKERS=2`. WordPress holds the queue, works on up to 6
+  documents at once and keeps at most 6 of its pages at the service.
 
 ## WordPress cron on the development server
 
