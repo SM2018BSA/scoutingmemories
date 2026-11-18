@@ -7,8 +7,9 @@ namespace ScoutingMemories\Forms\Ui;
  *
  * The one place front-end markup gets its CSS classes. It uses the site theme's Bootstrap 5.3
  * classes, so forms and views look like the rest of Scouting Memories. The few rules Bootstrap
- * doesn't have (site-green button, required-field marker, grid helpers, thumbnails) live in
- * assets/css/forms-front.css, scoped to `.sm-forms`. Tailwind is used only in the wp-admin builder.
+ * doesn't have (site-green and Formidable-coloured buttons, required-field marker, grid helpers,
+ * thumbnails) live in assets/css/forms-front.css, scoped to `.sm-forms`. Tailwind is used only in
+ * the wp-admin builder. Which colour submit buttons get is decided by ButtonStyle.
  */
 class ThemeClasses {
 
@@ -43,7 +44,7 @@ class ThemeClasses {
     /**
      * Button Components
      *
-     * @param string $variant 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'scout'
+     * @param string $variant 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'scout' | 'formidable'
      * @param string $size    'xs' | 'sm' | 'md' | 'lg' | 'icon'
      * @param string $extra   Additional classes
      */
@@ -59,6 +60,7 @@ class ThemeClasses {
         $variants = [
             'primary'   => 'btn-primary',
             'scout'     => 'btn-scout',
+            'formidable' => 'btn-secondary sm-btn-formidable',
             'secondary' => 'btn-secondary',
             'danger'    => 'btn-danger',
             'outline'   => 'btn-outline-secondary',

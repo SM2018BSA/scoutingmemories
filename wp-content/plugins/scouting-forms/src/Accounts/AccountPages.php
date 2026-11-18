@@ -2,6 +2,7 @@
 
 namespace ScoutingMemories\Forms\Accounts;
 
+use ScoutingMemories\Forms\Ui\ButtonStyle;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
@@ -96,7 +97,7 @@ class AccountPages {
         );
         $html .= '<input type="hidden" name="redirect_to" value="' . esc_url($redirect) . '" />';
         $html .= '<input type="hidden" name="sm_login_page" value="' . (int) get_the_ID() . '" />';
-        $html .= '<div class="frm_submit"><button type="submit" name="wp-submit" id="wp-submit' . $n . '" class="' . esc_attr(ThemeClasses::button('scout')) . '">' . esc_html($atts['label_log_in']) . '</button></div>';
+        $html .= '<div class="frm_submit"><button type="submit" name="wp-submit" id="wp-submit' . $n . '" ' . ButtonStyle::attributes() . '>' . esc_html($atts['label_log_in']) . '</button></div>';
         if ($atts['show_remember'] !== '0') {
             $html .= sprintf(
                 '<div class="frm_form_field form-field frm_none_container login-remember"><div class="form-check"><input name="rememberme" id="rememberme%1$d" value="forever" type="checkbox" class="form-check-input" /><label class="form-check-label" for="rememberme%1$d">%2$s</label></div></div>',
@@ -139,14 +140,14 @@ class AccountPages {
                     esc_attr(ThemeClasses::input())
                 );
             }
-            $html .= '<div class="frm_submit"><button type="submit" class="' . esc_attr(ThemeClasses::button('scout')) . '">' . esc_html__('Reset Password', 'scouting-forms') . '</button></div>';
+            $html .= '<div class="frm_submit"><button type="submit" ' . ButtonStyle::attributes() . '>' . esc_html__('Reset Password', 'scouting-forms') . '</button></div>';
             return $html . '</fieldset></div></form></div>';
         }
 
         $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php?action=lostpassword', 'login_post')) . '" class="frm-show-form"><div class="frm_form_fields"><fieldset>';
         $html .= '<div class="frm_description"><p>' . esc_html($messages['lost_password'] ?? __('Please enter your username or email address. You will receive a link to create a new password via email.', 'scouting-forms')) . '</p></div>';
         $html .= '<div class="frm_form_field form-field frm_top_container"><label for="sm_user_login" class="frm_primary_label">' . esc_html__('Username or Email Address', 'scouting-forms') . ' <span class="frm_required">*</span></label><input type="text" id="sm_user_login" name="user_login" class="' . esc_attr(ThemeClasses::input()) . '" autocomplete="username" required /></div>';
-        $html .= '<div class="frm_submit"><button type="submit" class="' . esc_attr(ThemeClasses::button('scout')) . '">' . esc_html__('Get New Password', 'scouting-forms') . '</button></div>';
+        $html .= '<div class="frm_submit"><button type="submit" ' . ButtonStyle::attributes() . '>' . esc_html__('Get New Password', 'scouting-forms') . '</button></div>';
         return $html . '</fieldset></div></form></div>';
     }
 
