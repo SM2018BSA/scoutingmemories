@@ -661,20 +661,22 @@ class Scouting_PDF_OCR_Admin {
                 <a class="nav-tab <?php echo $tab === 'overview' ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url($base); ?>">Overview</a>
                 <a class="nav-tab <?php echo $tab === 'queue' ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url($base . '&tab=queue'); ?>">Queue</a>
             </nav>
+            <?php // On both tabs: the overall bar, the time left and the documents being read ?>
+            <div id="sm-ocr-progress" class="sm-ocr-progress" style="display:none">
+                <p class="sm-ocr-overall-text" id="sm-ocr-overall-text"></p>
+                <div class="sm-ocr-bar sm-ocr-bar-overall" id="sm-ocr-overall-bar" role="progressbar"
+                    aria-label="Documents finished" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+                <p class="sm-ocr-timeleft" id="sm-ocr-timeleft"></p>
+                <p class="sm-ocr-speed" id="sm-ocr-speed"></p>
+                <h2 class="sm-ocr-reading-title">Being read now</h2>
+                <ul class="sm-ocr-reading" id="sm-ocr-reading" aria-live="off"></ul>
+            </div>
             <?php if ($tab === 'overview') : ?>
             <div id="sm-ocr-overview">
                 <p id="sm-ocr-state">Loading…</p>
                 <p id="sm-ocr-docs-line"></p>
                 <p id="sm-ocr-today-line"></p>
                 <p id="sm-ocr-unchecked-line"></p>
-                <div id="sm-ocr-progress" class="sm-ocr-progress" style="display:none">
-                    <p class="sm-ocr-overall-text" id="sm-ocr-overall-text"></p>
-                    <div class="sm-ocr-bar sm-ocr-bar-overall" id="sm-ocr-overall-bar" role="progressbar"
-                        aria-label="Documents finished" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
-                    <p class="sm-ocr-speed" id="sm-ocr-speed"></p>
-                    <h2 class="sm-ocr-reading-title">Being read now</h2>
-                    <ul class="sm-ocr-reading" id="sm-ocr-reading" aria-live="off"></ul>
-                </div>
                 <p id="sm-ocr-lastrun"></p>
                 <p>
                     <?php if ($is_admin) : ?>

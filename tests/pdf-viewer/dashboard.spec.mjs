@@ -166,11 +166,20 @@ test.describe('PDF Text dashboard and the PDF text box', () => {
         await tick(page); // page 1 answered: the count is known, the next pages go out
         await expect(card).toContainText(/\d+ of 12 pages read · reading pages? [\d, and]+ now/, { timeout: 15000 });
 
+        // The Queue tab shows the same progress area, and a bar in the document's Pages cell
+        await page.goto(DASHBOARD + '&tab=queue');
+        await expect(page.locator('#sm-ocr-progress')).toBeVisible();
+        await expect(page.locator('#sm-ocr-overall-bar')).toBeVisible();
+        await expect(page.locator('#sm-ocr-reading .sm-ocr-card')).toHaveCount(1);
+        await expect(page.locator('#sm-ocr-docs .sm-ocr-bar-row').first()).toBeVisible({ timeout: 15000 });
+        await page.goto(DASHBOARD);
+
         await tickUntil(page, () => docFor(WALK_PDF)?.status === 'done');
         await expect(page.locator('#sm-ocr-overall-text')).toHaveText('1 of 1 documents finished (100%)', { timeout: 15000 });
         await expect(page.locator('#sm-ocr-overall-bar')).toHaveAttribute('aria-valuenow', '100');
         await expect(page.locator('#sm-ocr-reading')).toHaveText('Nothing left to read.');
         await expect(page.locator('#sm-ocr-speed')).toContainText('12 pages read in the last hour.');
+        await expect(page.locator('#sm-ocr-timeleft')).toHaveText('Time left: none, every document is finished.');
     });
 
     test('Pause stops the queue; Resume starts it again', async ({ page }) => {

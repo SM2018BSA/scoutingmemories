@@ -207,20 +207,26 @@
             var finished = s.docs.done + s.docs.failed;
             var percent = setBar(document.getElementById('sm-ocr-overall-bar'), finished, total);
             setText('sm-ocr-overall-text', number(finished) + ' of ' + number(total) + ' documents finished (' + percent + '%)');
+            var timeleft = '';
             var speed = '';
-            if (s.speed) {
-                if (s.speed.pages_last_hour > 0) {
-                    speed = number(s.speed.pages_last_hour) + ' pages read in the last hour.';
-                    if (s.speed.hours_left !== null && s.speed.pages_left !== null && s.docs.queued + s.docs.working > 0) {
-                        var hours = s.speed.hours_left;
-                        var eta = hours < 1 ? 'under an hour' : hours < 48 ? 'about ' + Math.round(hours) + ' hours'
-                            : 'about ' + Math.round(hours / 24) + ' days';
-                        speed += ' About ' + number(s.speed.pages_left) + ' pages left: ' + eta + ' at this pace.';
-                    }
-                } else if (running) {
-                    speed = 'No pages finished in the last hour yet.';
-                }
+            var left = s.docs.queued + s.docs.working;
+            if (s.speed && s.speed.pages_last_hour > 0) {
+                speed = number(s.speed.pages_last_hour) + ' pages read in the last hour.';
             }
+            if (left === 0) {
+                timeleft = 'Time left: none, every document is finished.';
+            } else if (s.speed && s.speed.pages_last_hour > 0) {
+                if (s.speed.hours_left !== null && s.speed.pages_left !== null) {
+                    var hours = s.speed.hours_left;
+                    var eta = hours < 1 ? 'under an hour' : hours < 48 ? 'about ' + Math.round(hours) + ' hours'
+                        : 'about ' + Math.round(hours / 24) + ' days';
+                    timeleft = 'Time left: ' + eta + ' (about ' + number(s.speed.pages_left) + ' pages in ' +
+                        number(left) + ' documents).';
+                }
+            } else if (running) {
+                timeleft = 'Time left: worked out once the first pages of this hour are finished.';
+            }
+            setText('sm-ocr-timeleft', timeleft);
             setText('sm-ocr-speed', speed);
             var list = document.getElementById('sm-ocr-reading');
             list.textContent = '';
@@ -266,7 +272,19 @@
             if (doc.pages_failed) {
                 pages += ', ' + doc.pages_failed + ' failed';
             }
-            tr.appendChild(el('td', pages));
+            var pagesCell = el('td', pages);
+            if (doc.total_pages) {
+                var rowBar = el('div');
+                rowBar.className = 'sm-ocr-bar sm-ocr-bar-row' + (doc.status === 'working' ? ' sm-ocr-bar-moving' : '');
+                rowBar.setAttribute('role', 'progressbar');
+                rowBar.setAttribute('aria-label', 'Pages read');
+                rowBar.setAttribute('aria-valuemin', '0');
+                rowBar.setAttribute('aria-valuemax', '100');
+                rowBar.appendChild(el('span'));
+                setBar(rowBar, doc.pages_done + (doc.pages_failed || 0), doc.total_pages);
+                pagesCell.appendChild(rowBar);
+            }
+            tr.appendChild(pagesCell);
             tr.appendChild(el('td', doc.pages_checked + ' of ' + doc.pages_done));
             tr.appendChild(el('td', statusLabel(doc.status)));
 
