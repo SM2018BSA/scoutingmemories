@@ -9,6 +9,7 @@
 
     var config = window.ScoutingPdfAdminConfig || {};
     var POLL_MS = 10000;
+    var DASHBOARD_POLL_MS = 5000; // the progress area should feel live
 
     function api(method, path, body) {
         var options = {
@@ -98,13 +99,7 @@
             setText('sm-ocr-today-line', 'Pages read today: ' + s.today.queue_pages + ' by the queue, ' +
                 s.today.reader_pages + ' by readers');
             setText('sm-ocr-unchecked-line', 'Pages not yet checked by a reviewer: ' + s.pages_unchecked);
-            var current = '';
-            if (s.current) {
-                current = 'Now reading: ' + s.current.label + ' — ' + (s.current.total_pages
-                    ? 'page ' + Math.min(s.current.pages_done + 1, s.current.total_pages) + ' of ' + s.current.total_pages
-                    : 'page count not known yet');
-            }
-            setText('sm-ocr-current', current);
+            renderProgress(s);
             var lastrun = '';
             if (s.last_tick) {
                 if (s.queue === 'running' && s.last_tick_age !== null && s.last_tick_age > 180) {
@@ -119,6 +114,125 @@
             toggle('sm-ocr-pause', s.queue === 'running' || s.queue === 'backoff');
             toggle('sm-ocr-resume', s.queue === 'paused');
             toggle('sm-ocr-tick', s.queue !== 'off');
+        }
+
+        function number(n) {
+            return Number(n).toLocaleString('en-US');
+        }
+
+        function setBar(bar, done, total) {
+            var percent = total > 0 ? Math.min(100, Math.round(done / total * 1000) / 10) : 0;
+            bar.firstElementChild.style.width = percent + '%';
+            bar.setAttribute('aria-valuenow', String(percent));
+            return percent;
+        }
+
+        function pageList(pages) {
+            if (pages.length === 1) {
+                return 'page ' + pages[0];
+            }
+            return 'pages ' + pages.slice(0, -1).join(', ') + ' and ' + pages[pages.length - 1];
+        }
+
+        function readingCard(doc, running) {
+            var card = el('li');
+            card.className = 'sm-ocr-card';
+            var icon = el('span');
+            icon.className = 'sm-ocr-card-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            card.appendChild(icon);
+            var body = el('div');
+            body.className = 'sm-ocr-card-body';
+            var title = el('p');
+            title.className = 'sm-ocr-card-title';
+            if (doc.permalink) {
+                var link = el('a', doc.label || doc.file);
+                link.href = doc.permalink;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                title.appendChild(link);
+            } else {
+                title.textContent = doc.label || doc.file;
+            }
+            body.appendChild(title);
+            if (doc.label && doc.file && doc.label !== doc.file) {
+                var file = el('p', doc.file);
+                file.className = 'sm-ocr-card-file';
+                body.appendChild(file);
+            }
+            var bar = el('div');
+            bar.className = 'sm-ocr-bar';
+            bar.setAttribute('role', 'progressbar');
+            bar.setAttribute('aria-label', 'Pages read of ' + (doc.label || doc.file));
+            bar.setAttribute('aria-valuemin', '0');
+            bar.setAttribute('aria-valuemax', '100');
+            bar.appendChild(el('span'));
+            body.appendChild(bar);
+            var finished = doc.pages_done + doc.pages_failed;
+            var line;
+            if (doc.total_pages > 0) {
+                setBar(bar, finished, doc.total_pages);
+                line = number(finished) + ' of ' + number(doc.total_pages) + ' pages read';
+                if (doc.pages_failed > 0) {
+                    line += ' (' + doc.pages_failed + ' could not be read)';
+                }
+            } else {
+                setBar(bar, 0, 1);
+                line = 'Finding out how many pages it has';
+            }
+            if (doc.reading.length) {
+                line += running ? ' · reading ' + pageList(doc.reading) + ' now' : ' · ' + pageList(doc.reading) + ' sent to the reader';
+            }
+            var status = el('p', line);
+            status.className = 'sm-ocr-card-line';
+            body.appendChild(status);
+            card.appendChild(body);
+            return card;
+        }
+
+        // The overall bar, the pace, and one card per document being read
+        function renderProgress(s) {
+            var box = document.getElementById('sm-ocr-progress');
+            if (!box) {
+                return;
+            }
+            var total = s.docs.queued + s.docs.working + s.docs.done + s.docs.failed;
+            if (s.queue === 'off' || total === 0) {
+                box.style.display = 'none';
+                return;
+            }
+            box.style.display = '';
+            var running = s.queue === 'running';
+            box.classList.toggle('sm-ocr-running', running);
+            var finished = s.docs.done + s.docs.failed;
+            var percent = setBar(document.getElementById('sm-ocr-overall-bar'), finished, total);
+            setText('sm-ocr-overall-text', number(finished) + ' of ' + number(total) + ' documents finished (' + percent + '%)');
+            var speed = '';
+            if (s.speed) {
+                if (s.speed.pages_last_hour > 0) {
+                    speed = number(s.speed.pages_last_hour) + ' pages read in the last hour.';
+                    if (s.speed.hours_left !== null && s.speed.pages_left !== null && s.docs.queued + s.docs.working > 0) {
+                        var hours = s.speed.hours_left;
+                        var eta = hours < 1 ? 'under an hour' : hours < 48 ? 'about ' + Math.round(hours) + ' hours'
+                            : 'about ' + Math.round(hours / 24) + ' days';
+                        speed += ' About ' + number(s.speed.pages_left) + ' pages left: ' + eta + ' at this pace.';
+                    }
+                } else if (running) {
+                    speed = 'No pages finished in the last hour yet.';
+                }
+            }
+            setText('sm-ocr-speed', speed);
+            var list = document.getElementById('sm-ocr-reading');
+            list.textContent = '';
+            (s.reading || []).forEach(function(doc) {
+                list.appendChild(readingCard(doc, running));
+            });
+            if (!list.firstChild) {
+                var idle = el('li', s.docs.queued > 0 ? 'Nothing at this moment; the next document starts within a minute.'
+                    : 'Nothing left to read.');
+                idle.className = 'sm-ocr-idle';
+                list.appendChild(idle);
+            }
         }
 
         function statusLabel(status) {
@@ -345,7 +459,7 @@
             if (!document.hidden) {
                 refresh();
             }
-        }, POLL_MS);
+        }, DASHBOARD_POLL_MS);
         document.addEventListener('visibilitychange', function() {
             if (!document.hidden) {
                 refresh();

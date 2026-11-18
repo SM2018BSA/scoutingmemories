@@ -368,21 +368,70 @@ try {
     check('queue empty page needs no checking', array($r[2]->status, $r[2]->review_status), array('empty', 'auto'));
     $drop_doc($d);
 
-    // Never more than 3 pages in flight
-    $d = $make_doc('queue-cap', array('total_pages' => 5));
+    // Never more than 4 pages in flight
+    $d = $make_doc('queue-cap', array('total_pages' => 6));
     $answers[] = array(202, array('id' => $jid(11), 'status' => 'queued', 'page' => 1));
     $answers[] = array(202, array('id' => $jid(12), 'status' => 'queued', 'page' => 2));
     $answers[] = array(202, array('id' => $jid(13), 'status' => 'queued', 'page' => 3));
+    $answers[] = array(202, array('id' => $jid(14), 'status' => 'queued', 'page' => 4));
     $before = count($sent);
     $tick();
-    check('queue sends three pages at most', count($sent) - $before, 3);
+    check('queue sends four pages at most', count($sent) - $before, 4);
     $answers[] = array(200, array('id' => $jid(11), 'status' => 'working', 'page' => 1));
     $answers[] = array(200, array('id' => $jid(12), 'status' => 'working', 'page' => 2));
     $answers[] = array(200, array('id' => $jid(13), 'status' => 'working', 'page' => 3));
+    $answers[] = array(200, array('id' => $jid(14), 'status' => 'working', 'page' => 4));
     $before = count($sent);
     $tick();
-    check('queue waits while three are in flight', count($sent) - $before, 3); // three polls, no new pages
-    check('queue pages 4 and 5 have no rows yet', count($qrows($d)), 3);
+    check('queue waits while four are in flight', count($sent) - $before, 4); // four polls, no new pages
+    check('queue pages 5 and 6 have no rows yet', count($qrows($d)), 4);
+    $drop_doc($d);
+
+    // Several documents at once: each one's page 1 goes out in the same tick, front of the
+    // queue first, and the cap counts over all of them
+    $several = array();
+    foreach (array('queue-many-a', 'queue-many-b', 'queue-many-c', 'queue-many-d', 'queue-many-e') as $n => $name) {
+        $several[] = $make_doc($name, $n === 2 ? array('priority' => 1) : array());
+    }
+    for ($n = 0; $n < 4; $n++) {
+        $answers[] = array(202, array('id' => $jid(81 + $n), 'status' => 'queued', 'page' => 1));
+    }
+    $before = count($sent);
+    $tick();
+    check('queue several documents: four page 1s sent', count($sent) - $before, 4);
+    check('queue several documents: four being read, one waiting',
+        array_map(function($d) use ($doc_row) { return $doc_row($d)->status; }, $several),
+        array('working', 'working', 'working', 'working', 'queued'));
+    check('queue several documents: the front of the queue went first',
+        json_decode($sent[$before]['args']['body'], true)['url'], $several[2]->url);
+    // One finishes (a one-page document): its slot goes to the waiting one
+    $answers[] = array(200, array('id' => $jid(81), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 1));
+    for ($n = 1; $n < 4; $n++) {
+        $answers[] = array(200, array('id' => $jid(81 + $n), 'status' => 'working', 'page' => 1));
+    }
+    $answers[] = array(202, array('id' => $jid(85), 'status' => 'queued', 'page' => 1));
+    $tick();
+    check('queue several documents: the finished one is done, the last one started',
+        array($doc_row($several[2])->status, $doc_row($several[4])->status), array('done', 'working'));
+    foreach ($several as $d) {
+        $drop_doc($d);
+    }
+
+    // A tick from cron stays and collects answers as they come: a whole 2-page document in
+    // one run, then it stops as soon as nothing is in flight
+    $d = $make_doc('queue-cron-wait');
+    $answers[] = array(202, array('id' => $jid(91), 'status' => 'queued', 'page' => 1));
+    $answers[] = array(200, array('id' => $jid(91), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 2));
+    $answers[] = array(202, array('id' => $jid(92), 'status' => 'queued', 'page' => 2));
+    $answers[] = array(200, array('id' => $jid(92), 'status' => 'done', 'page' => 2, 'text' => 'Two', 'words' => array(), 'engine' => 'x', 'pages' => 2));
+    add_filter('wp_doing_cron', '__return_true');
+    $began = microtime(true);
+    $tick();
+    $took = microtime(true) - $began;
+    remove_filter('wp_doing_cron', '__return_true');
+    check('queue cron tick: the whole document in one run', array($doc_row($d)->status, (int) $doc_row($d)->pages_done), array('done', 2));
+    check('queue cron tick: stops when nothing is in flight', $took < 15, true);
+    check('queue cron tick: no answers left over', count($answers), 0);
     $drop_doc($d);
 
     // Page 1 failing fails the whole document
@@ -693,7 +742,7 @@ try {
     // The status poll (as a reviewer)
     $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('GET', "$v1/ocr/admin/status"); });
     check('status answers a reviewer', $r[0], 200);
-    check('status shape', array_keys($r[2]), array('queue', 'backoff_until', 'last_tick', 'last_tick_age', 'docs', 'current', 'pages_unchecked', 'today'));
+    check('status shape', array_keys($r[2]), array('queue', 'backoff_until', 'last_tick', 'last_tick_age', 'docs', 'reading', 'speed', 'pages_unchecked', 'today'));
     check('status: paused', $r[2]['queue'], 'paused');
     check('status: the waiting text is counted', $r[2]['pages_unchecked'], 3);
     check('status: not cached', $r[3]->get_headers()['Cache-Control'], 'no-store');

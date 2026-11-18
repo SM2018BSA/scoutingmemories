@@ -145,6 +145,34 @@ test.describe('PDF Text dashboard and the PDF text box', () => {
         await expect(page.locator('#sm-ocr-docs')).toContainText('Done');
     });
 
+    test('the progress area shows each document being read and the overall bar', async ({ page }) => {
+        await logInAdmin(page);
+        await page.goto(DASHBOARD + '&tab=queue');
+        await page.locator('#sm-ocr-add-url').fill(WALK_PDF);
+        await page.locator('#sm-ocr-add').click();
+        await expect(page.locator('#sm-ocr-add-result')).toHaveText('Added. It will be read next.');
+
+        await page.goto(DASHBOARD);
+        await tick(page); // page 1 goes out
+        await page.reload();
+        const progress = page.locator('#sm-ocr-progress');
+        await expect(progress).toBeVisible();
+        await expect(progress).toHaveClass(/sm-ocr-running/);
+        await expect(page.locator('#sm-ocr-overall-text')).toHaveText('0 of 1 documents finished (0%)');
+        const card = page.locator('#sm-ocr-reading .sm-ocr-card');
+        await expect(card).toHaveCount(1);
+        await expect(card).toContainText('queue-walk.pdf');
+
+        await tick(page); // page 1 answered: the count is known, the next pages go out
+        await expect(card).toContainText(/\d+ of 12 pages read · reading pages? [\d, and]+ now/, { timeout: 15000 });
+
+        await tickUntil(page, () => docFor(WALK_PDF)?.status === 'done');
+        await expect(page.locator('#sm-ocr-overall-text')).toHaveText('1 of 1 documents finished (100%)', { timeout: 15000 });
+        await expect(page.locator('#sm-ocr-overall-bar')).toHaveAttribute('aria-valuenow', '100');
+        await expect(page.locator('#sm-ocr-reading')).toHaveText('Nothing left to read.');
+        await expect(page.locator('#sm-ocr-speed')).toContainText('12 pages read in the last hour.');
+    });
+
     test('Pause stops the queue; Resume starts it again', async ({ page }) => {
         await logInAdmin(page);
         await page.goto(DASHBOARD + '&tab=queue');

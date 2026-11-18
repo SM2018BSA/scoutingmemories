@@ -10,7 +10,8 @@ viewer. Nothing is read in bulk, and the original PDFs are never changed.
 - WordPress sends only the PDF's link and a page number. The service downloads the PDF from the
   archive's public storage itself, the way a visitor's browser does. It needs no storage key.
 - WordPress always calls the service, never the other way round.
-- One page is read at a time.
+- One page is read at a time, or several side by side when `OCR_WORKERS` says so (one per
+  processor at most).
 
 It runs on the development server, not on WP Engine. This folder is never published to the
 live site: the control panel's live release only copies ticked plugin and theme folders.
@@ -128,6 +129,7 @@ range, is replaced and the log says so.
 | `OCR_MAX_PDF_MB` | `60` | 1–500 | Largest PDF it will download |
 | `OCR_PAGES_PER_HOUR` | `120` | 1–100000 | Pages accepted per hour, retries included |
 | `OCR_QUEUE_MAX` | `50` | 1–10000 | Pages allowed to be waiting or being read |
+| `OCR_WORKERS` | `1` | 1–8 | Pages read at the same time. Each uses one processor and up to about 450 MB; keep it at or below the number of processors |
 | `OCR_PAUSED` | `0` | `0` or `1` | `1` refuses new pages and reads none |
 | `OCR_DPI` | `300` | 72–600 | Resolution a page is rendered at |
 | `OCR_MAX_PIXELS` | `40000000` | 1000000–200000000 | An oversized page is rendered at a lower resolution to stay under this; below 72 dpi it is refused |
@@ -166,8 +168,9 @@ same page is interrupted a second time it is marked failed, so one bad page cann
   `ProxyPass /v1/ http://127.0.0.1:8000/v1/ retry=0 timeout=20`
 - For background reading (the WordPress plugin's queue, which reads whole documents one page
   at a time through the same `/v1/jobs` requests), the development server's `ocr.env` raises
-  the hourly cap: `OCR_PAGES_PER_HOUR=300`. The app itself is unchanged; WordPress holds the
-  queue and sends at most 3 pages at a time.
+  the hourly cap and reads two pages at once (the server has two processors):
+  `OCR_PAGES_PER_HOUR=900` and `OCR_WORKERS=2`. WordPress holds the queue, works on up to 4
+  documents at once and keeps at most 4 of its pages at the service.
 
 ## WordPress cron on the development server
 

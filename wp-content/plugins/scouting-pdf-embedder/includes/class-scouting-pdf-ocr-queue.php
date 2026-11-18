@@ -3,12 +3,14 @@
  * Background reading: a queue of whole documents for the page OCR service.
  *
  * WordPress owns the queue (one row per document in {prefix}scouting_pdf_ocr_docs); the OCR
- * service on the development server stays the dumb one-page worker it already is. A tick runs
- * every minute (WP-Cron; the dashboard also ticks when cron is late) and, for ONE document at
- * a time, polls the pages sent earlier and sends the next ones — at most 3 in flight, page 1
- * first, because page 1's answer names the document's page count. One document at a time keeps
- * the service's PDF cache effective (each PDF is downloaded once); 3 in flight keeps readers'
- * own Text-button requests fast.
+ * service on the development server stays the dumb page worker it already is. A tick runs
+ * every minute (WP-Cron; the dashboard also ticks when cron is late). It works on up to 4
+ * documents at once, polls the pages sent earlier and sends the next ones — at most 4 in
+ * flight over all documents, page 1 of each first, because page 1's answer names the
+ * document's page count. 4 in flight keeps the service's readers (2 on the development
+ * server) busy while keeping readers' own Text-button requests fast. A tick started by cron
+ * stays for most of its minute, collecting answers every few seconds and sending the next
+ * pages at once; a tick from the dashboard is one quick pass.
  *
  * Nothing runs unless the OCR feature AND the "Background reading" setting are on, and the
  * queue additionally starts paused: nothing is sent until Resume is pressed on the dashboard.
@@ -29,14 +31,17 @@ class Scouting_PDF_OCR_Queue {
     const CRON_HOOK        = 'scouting_pdf_ocr_tick';
     const CRON_SCHEDULE    = 'scouting_pdf_ocr_minute';
 
-    // At most 3 queue pages at the service at once, so a reader's own page never waits
-    // behind more than a few ~10-second jobs
-    const MAX_IN_FLIGHT = 3;
-    // Bounds per tick: well under the minute between ticks, and far under the 120-second
-    // point where a waiting tick would take the lock over
-    const MAX_POLLS      = 10;
-    const MAX_DISPATCHES = 3;
-    const TICK_BUDGET    = 20;  // seconds of service calls
+    // At most 4 queue pages at the service at once (over all documents), so a reader's own
+    // page never waits behind more than a few ~10-second jobs
+    const MAX_IN_FLIGHT = 4;
+    // Documents read side by side; most of the archive's documents are a page or two
+    const MAX_WORKING_DOCS = 4;
+    // Bounds per tick: under the minute between ticks, and far under the 120-second point
+    // where a waiting tick would take the lock over
+    const MAX_POLLS   = 12;
+    const TICK_BUDGET = 20;  // seconds: a dashboard tick (Run once now, or cron running late)
+    const CRON_BUDGET = 45;  // seconds: a tick from cron, which waits for answers as it goes
+    const POLL_PAUSE  = 2;   // seconds between looks at the service within a cron tick
     // When the service refuses (full, hourly cap, paused) or does not answer, the queue
     // yields for ten minutes instead of hammering it
     const BACKOFF_SECONDS = 600;
@@ -301,9 +306,14 @@ class Scouting_PDF_OCR_Queue {
         if (!self::acquire_lock()) {
             return false;
         }
+        // Only cron waits for answers: a web request (the dashboard) must come back quickly
+        $from_cron = wp_doing_cron();
+        if ($from_cron && function_exists('set_time_limit')) {
+            @set_time_limit(self::CRON_BUDGET + 30);
+        }
         try {
             update_option(self::LAST_TICK_OPTION, current_time('mysql'), false);
-            $this->run_tick();
+            $this->run_tick($from_cron ? self::CRON_BUDGET : self::TICK_BUDGET, $from_cron);
         } finally {
             self::release_lock();
         }
@@ -325,73 +335,136 @@ class Scouting_PDF_OCR_Queue {
         $this->tick();
     }
 
-    private function run_tick() {
+    private function run_tick($budget, $wait) {
+        $deadline = microtime(true) + $budget;
+        while (true) {
+            $running = self::state() === 'running';
+            $this->poll_pages($deadline);
+            $this->settle_working();
+            if ($running && !$this->fill_slots($deadline)) {
+                return; // refused: the backoff is set, this tick is over
+            }
+            // A run from cron stays and collects the answers as they come in, sending the
+            // next pages straight away, instead of leaving the service idle until the next minute
+            if (!$wait || $this->in_flight() === 0 || microtime(true) + self::POLL_PAUSE >= $deadline) {
+                return;
+            }
+            sleep(self::POLL_PAUSE);
+            // Pause, or Background reading switched off, takes effect within a few seconds
+            wp_cache_delete(self::STATE_OPTION, 'options');
+            wp_cache_delete(Scouting_PDF_OCR::OPTION, 'options');
+            wp_cache_delete('alloptions', 'options');
+            if (!Scouting_PDF_OCR::queue_enabled()) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Ask the service about the pages sent earlier, oldest first: the queue's own and
+     * readers' pages of the documents being read
+     */
+    private function poll_pages($deadline) {
         global $wpdb;
         $docs = Scouting_PDF_OCR::docs_table();
         $pages = Scouting_PDF_OCR::table();
-        $deadline = microtime(true) + self::TICK_BUDGET;
-        $running = self::state() === 'running';
-
-        $doc = $wpdb->get_row("SELECT * FROM $docs WHERE status = 'working' LIMIT 1");
-
-        if ($doc) {
-            // Poll the pages sent earlier, oldest first — readers' pages of this document too
-            $rows = $wpdb->get_results($wpdb->prepare(
-                "SELECT id, job_id, requested_at FROM $pages WHERE doc_key = %s AND status = 'queued' ORDER BY requested_at, id LIMIT %d",
-                $doc->doc_key, self::MAX_POLLS
-            ));
-            $gone_stale = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - 10 * MINUTE_IN_SECONDS);
-            foreach ($rows as $row) {
-                if ($row->job_id === '') {
-                    // Died between its INSERT and the send; closed once it is old enough
-                    if ($row->requested_at < $gone_stale) {
-                        $wpdb->update($pages, array('status' => 'failed', 'finished_at' => current_time('mysql')),
-                            array('id' => $row->id, 'status' => 'queued'));
-                    }
-                    continue;
-                }
-                if (microtime(true) >= $deadline) {
-                    break;
-                }
-                $answer = Scouting_PDF_OCR::call_service('GET', '/v1/jobs/' . $row->job_id);
-                if ($answer['status'] === 404) {
-                    // The service forgot the job (its 7-day clean-up, or a reset)
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.id, p.job_id, p.requested_at FROM $pages p JOIN $docs d ON d.doc_key = p.doc_key
+             WHERE d.status = 'working' AND p.status = 'queued' ORDER BY p.requested_at, p.id LIMIT %d",
+            self::MAX_POLLS
+        ));
+        $gone_stale = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - 10 * MINUTE_IN_SECONDS);
+        foreach ($rows as $row) {
+            if ($row->job_id === '') {
+                // Died between its INSERT and the send; closed once it is old enough
+                if ($row->requested_at < $gone_stale) {
                     $wpdb->update($pages, array('status' => 'failed', 'finished_at' => current_time('mysql')),
-                        array('id' => $row->id));
-                } elseif ($answer['json']) {
-                    Scouting_PDF_OCR::save_job_answer($row->id, $answer['json']);
+                        array('id' => $row->id, 'status' => 'queued'));
                 }
+                continue;
             }
-        } elseif ($running) {
-            // Take the next waiting document: hand-added and submissions first (priority 1)
-            $doc = $wpdb->get_row("SELECT * FROM $docs WHERE status = 'queued' ORDER BY priority DESC, id LIMIT 1");
-            if ($doc) {
-                $wpdb->update($docs, array('status' => 'working', 'started_at' => current_time('mysql')),
-                    array('id' => $doc->id));
+            if (microtime(true) >= $deadline) {
+                break;
+            }
+            $answer = Scouting_PDF_OCR::call_service('GET', '/v1/jobs/' . $row->job_id);
+            if ($answer['status'] === 404) {
+                // The service forgot the job (its 7-day clean-up, or a reset)
+                $wpdb->update($pages, array('status' => 'failed', 'finished_at' => current_time('mysql')),
+                    array('id' => $row->id));
+            } elseif ($answer['json']) {
+                Scouting_PDF_OCR::save_job_answer($row->id, $answer['json']);
             }
         }
-        if (!$doc) {
-            return;
-        }
-        // save_job_answer() may have filled total_pages in the meantime
-        $doc = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs WHERE id = %d", $doc->id));
-        if (!$doc) {
-            return;
-        }
-        if ($running && $doc->status === 'working') {
-            $this->dispatch_pages($doc, $deadline);
-            $doc = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs WHERE id = %d", $doc->id));
-        }
-        if ($doc) {
+    }
+
+    /**
+     * The documents being read, front of the queue first
+     */
+    public static function working_docs() {
+        global $wpdb;
+        return $wpdb->get_results('SELECT * FROM ' . Scouting_PDF_OCR::docs_table() .
+            " WHERE status = 'working' ORDER BY priority DESC, id");
+    }
+
+    private function settle_working() {
+        foreach (self::working_docs() as $doc) {
             $this->settle($doc);
         }
     }
 
     /**
-     * Send the working document's next pages: learn the page count from page 1 first,
-     * then fill the in-flight slots lowest page first.
+     * The queue's pages at the service right now, over all documents
      */
-    private function dispatch_pages($doc, $deadline) {
+    private function in_flight() {
+        global $wpdb;
+        return (int) $wpdb->get_var('SELECT COUNT(*) FROM ' . Scouting_PDF_OCR::table() .
+            " WHERE status = 'queued' AND job_id <> '' AND source IN ('bulk', 'auto')");
+    }
+
+    /**
+     * Keep MAX_IN_FLIGHT pages at the service: the next pages of the documents being read
+     * first (front of the queue first), then the next waiting document, up to
+     * MAX_WORKING_DOCS at once. Several documents at once matters because most of the
+     * archive's documents are short: one at a time would leave the service idle while each
+     * one's page 1 is read. Returns false when the service refused.
+     */
+    private function fill_slots($deadline) {
+        global $wpdb;
+        $docs = Scouting_PDF_OCR::docs_table();
+        $free = self::MAX_IN_FLIGHT - $this->in_flight();
+        while ($free > 0 && microtime(true) < $deadline) {
+            $working = self::working_docs();
+            foreach ($working as $doc) {
+                $sent = $this->dispatch_pages($doc, $deadline, $free);
+                if ($sent === false) {
+                    return false;
+                }
+                $free -= $sent;
+                if ($free <= 0) {
+                    return true;
+                }
+            }
+            if (count($working) >= self::MAX_WORKING_DOCS) {
+                return true;
+            }
+            // Take the next waiting document: hand-added and submissions first (priority 1)
+            $next = $wpdb->get_row("SELECT id FROM $docs WHERE status = 'queued' ORDER BY priority DESC, id LIMIT 1");
+            if (!$next) {
+                return true;
+            }
+            $wpdb->query($wpdb->prepare(
+                "UPDATE $docs SET status = 'working', started_at = %s WHERE id = %d AND status = 'queued'",
+                current_time('mysql'), $next->id
+            ));
+        }
+        return true;
+    }
+
+    /**
+     * Send up to $limit of one document's next pages: learn the page count from page 1
+     * first, then lowest page first. Returns how many were sent, or false on a refusal.
+     */
+    private function dispatch_pages($doc, $deadline, $limit) {
         global $wpdb;
         $pages = Scouting_PDF_OCR::table();
         $docs = Scouting_PDF_OCR::docs_table();
@@ -402,35 +475,33 @@ class Scouting_PDF_OCR_Queue {
             ));
             if (!$first) {
                 // Page 1's answer names the page count; the rest of the document waits for it
-                $this->dispatch($doc, 1, null);
-                return;
+                return $this->dispatch($doc, 1, null) ? 1 : false;
             }
             if ($first->status === 'queued') {
-                return; // in flight (a reader's request, or our own); the poll step handles it
+                return 0; // in flight (a reader's request, or our own); the poll step handles it
             }
             if ($first->status === 'failed') {
                 if ($first->source !== 'reader') {
-                    return; // our own send failed; settle() marks the document failed
+                    return 0; // our own send failed; settle() marks the document failed
                 }
                 // A reader's old failure: the queue takes it over for one retry
-                $this->dispatch($doc, 1, $first);
-                return;
+                return $this->dispatch($doc, 1, $first) ? 1 : false;
             }
             // done or empty: a reader read page 1 before the document was queued. Ask the
             // service about that page again only to learn the count — it answers with the
             // finished job if it still has it, or reads the page once more. No new row.
             if (microtime(true) >= $deadline) {
-                return;
+                return 0;
             }
             $answer = Scouting_PDF_OCR::call_service('POST', '/v1/jobs',
                 wp_json_encode(array('url' => $doc->pdf_url, 'page' => 1)));
             $job = $answer['json'];
             if (!$job || empty($job['status']) || !empty($job['error'])) {
                 self::start_backoff();
-                return;
+                return false;
             }
             if ($job['status'] !== 'done' || (int) ($job['pages'] ?? 0) < 1) {
-                return; // the service is re-reading it; the count arrives on a later tick
+                return 0; // the service is re-reading it; the count arrives on a later tick
             }
             $total = min(9999, (int) $job['pages']);
             $wpdb->query($wpdb->prepare(
@@ -439,24 +510,18 @@ class Scouting_PDF_OCR_Queue {
             $doc->total_pages = $total;
         }
 
-        $dispatched = 0;
-        while ($dispatched < self::MAX_DISPATCHES && microtime(true) < $deadline) {
-            $in_flight = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM $pages WHERE doc_key = %s AND status = 'queued' AND job_id <> '' AND source IN ('bulk', 'auto')",
-                $doc->doc_key
-            ));
-            if ($in_flight >= self::MAX_IN_FLIGHT) {
-                return;
-            }
+        $sent = 0;
+        while ($sent < $limit && microtime(true) < $deadline) {
             $next = $this->next_page($doc);
             if (!$next) {
-                return;
+                break;
             }
             if (!$this->dispatch($doc, $next[0], $next[1])) {
-                return; // refused: the backoff is set, this tick is over
+                return false;
             }
-            $dispatched++;
+            $sent++;
         }
+        return $sent;
     }
 
     /**

@@ -180,7 +180,37 @@ class Scouting_PDF_OCR_Admin {
             $queue = 'running';
         }
         $backoff = Scouting_PDF_OCR_Queue::backoff_until();
-        $current = $wpdb->get_row("SELECT doc_key, label, pages_done, total_pages FROM $docs WHERE status = 'working' LIMIT 1");
+        // Every document being read, with the pages at the reading service right now
+        $reading = array();
+        foreach (array_slice(Scouting_PDF_OCR_Queue::working_docs(), 0, 10) as $w) {
+            $at_service = array_map('intval', $wpdb->get_col($wpdb->prepare(
+                "SELECT page FROM $pages WHERE doc_key = %s AND status = 'queued' ORDER BY page LIMIT 20", $w->doc_key
+            )));
+            $reading[] = array(
+                'id'           => (int) $w->id,
+                'label'        => $w->label,
+                'file'         => rawurldecode(basename((string) wp_parse_url($w->pdf_url, PHP_URL_PATH))),
+                'pages_done'   => (int) $w->pages_done,
+                'pages_failed' => (int) $w->pages_failed,
+                'total_pages'  => (int) $w->total_pages,
+                'reading'      => $at_service,
+                'permalink'    => $w->post_id ? (get_permalink((int) $w->post_id) ?: null) : null,
+            );
+        }
+        $hour_ago = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql')) - HOUR_IN_SECONDS);
+        $last_hour = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $pages WHERE finished_at >= %s AND status IN ('done', 'empty', 'failed') AND source IN ('bulk', 'auto')",
+            $hour_ago
+        ));
+        // Pages still to read: the known counts of the documents being read, plus the waiting
+        // documents at the average length of the documents finished so far
+        $finished = $wpdb->get_row("SELECT COUNT(*) AS n, COALESCE(SUM(total_pages), 0) AS pages FROM $docs WHERE status = 'done' AND total_pages > 0");
+        $average = ($finished && (int) $finished->n > 0) ? (int) $finished->pages / (int) $finished->n : 0;
+        $left_working = 0;
+        foreach ($reading as $r) {
+            $left_working += max(0, $r['total_pages'] - $r['pages_done'] - $r['pages_failed']);
+        }
+        $pages_left = $average > 0 ? (int) round($left_working + $counts['queued'] * $average) : null;
         $today = current_time('Y-m-d') . ' 00:00:00';
         $response = rest_ensure_response(array(
             'queue'         => $queue,
@@ -190,12 +220,13 @@ class Scouting_PDF_OCR_Admin {
             'last_tick_age' => Scouting_PDF_OCR_Queue::last_tick() !== ''
                 ? max(0, strtotime(current_time('mysql')) - strtotime(Scouting_PDF_OCR_Queue::last_tick())) : null,
             'docs'          => $counts,
-            'current'       => $current ? array(
-                'doc_key'     => $current->doc_key,
-                'label'       => $current->label,
-                'pages_done'  => (int) $current->pages_done,
-                'total_pages' => (int) $current->total_pages,
-            ) : null,
+            'reading'       => $reading,
+            'speed'         => array(
+                'pages_last_hour' => $last_hour,
+                'pages_left'      => $pages_left,
+                // Hours to go at the last hour's pace; null until there is a pace to go by
+                'hours_left'      => ($pages_left !== null && $last_hour > 0) ? round($pages_left / $last_hour, 1) : null,
+            ),
             'pages_unchecked' => (int) $wpdb->get_var(
                 "SELECT COUNT(*) FROM $pages WHERE status = 'done' AND review_status = 'pending'"
             ),
@@ -603,6 +634,8 @@ class Scouting_PDF_OCR_Admin {
     }
 
     public static function enqueue_admin_script() {
+        wp_enqueue_style('scouting-pdf-admin',
+            SCOUTING_PDF_PLUGIN_URL . 'assets/css/scouting-pdf-admin.css', array(), SCOUTING_PDF_VERSION);
         wp_enqueue_script('scouting-pdf-admin',
             SCOUTING_PDF_PLUGIN_URL . 'assets/js/scouting-pdf-admin.js', array(), SCOUTING_PDF_VERSION, true);
         wp_add_inline_script('scouting-pdf-admin', 'window.ScoutingPdfAdminConfig = ' . wp_json_encode(array(
@@ -634,7 +667,14 @@ class Scouting_PDF_OCR_Admin {
                 <p id="sm-ocr-docs-line"></p>
                 <p id="sm-ocr-today-line"></p>
                 <p id="sm-ocr-unchecked-line"></p>
-                <p id="sm-ocr-current" hidden></p>
+                <div id="sm-ocr-progress" class="sm-ocr-progress" style="display:none">
+                    <p class="sm-ocr-overall-text" id="sm-ocr-overall-text"></p>
+                    <div class="sm-ocr-bar sm-ocr-bar-overall" id="sm-ocr-overall-bar" role="progressbar"
+                        aria-label="Documents finished" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+                    <p class="sm-ocr-speed" id="sm-ocr-speed"></p>
+                    <h2 class="sm-ocr-reading-title">Being read now</h2>
+                    <ul class="sm-ocr-reading" id="sm-ocr-reading" aria-live="off"></ul>
+                </div>
                 <p id="sm-ocr-lastrun"></p>
                 <p>
                     <?php if ($is_admin) : ?>

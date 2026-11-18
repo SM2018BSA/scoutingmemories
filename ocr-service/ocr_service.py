@@ -100,6 +100,9 @@ PORT = env_int('OCR_PORT', 8000, 1, 65535)
 MAX_PDF_MB = env_int('OCR_MAX_PDF_MB', 60, 1, 500)
 PAGES_PER_HOUR = env_int('OCR_PAGES_PER_HOUR', 120, 1, 100000)
 QUEUE_MAX = env_int('OCR_QUEUE_MAX', 50, 1, 10000)
+# Pages read at the same time, one processor each. More than the machine has processors only
+# makes every page slower.
+WORKERS = env_int('OCR_WORKERS', 1, 1, 8)
 PAUSED = env_switch('OCR_PAUSED')
 DPI = env_int('OCR_DPI', 300, 72, 600)
 MAX_PIXELS = env_int('OCR_MAX_PIXELS', 40000000, 1000000, 200000000)
@@ -129,7 +132,11 @@ MAX_WORDS = 20000
 INSTALLED_UNIT = '/etc/systemd/system/scouting-ocr.service'
 
 ENGINE = 'tesseract'
-WAKE = threading.Event()    # set when a job is added, so the worker does not wait
+WAKE = threading.Event()    # set when a job is added, so a worker does not wait
+# One download at a time: two readers asking for the same new PDF must not both write it, and
+# a cache trim must not delete a PDF another reader is about to open
+PDF_LOCK = threading.Lock()
+IN_USE = {}                 # cached PDF path -> readers using it right now (under PDF_LOCK)
 
 
 # ---- Job list (SQLite) ---------------------------------------------------------------------
@@ -292,14 +299,36 @@ def cache_path(url):
 
 
 def forget_pdf(url):
-    try:
-        os.remove(cache_path(url))
-    except OSError:
-        pass
+    """Delete the kept copy, unless another reader is using it right now (this reader holds one use)"""
+    path = cache_path(url)
+    with PDF_LOCK:
+        if IN_USE.get(path, 0) > 1:
+            return
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def fetch_pdf(url):
-    """Download the PDF (or reuse the copy kept on disk) and return its path"""
+    """Download the PDF (or reuse the copy kept on disk), mark it in use and return its path.
+    Every call is paired with release_pdf(path)."""
+    with PDF_LOCK:
+        path = _fetch_pdf(url)
+        IN_USE[path] = IN_USE.get(path, 0) + 1
+        return path
+
+
+def release_pdf(path):
+    with PDF_LOCK:
+        left = IN_USE.get(path, 0) - 1
+        if left > 0:
+            IN_USE[path] = left
+        else:
+            IN_USE.pop(path, None)
+
+
+def _fetch_pdf(url):
     path = cache_path(url)
     if os.path.isfile(path) and os.path.getsize(path) > 0:
         return path
@@ -366,7 +395,7 @@ def trim_cache(keep=None):
         full = os.path.join(PDF_DIR, name)
         try:
             info = os.stat(full)
-            if full != keep and info.st_mtime < too_old:
+            if full != keep and full not in IN_USE and info.st_mtime < too_old:
                 os.remove(full)
                 continue
         except OSError:
@@ -376,7 +405,7 @@ def trim_cache(keep=None):
     for _, size, full in sorted(files):
         if total <= CACHE_BYTES:
             break
-        if full == keep:
+        if full == keep or full in IN_USE:
             continue
         try:
             os.remove(full)
@@ -457,8 +486,8 @@ def read_page(job_id, url, page):
     pdf = fetch_pdf(url)
     work = os.path.join(WORK_DIR, job_id)
     shutil.rmtree(work, ignore_errors=True)
-    os.makedirs(work)
     try:
+        os.makedirs(work)
         try:
             pages, dpi = page_dpi(pdf, page)
             # -cropbox: the same part of the page that pdfinfo measured and that PDF viewers show
@@ -471,7 +500,7 @@ def read_page(job_id, url, page):
         picture = os.path.join(work, 'page.png')
         if not os.path.isfile(picture):
             raise OcrError('render_failed')
-        environment = dict(os.environ, OMP_THREAD_LIMIT='1')  # one page at a time, one processor thread
+        environment = dict(os.environ, OMP_THREAD_LIMIT='1')  # one processor thread per reader
         # --psm 1: find the layout and which way up the page is
         run(['tesseract', picture, os.path.join(work, 'out'), '-l', 'eng', '--psm', '1', '--dpi', str(dpi), 'txt', 'tsv'],
             OCR_SECONDS, 'ocr_failed', env=environment)
@@ -482,6 +511,7 @@ def read_page(job_id, url, page):
         raise OcrError('ocr_failed')
     finally:
         shutil.rmtree(work, ignore_errors=True)
+        release_pdf(pdf)
     return {'text': text, 'words': words, 'pages': pages, 'width': width, 'height': height, 'dpi': dpi}
 
 
@@ -491,28 +521,38 @@ def tool_memory():
     return ', largest tool memory since start %d MB' % (resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
 
 
-def worker():
-    """Reads the waiting pages one at a time, oldest first"""
+def worker(number):
+    """One reader: takes the oldest waiting page, reads it, repeats. OCR_WORKERS of these run
+    side by side; each claims its page with one conditional update, so no page is read twice."""
     con = connect(wait=10)
     tidied = 0.0
+    mine = None  # the job this reader has claimed and not yet finished
     while True:
         try:
             now = int(time.time())
-            # Only this loop marks a job 'working', so one found here was left by an error: fail it
-            con.execute("UPDATE jobs SET status = 'failed', finished = ?, error = 'internal' WHERE status = 'working'", (now,))
-            if time.time() - tidied > 3600:
+            if mine is not None:
+                # Left by an error between the claim and the result: fail only this reader's own job
+                con.execute("UPDATE jobs SET status = 'failed', finished = ?, error = 'internal' WHERE id = ? AND status = 'working'",
+                            (now, mine))
+                mine = None
+            if number == 0 and time.time() - tidied > 3600:
                 con.execute("DELETE FROM jobs WHERE status IN ('done', 'failed') AND finished < ?", (now - KEEP_DAYS * 86400,))
                 con.execute('DELETE FROM accepted WHERE at < ?', (now - 7200,))
-                trim_cache()
+                with PDF_LOCK:
+                    trim_cache()
                 tidied = time.time()
             row = None if PAUSED else con.execute(
                 "SELECT * FROM jobs WHERE status = 'queued' ORDER BY created, id LIMIT 1").fetchone()
             if row is None:
-                WAKE.wait(5)
+                WAKE.wait(2)
                 WAKE.clear()
                 continue
+            claimed = con.execute("UPDATE jobs SET status = 'working', started = ? WHERE id = ? AND status = 'queued'",
+                                  (now, row['id'])).rowcount
+            if claimed != 1:
+                continue  # another reader took it first
+            mine = row['id']
             name = file_name(row['url'])
-            con.execute("UPDATE jobs SET status = 'working', started = ? WHERE id = ?", (now, row['id']))
             began = time.monotonic()
             try:
                 result = read_page(row['id'], row['url'], row['page'])
@@ -532,6 +572,7 @@ def worker():
                 log('failed: %s page %d: internal\n%s' % (name, row['page'], traceback.format_exc()))
                 con.execute("UPDATE jobs SET status = 'failed', finished = ?, error = 'internal' WHERE id = ?",
                             (int(time.time()), row['id']))
+            mine = None
         except Exception:
             log('worker problem:\n' + traceback.format_exc())
             time.sleep(5)
@@ -714,12 +755,13 @@ def main():
     except OSError:
         pass
 
-    threading.Thread(target=worker, name='worker', daemon=True).start()
+    for number in range(WORKERS):
+        threading.Thread(target=worker, args=(number,), name='worker-%d' % number, daemon=True).start()
     server = Server((LISTEN_HOST, PORT), Handler)
     log('scouting-ocr listening on %s:%d (%s; storage host %s; %s)' % (
         LISTEN_HOST, PORT, ENGINE, ALLOWED_HOST, 'PAUSED: reading nothing' if PAUSED else 'reading pages'))
-    log('limits: %d pages an hour, %d waiting, PDFs up to %d MB, %d dpi, %d pixels a page, %d MB of PDFs kept, %d days' % (
-        PAGES_PER_HOUR, QUEUE_MAX, MAX_PDF_MB, DPI, MAX_PIXELS, CACHE_MB, KEEP_DAYS))
+    log('limits: %d page(s) read at a time, %d pages an hour, %d waiting, PDFs up to %d MB, %d dpi, %d pixels a page, %d MB of PDFs kept, %d days' % (
+        WORKERS, PAGES_PER_HOUR, QUEUE_MAX, MAX_PDF_MB, DPI, MAX_PIXELS, CACHE_MB, KEEP_DAYS))
     server.serve_forever()
 
 
