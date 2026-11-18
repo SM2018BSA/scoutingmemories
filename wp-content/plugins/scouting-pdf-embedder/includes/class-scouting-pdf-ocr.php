@@ -31,6 +31,8 @@ class Scouting_PDF_OCR {
 
     const OPTION = 'scouting_pdf_ocr';          // settings array
     const DB_OPTION = 'scouting_pdf_ocr_db_version';
+    const TEST_FIELD = 'scouting_pdf_ocr_test'; // the "Save and test connection" button's name
+    const RESULT_ID = 'sm-ocr-result';          // the box beside the buttons that shows what happened
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -45,7 +47,7 @@ class Scouting_PDF_OCR {
         add_action('admin_menu', array($this, 'add_settings_page'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_post_scouting_pdf_ocr_test', array($this, 'handle_test_connection'));
-        add_action('admin_notices', array($this, 'print_test_result'));
+        add_filter('wp_redirect', array($this, 'redirect_after_save'));
     }
 
     // ---- Configuration --------------------------------------------------------
@@ -674,7 +676,6 @@ class Scouting_PDF_OCR {
         }
         $s = self::settings();
         $constants = defined('SCOUTING_PDF_OCR_URL') && SCOUTING_PDF_OCR_URL && defined('SCOUTING_PDF_OCR_SECRET') && SCOUTING_PDF_OCR_SECRET;
-        $test_url = wp_nonce_url(admin_url('admin-post.php?action=scouting_pdf_ocr_test'), 'scouting_pdf_ocr_test');
         ?>
         <div class="wrap">
             <h1>PDF OCR</h1>
@@ -733,10 +734,12 @@ class Scouting_PDF_OCR {
                         <td><?php echo (int) self::count_today(); ?> page(s) requested.</td>
                     </tr>
                 </table>
+                <?php $this->print_result_box(); ?>
                 <p class="submit">
                     <?php submit_button('Save Changes', 'primary', 'submit', false); ?>
                     <?php if (self::enabled()) : ?>
-                        <a href="<?php echo esc_url($test_url); ?>" class="button">Test connection</a>
+                        <?php // A submit button, so ticks and changes on the page are saved before the test, never lost ?>
+                        <button type="submit" class="button" name="<?php echo esc_attr(self::TEST_FIELD); ?>" value="1">Save and test connection</button>
                     <?php endif; ?>
                 </p>
             </form>
@@ -753,33 +756,79 @@ class Scouting_PDF_OCR {
             wp_die('Not allowed');
         }
         check_admin_referer('scouting_pdf_ocr_test');
-        $result = 'down';
-        if (self::enabled()) {
-            $answer = self::call_service('GET', '/v1/jobs/' . str_repeat('0', 32));
-            if ($answer['status'] === 404 && $answer['json']) {
-                $result = 'ok';
-            } elseif ($answer['status'] === 401) {
-                // The service tells a wrong secret and a wrong clock apart; so do we
-                $result = (isset($answer['json']['error']) && $answer['json']['error'] === 'bad_time') ? 'clock' : 'secret';
-            }
-        }
-        wp_safe_redirect(add_query_arg('ocr_test', $result, admin_url('options-general.php?page=scouting-pdf-ocr')));
+        wp_safe_redirect(self::settings_url(array('ocr_test' => self::test_connection())));
         exit;
     }
 
-    public function print_test_result() {
-        if (!isset($_GET['ocr_test']) || !isset($_GET['page']) || $_GET['page'] !== 'scouting-pdf-ocr') {
-            return;
+    /**
+     * A signed question about a job that cannot exist. Returns ok, secret, clock or down.
+     */
+    private static function test_connection() {
+        if (!self::enabled()) {
+            return 'down';
         }
+        $answer = self::call_service('GET', '/v1/jobs/' . str_repeat('0', 32));
+        if ($answer['status'] === 404 && $answer['json']) {
+            return 'ok';
+        }
+        if ($answer['status'] === 401) {
+            // The service tells a wrong secret and a wrong clock apart; so do we
+            return (isset($answer['json']['error']) && $answer['json']['error'] === 'bad_time') ? 'clock' : 'secret';
+        }
+        return 'down';
+    }
+
+    /**
+     * The settings page's address, scrolled down to the result box beside the buttons
+     */
+    private static function settings_url($args = array()) {
+        return add_query_arg($args, admin_url('options-general.php?page=scouting-pdf-ocr')) . '#' . self::RESULT_ID;
+    }
+
+    /**
+     * After WordPress saves the settings form it goes back to the page. Send it to the result
+     * box, and when "Save and test connection" was pressed, run the test on the saved settings.
+     */
+    public function redirect_after_save($location) {
+        if (($GLOBALS['pagenow'] ?? '') !== 'options.php' || !isset($_POST['option_page']) || $_POST['option_page'] !== 'scouting_pdf_ocr'
+            || !current_user_can('manage_options')) {
+            return $location;
+        }
+        $args = array('settings-updated' => 'true');
+        if (!empty($_POST[self::TEST_FIELD])) {
+            wp_cache_delete('alloptions', 'options');
+            wp_cache_delete(self::OPTION, 'options');
+            $args['ocr_test'] = self::test_connection();
+        }
+        return self::settings_url($args);
+    }
+
+    /**
+     * The result of the last save or test, beside the buttons where the person is looking.
+     * WordPress's own notices appear at the top of the page, which is out of sight after a
+     * long form, and some plugins hide them.
+     */
+    private function print_result_box() {
         $messages = array(
             'ok'     => array('notice-success', 'Connected: the service answered and accepted the secret.'),
             'secret' => array('notice-error', 'The service answered but refused the secret. Check the shared secret.'),
             'clock'  => array('notice-error', 'The clocks of this website and the reading service are more than 5 minutes apart. The secret itself is right.'),
             'down'   => array('notice-error', 'The service did not answer. Check the address, or try again shortly.'),
         );
-        $key = (string) $_GET['ocr_test'];
-        if (isset($messages[$key])) {
-            printf('<div class="notice %s is-dismissible"><p>%s</p></div>', esc_attr($messages[$key][0]), esc_html($messages[$key][1]));
+        $lines = array();
+        if (isset($_GET['settings-updated']) && $_GET['settings-updated'] === 'true') {
+            $s = self::settings();
+            $lines[] = array('notice-success', 'Settings saved. Background reading is ' . (self::queue_enabled() ? 'switched on.' : 'switched off.')
+                . ' Automatic approval is ' . (!empty($s['auto_approve']) ? 'on.' : 'off.'));
         }
+        $key = isset($_GET['ocr_test']) ? (string) $_GET['ocr_test'] : '';
+        if (isset($messages[$key])) {
+            $lines[] = $messages[$key];
+        }
+        echo '<div id="' . esc_attr(self::RESULT_ID) . '" role="status" aria-live="polite">';
+        foreach ($lines as $line) {
+            printf('<div class="notice inline %s"><p>%s</p></div>', esc_attr($line[0]), esc_html($line[1]));
+        }
+        echo '</div>';
     }
 }

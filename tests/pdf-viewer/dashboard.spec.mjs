@@ -14,6 +14,7 @@ const FAKE_TEXT = 'Camp Tahquitz opened in 1952\non the shore of the lake.\n\nWa
 const STORAGE_PDF = 'https://storage.scoutingmemories.org/sm-tests/leaders-guide.pdf';
 const WALK_PDF = 'https://storage.scoutingmemories.org/sm-tests/queue-walk.pdf';
 const DASHBOARD = '/wp-admin/admin.php?page=scouting-pdf-text';
+const SETTINGS = '/wp-admin/options-general.php?page=scouting-pdf-ocr';
 let service;
 
 const ocrState = (...args) => execFileSync('php', [join(HERE, 'ocr-state.php'), WP_DIR, ...args], { encoding: 'utf8' });
@@ -235,6 +236,46 @@ test.describe('PDF Text dashboard and the PDF text box', () => {
         await page.locator('#sm-ocr-scan').click();
         await expect(page.locator('#sm-ocr-scan-progress')).toContainText('new document(s) added to the queue.', { timeout: 30000 });
         expect(docFor(STORAGE_PDF)).toMatchObject({ status: 'queued', source: 'bulk', priority: 0 });
+    });
+
+    test('settings: a tick is saved, and the result shows beside the buttons', async ({ page }) => {
+        ocrState('queue-off');
+        await logInAdmin(page);
+        await page.goto(SETTINGS);
+        const queueBox = page.locator('input[name="scouting_pdf_ocr[queue_enabled]"]');
+        await expect(queueBox).not.toBeChecked();
+        await queueBox.check();
+        await page.getByRole('button', { name: 'Save Changes' }).click();
+        await page.waitForURL(/settings-updated=true#sm-ocr-result$/);
+        await expect(page.locator('#sm-ocr-result')).toContainText('Settings saved. Background reading is switched on.');
+        await expect(page.locator('#sm-ocr-result')).toBeInViewport();
+        await expect(queueBox).toBeChecked();
+    });
+
+    test('settings: Save and test connection keeps unsaved ticks, then tests', async ({ page }) => {
+        ocrState('queue-off');
+        ocrState('auto-approve', 'off');
+        try {
+            await logInAdmin(page);
+            await page.goto(SETTINGS);
+            await page.locator('input[name="scouting_pdf_ocr[queue_enabled]"]').check();
+            await page.locator('input[name="scouting_pdf_ocr[auto_approve]"]').check();
+            await page.getByRole('button', { name: 'Save and test connection' }).click();
+            await page.waitForURL(/ocr_test=ok#sm-ocr-result$/);
+            const result = page.locator('#sm-ocr-result');
+            await expect(result).toContainText('Settings saved. Background reading is switched on. Automatic approval is on.');
+            await expect(result).toContainText('Connected: the service answered and accepted the secret.');
+            await expect(page.locator('input[name="scouting_pdf_ocr[queue_enabled]"]')).toBeChecked();
+            await expect(page.locator('input[name="scouting_pdf_ocr[auto_approve]"]')).toBeChecked();
+
+            // The PDF Text page's own Test connection link lands on the same result box
+            await page.goto(DASHBOARD);
+            await page.getByRole('link', { name: 'Test connection' }).click();
+            await page.waitForURL(/ocr_test=ok#sm-ocr-result$/);
+            await expect(result).toContainText('Connected: the service answered and accepted the secret.');
+        } finally {
+            ocrState('auto-approve', 'off');
+        }
     });
 
     test('auto-approve: new text arrives already checked', async ({ page }) => {
