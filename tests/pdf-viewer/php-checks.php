@@ -368,51 +368,49 @@ try {
     check('queue empty page needs no checking', array($r[2]->status, $r[2]->review_status), array('empty', 'auto'));
     $drop_doc($d);
 
-    // Never more than 4 pages in flight
-    $d = $make_doc('queue-cap', array('total_pages' => 6));
-    $answers[] = array(202, array('id' => $jid(11), 'status' => 'queued', 'page' => 1));
-    $answers[] = array(202, array('id' => $jid(12), 'status' => 'queued', 'page' => 2));
-    $answers[] = array(202, array('id' => $jid(13), 'status' => 'queued', 'page' => 3));
-    $answers[] = array(202, array('id' => $jid(14), 'status' => 'queued', 'page' => 4));
+    // Never more than 6 pages in flight
+    $d = $make_doc('queue-cap', array('total_pages' => 8));
+    for ($n = 1; $n <= 6; $n++) {
+        $answers[] = array(202, array('id' => $jid(10 + $n), 'status' => 'queued', 'page' => $n));
+    }
     $before = count($sent);
     $tick();
-    check('queue sends four pages at most', count($sent) - $before, 4);
-    $answers[] = array(200, array('id' => $jid(11), 'status' => 'working', 'page' => 1));
-    $answers[] = array(200, array('id' => $jid(12), 'status' => 'working', 'page' => 2));
-    $answers[] = array(200, array('id' => $jid(13), 'status' => 'working', 'page' => 3));
-    $answers[] = array(200, array('id' => $jid(14), 'status' => 'working', 'page' => 4));
+    check('queue sends six pages at most', count($sent) - $before, 6);
+    for ($n = 1; $n <= 6; $n++) {
+        $answers[] = array(200, array('id' => $jid(10 + $n), 'status' => 'working', 'page' => $n));
+    }
     $before = count($sent);
     $tick();
-    check('queue waits while four are in flight', count($sent) - $before, 4); // four polls, no new pages
-    check('queue pages 5 and 6 have no rows yet', count($qrows($d)), 4);
+    check('queue waits while six are in flight', count($sent) - $before, 6); // six polls, no new pages
+    check('queue pages 7 and 8 have no rows yet', count($qrows($d)), 6);
     $drop_doc($d);
 
     // Several documents at once: each one's page 1 goes out in the same tick, front of the
     // queue first, and the cap counts over all of them
     $several = array();
-    foreach (array('queue-many-a', 'queue-many-b', 'queue-many-c', 'queue-many-d', 'queue-many-e') as $n => $name) {
+    foreach (array('queue-many-a', 'queue-many-b', 'queue-many-c', 'queue-many-d', 'queue-many-e', 'queue-many-f', 'queue-many-g') as $n => $name) {
         $several[] = $make_doc($name, $n === 2 ? array('priority' => 1) : array());
     }
-    for ($n = 0; $n < 4; $n++) {
+    for ($n = 0; $n < 6; $n++) {
         $answers[] = array(202, array('id' => $jid(81 + $n), 'status' => 'queued', 'page' => 1));
     }
     $before = count($sent);
     $tick();
-    check('queue several documents: four page 1s sent', count($sent) - $before, 4);
-    check('queue several documents: four being read, one waiting',
+    check('queue several documents: six page 1s sent', count($sent) - $before, 6);
+    check('queue several documents: six being read, one waiting',
         array_map(function($d) use ($doc_row) { return $doc_row($d)->status; }, $several),
-        array('working', 'working', 'working', 'working', 'queued'));
+        array('working', 'working', 'working', 'working', 'working', 'working', 'queued'));
     check('queue several documents: the front of the queue went first',
         json_decode($sent[$before]['args']['body'], true)['url'], $several[2]->url);
     // One finishes (a one-page document): its slot goes to the waiting one
     $answers[] = array(200, array('id' => $jid(81), 'status' => 'done', 'page' => 1, 'text' => 'One', 'words' => array(), 'engine' => 'x', 'pages' => 1));
-    for ($n = 1; $n < 4; $n++) {
+    for ($n = 1; $n < 6; $n++) {
         $answers[] = array(200, array('id' => $jid(81 + $n), 'status' => 'working', 'page' => 1));
     }
-    $answers[] = array(202, array('id' => $jid(85), 'status' => 'queued', 'page' => 1));
+    $answers[] = array(202, array('id' => $jid(87), 'status' => 'queued', 'page' => 1));
     $tick();
     check('queue several documents: the finished one is done, the last one started',
-        array($doc_row($several[2])->status, $doc_row($several[4])->status), array('done', 'working'));
+        array($doc_row($several[2])->status, $doc_row($several[6])->status), array('done', 'working'));
     foreach ($several as $d) {
         $drop_doc($d);
     }

@@ -4,13 +4,14 @@
  *
  * WordPress owns the queue (one row per document in {prefix}scouting_pdf_ocr_docs); the OCR
  * service on the development server stays the dumb page worker it already is. A tick runs
- * every minute (WP-Cron; the dashboard also ticks when cron is late). It works on up to 4
- * documents at once, polls the pages sent earlier and sends the next ones — at most 4 in
+ * every minute (WP-Cron; the dashboard also ticks when cron is late). It works on up to 6
+ * documents at once, polls the pages sent earlier and sends the next ones — at most 6 in
  * flight over all documents, page 1 of each first, because page 1's answer names the
- * document's page count. 4 in flight keeps the service's readers (2 on the development
- * server) busy while keeping readers' own Text-button requests fast. A tick started by cron
- * stays for most of its minute, collecting answers every few seconds and sending the next
- * pages at once; a tick from the dashboard is one quick pass.
+ * document's page count. 6 in flight keeps the service's readers (2 on the development
+ * server) busy through the few seconds between one cron run and the next, while keeping
+ * readers' own Text-button requests reasonably quick. A tick started by cron stays for most
+ * of its minute, collecting answers every 2 seconds and sending the next pages at once; a
+ * tick from the dashboard is one quick pass.
  *
  * Nothing runs unless the OCR feature AND the "Background reading" setting are on, and the
  * queue additionally starts paused: nothing is sent until Resume is pressed on the dashboard.
@@ -31,16 +32,18 @@ class Scouting_PDF_OCR_Queue {
     const CRON_HOOK        = 'scouting_pdf_ocr_tick';
     const CRON_SCHEDULE    = 'scouting_pdf_ocr_minute';
 
-    // At most 4 queue pages at the service at once (over all documents), so a reader's own
-    // page never waits behind more than a few ~10-second jobs
-    const MAX_IN_FLIGHT = 4;
-    // Documents read side by side; most of the archive's documents are a page or two
-    const MAX_WORKING_DOCS = 4;
+    // At most 6 queue pages at the service at once (over all documents): with 2 readers that
+    // is about 20 seconds of work lined up, enough to cover the gap between cron runs, while a
+    // reader's own page never waits behind more than three ~7-second rounds
+    const MAX_IN_FLIGHT = 6;
+    // Documents read side by side; most of the archive's documents are a page or two, so
+    // there must be as many documents as slots or short ones would leave slots empty
+    const MAX_WORKING_DOCS = 6;
     // Bounds per tick: under the minute between ticks, and far under the 120-second point
     // where a waiting tick would take the lock over
     const MAX_POLLS   = 12;
     const TICK_BUDGET = 20;  // seconds: a dashboard tick (Run once now, or cron running late)
-    const CRON_BUDGET = 45;  // seconds: a tick from cron, which waits for answers as it goes
+    const CRON_BUDGET = 50;  // seconds: a tick from cron, which waits for answers as it goes
     const POLL_PAUSE  = 2;   // seconds between looks at the service within a cron tick
     // When the service refuses (full, hourly cap, paused) or does not answer, the queue
     // yields for ten minutes instead of hammering it
