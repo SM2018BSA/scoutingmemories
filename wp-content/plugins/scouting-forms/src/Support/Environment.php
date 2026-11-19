@@ -13,13 +13,17 @@ class Environment {
 
     /**
      * True on a local development copy: the site URL host is localhost, 127.0.0.1 or a
-     * *.local / *.test / *.ddev.site domain (ddev.site only ever points at the computer itself).
+     * *.local / *.test / *.ddev.site domain (ddev.site only ever points at the computer itself),
+     * or a test site that says so in wp-config.php with
+     * define('SCOUTING_FORMS_TEST_SITE', true); (the development server's forms website).
+     * The live site never defines it.
      */
     public static function isLocal(): bool {
         static $isLocal = null;
         if ($isLocal === null) {
             $host = strtolower((string) wp_parse_url(home_url(), PHP_URL_HOST));
-            $isLocal = in_array($host, ['localhost', '127.0.0.1'], true)
+            $isLocal = (defined('SCOUTING_FORMS_TEST_SITE') && SCOUTING_FORMS_TEST_SITE === true)
+                || in_array($host, ['localhost', '127.0.0.1'], true)
                 || substr($host, -6) === '.local'
                 || substr($host, -5) === '.test'
                 || substr($host, -10) === '.ddev.site';
