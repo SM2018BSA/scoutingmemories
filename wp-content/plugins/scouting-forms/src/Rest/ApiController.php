@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms\Rest;
 
 use ScoutingMemories\Forms\Forms\EntryService;
 use ScoutingMemories\Forms\Forms\Rendering\FieldRenderer;
+use ScoutingMemories\Forms\Forms\Rendering\StoredDynamicText;
 use ScoutingMemories\Forms\Models\EntryRepository;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\Permissions;
@@ -456,7 +457,10 @@ class ApiController {
             return new WP_REST_Response(['message' => __('Entry not found.', 'scouting-forms')], 404);
         }
         $fields = FormRepository::fields((int) $entry['form_id']);
-        $raw = EntryService::withoutPasswords($fields, EntryRepository::formValues((int) $entry['id'], $fields));
+        $raw = EntryService::withoutPasswords(
+            $fields,
+            StoredDynamicText::asEntryIds($fields, EntryRepository::formValues((int) $entry['id'], $fields))
+        );
         $display = new EntryValues((int) $entry['form_id']);
         $display->load([(int) $entry['id']]);
         $shown = [];

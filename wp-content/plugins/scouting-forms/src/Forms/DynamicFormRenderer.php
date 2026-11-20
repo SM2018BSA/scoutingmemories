@@ -6,6 +6,7 @@ use ScoutingMemories\Forms\Actions\EntryShortcodes;
 use ScoutingMemories\Forms\Actions\RegisterAction;
 use ScoutingMemories\Forms\Compat\Compat;
 use ScoutingMemories\Forms\Forms\Rendering\FormTemplate;
+use ScoutingMemories\Forms\Forms\Rendering\StoredDynamicText;
 use ScoutingMemories\Forms\Models\EntryRepository;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\FormAccess;
@@ -89,7 +90,7 @@ class DynamicFormRenderer extends FormHandler {
             // An Edit link (?frm_action=edit&entry=ID) opens the entry for someone allowed to edit it
             $editId = self::editTarget($form);
             if ($editId) {
-                $state['values'] = EntryRepository::formValues($editId, $fields);
+                $state['values'] = StoredDynamicText::asEntryIds($fields, EntryRepository::formValues($editId, $fields));
                 $state['entry_id'] = $editId;
                 // Account fields show the account's current details (Formidable Registration)
                 $register = RegisterAction::forForm((int) $form['id'], 'update', $state['values']);
@@ -213,7 +214,10 @@ class DynamicFormRenderer extends FormHandler {
         if ($updated) {
             // The edited entry stays open in the form, with its saved values
             $state['entry_id'] = (int) $context['entry']['id'];
-            $state['values'] = EntryRepository::formValues((int) $context['entry']['id'], $context['fields']);
+            $state['values'] = StoredDynamicText::asEntryIds(
+                $context['fields'],
+                EntryRepository::formValues((int) $context['entry']['id'], $context['fields'])
+            );
         }
         return $state;
     }

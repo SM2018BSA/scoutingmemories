@@ -217,6 +217,40 @@ class DynamicOptions {
     }
 
     /**
+     * The entries a stored text may stand for: the entry whose linked value is the text
+     * (idForText), or else the entries of the linked form with the text as the value of another
+     * of their fields (a State's abbreviation, "NY"; two States share "ME"). Only entries the
+     * field offers (a dependent field's choices are checked when it is saved).
+     *
+     * @param array<string, mixed> $field
+     * @return string[] Entry IDs
+     */
+    public static function idsForStoredText(array $field, string $text): array {
+        $text = trim($text);
+        $id = self::idForText($field, $text);
+        if ($id !== '' || $text === '') {
+            return $id !== '' ? [$id] : [];
+        }
+        $linked = FormRepository::field((int) ($field['field_options']['form_select'] ?? 0));
+        if (!$linked) {
+            return [];
+        }
+        global $wpdb;
+        $ids = array_map('strval', $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT m.item_id FROM {$wpdb->prefix}frm_item_metas m
+             INNER JOIN {$wpdb->prefix}frm_items i ON i.id = m.item_id
+             WHERE i.form_id = %d AND i.is_draft = 0 AND m.meta_value = %s ORDER BY m.item_id LIMIT 10",
+            (int) $linked['form_id'],
+            $text
+        )));
+        if (self::isDependent($field)) {
+            return $ids;
+        }
+        $offered = self::forField($field);
+        return array_values(array_filter($ids, static fn(string $id): bool => array_key_exists((int) $id, $offered)));
+    }
+
+    /**
      * @param array<int|string, string> $options
      * @param array<string, mixed> $opts field_options
      * @return array<int|string, string>

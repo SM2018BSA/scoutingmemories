@@ -192,8 +192,9 @@ class FieldRenderer {
                         esc_attr($shown)
                     );
                 }
-                // Text the theme keeps in some of these (council slugs), not chosen entries: sent
-                // back as it is, so editing the entry does not lose it
+                // Text the theme keeps on the entry in some of these (council slugs), not chosen
+                // entries: sent back as it is, so editing the entry does not lose it. (Text kept
+                // on the entry's post was already turned into entries by StoredDynamicText.)
                 $kept = array_values(array_filter(array_map('strval', (array) $value), 'strlen'));
                 if ($kept && array_filter($kept, static fn($v) => !ctype_digit($v))) {
                     $html = '';
