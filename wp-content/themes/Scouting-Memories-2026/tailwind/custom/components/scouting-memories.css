@@ -1,0 +1,213 @@
+/**
+ * Scouting Memories styles carried over from the old theme's css/styles.css.
+ *
+ * Ported as-is where the rule still means something in this theme; the rules tied to
+ * Bootstrap markup (dropdown-item colours, .text-light links, the .hidden/.sr-only
+ * overrides) are NOT ported - their jobs move into the daisyUI components and Tailwind
+ * utilities as each template is rebuilt.
+ */
+
+/* Brand colours (templates use these exactly like the old theme did). */
+.sm_green_bkg_color {
+	background-color: #025600;
+}
+.sm_green_color {
+	color: #025600;
+}
+
+/* Headings use Roboto Slab, as on the old site (the !important matches the old rule,
+   which also had to win over plugin styles). */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: var(--font-slab), serif !important;
+}
+
+/* Pointer helpers used by templates and inline scripts. */
+.pointer,
+.cursor {
+	cursor: pointer;
+}
+
+/* The masthead logo grows with the viewport, exactly as before. */
+#sm_logo img {
+	width: 40%;
+}
+@media (min-width: 576px) {
+	#sm_logo img {
+		width: 45% !important;
+	}
+}
+@media (min-width: 768px) {
+	#sm_logo img {
+		width: 50% !important;
+	}
+}
+@media (min-width: 992px) {
+	#sm_logo img {
+		width: 75% !important;
+	}
+}
+@media (min-width: 1200px) {
+	#sm_logo img {
+		width: 85% !important;
+	}
+}
+@media (min-width: 1600px) {
+	#sm_logo img {
+		width: 100% !important;
+	}
+}
+
+/* Front page card-tabs: three radios switched entirely in CSS. The checked radio
+   shows its pane and paints its card green, replacing the old Bootstrap tab JS. */
+.ft-tabs input[type="radio"] {
+	display: none;
+}
+.ft-tabs .ft-pane {
+	display: none;
+}
+#ft-about:checked ~ .ft-panes .ft-pane-about,
+#ft-search:checked ~ .ft-panes .ft-pane-search,
+#ft-video:checked ~ .ft-panes .ft-pane-video {
+	display: block;
+}
+#ft-about:checked ~ .ft-cards label[for="ft-about"] .card,
+#ft-search:checked ~ .ft-cards label[for="ft-search"] .card,
+#ft-video:checked ~ .ft-cards label[for="ft-video"] .card {
+	background-color: #025600;
+	color: #ffffff;
+}
+
+/* On the local sites PHP notices print long unbreakable file paths into the page
+   (display_errors is on there; live hides them). Let them wrap instead of forcing
+   sideways scrolling, so layout checks measure the real content. */
+.entry-footer,
+.entry-content {
+	overflow-wrap: anywhere;
+}
+
+/* My Account dashboard tabs: radios switched entirely in CSS, one group for the
+   main tabs (ma-tab), one for the Indexing pills (ma-idx), one for the Admin
+   pills (ma-adm). The checked radio shows its pane and marks its label. */
+.ma-tabs input[type="radio"] {
+	display: none;
+}
+.ma-tabs .ma-pane,
+.ma-tabs .ma-subpane {
+	display: none;
+}
+#tab-myHome:checked ~ .ma-panes #pane-myHome,
+#tab-myPosts:checked ~ .ma-panes #pane-myPosts,
+#tab-myMedia:checked ~ .ma-panes #pane-myMedia,
+#tab-myDefaults:checked ~ .ma-panes #pane-myDefaults,
+#tab-myIndexing:checked ~ .ma-panes #pane-myIndexing,
+#tab-myAdmin:checked ~ .ma-panes #pane-myAdmin,
+#tab-myAdmin2:checked ~ .ma-panes #pane-myAdmin2 {
+	display: block;
+}
+#idx-myCouncils:checked ~ #idx-pane-councils,
+#idx-myCamps:checked ~ #idx-pane-camps,
+#idx-myLodges:checked ~ #idx-pane-lodges,
+#idx-myTools:checked ~ #idx-pane-tools,
+#adm-users:checked ~ #adm-pane-users,
+#adm-posts:checked ~ #adm-pane-posts,
+#adm-states:checked ~ #adm-pane-states,
+#adm-councils:checked ~ #adm-pane-councils,
+#adm-camps:checked ~ #adm-pane-camps,
+#adm-lodges:checked ~ #adm-pane-lodges,
+#adm-tools:checked ~ #adm-pane-tools {
+	display: block;
+}
+#tab-myHome:checked ~ .ma-tablist label[for="tab-myHome"],
+#tab-myPosts:checked ~ .ma-tablist label[for="tab-myPosts"],
+#tab-myMedia:checked ~ .ma-tablist label[for="tab-myMedia"],
+#tab-myDefaults:checked ~ .ma-tablist label[for="tab-myDefaults"],
+#tab-myIndexing:checked ~ .ma-tablist label[for="tab-myIndexing"],
+#tab-myAdmin:checked ~ .ma-tablist label[for="tab-myAdmin"],
+#tab-myAdmin2:checked ~ .ma-tablist label[for="tab-myAdmin2"],
+#idx-myCouncils:checked ~ .ma-sublist label[for="idx-myCouncils"],
+#idx-myCamps:checked ~ .ma-sublist label[for="idx-myCamps"],
+#idx-myLodges:checked ~ .ma-sublist label[for="idx-myLodges"],
+#idx-myTools:checked ~ .ma-sublist label[for="idx-myTools"],
+#adm-users:checked ~ .ma-sublist label[for="adm-users"],
+#adm-posts:checked ~ .ma-sublist label[for="adm-posts"],
+#adm-states:checked ~ .ma-sublist label[for="adm-states"],
+#adm-councils:checked ~ .ma-sublist label[for="adm-councils"],
+#adm-camps:checked ~ .ma-sublist label[for="adm-camps"],
+#adm-lodges:checked ~ .ma-sublist label[for="adm-lodges"],
+#adm-tools:checked ~ .ma-sublist label[for="adm-tools"] {
+	background-color: #025600;
+	color: #ffffff;
+}
+
+/* Formidable view pagination inside the dashboard (markup comes from the
+   database): style it like the daisy join the public pages use. */
+.ma-tabs ul.pagination {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	margin-top: 1rem;
+	padding: 0;
+	list-style: none;
+}
+.ma-tabs ul.pagination a,
+.ma-tabs ul.pagination span {
+	display: inline-block;
+	padding: 0.25rem 0.75rem;
+	border: var(--border) solid var(--color-base-300);
+	border-radius: var(--radius-field);
+}
+.ma-tabs ul.pagination .active a,
+.ma-tabs ul.pagination a:hover {
+	background-color: #025600;
+	color: #ffffff;
+}
+
+/* select2 (the chained search dropdowns), replacing the old select2-bootstrap4 skin:
+   full-width boxes that match the daisyUI fields they sit between. */
+.select2-container {
+	width: 100% !important;
+}
+.select2-container .select2-selection--multiple {
+	border: var(--border) solid var(--color-base-300);
+	border-radius: var(--radius-field);
+	min-height: 2.5rem;
+}
+.select2-container--default.select2-container--focus .select2-selection--multiple {
+	border-color: var(--color-primary);
+}
+.select2-search__field {
+	min-height: 1.75rem;
+}
+
+/* Bootstrap class names hardcoded in DATABASE-stored Formidable View templates
+   (Edit/Delete buttons, tables). daisyUI's own .btn and .btn-secondary cover most
+   of it; these rules map the rest. The Views themselves are not edited. */
+.btn-danger {
+	background-color: var(--color-error);
+	border-color: var(--color-error);
+	color: var(--color-error-content);
+}
+table.table {
+	width: 100%;
+	border-collapse: collapse;
+}
+table.table th,
+table.table td {
+	border-bottom: var(--border) solid var(--color-base-300);
+	padding: 0.5rem 0.75rem;
+	text-align: left;
+}
+
+/* Formidable fixes carried over verbatim (plugin markup, independent of the theme). */
+.with_frm_style select {
+	padding: 1px 5px 5px 1px !important;
+}
+.frm_pro_form .select2-container {
+	max-height: 189px;
+	overflow: auto;
+}

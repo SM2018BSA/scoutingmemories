@@ -19,6 +19,7 @@
 /wp-content/plugins/*
 !/wp-content/plugins/scouting-pdf-embedder/
 !/wp-content/plugins/scouting-forms/
+!/wp-content/plugins/scouting-memories-core/
 
 !/wp-content/mu-plugins/
 /wp-content/mu-plugins/*
@@ -40,3 +41,6 @@ Thumbs.db
 # Starter-theme documents we never deploy
 /wp-content/themes/*/README.md
 /wp-content/themes/*/LICENSE
+
+# Private working notes about the site's users and roles: kept on the owner's PC only
+/wp-content/plugins/scouting-memories-core/docs/AUDIT.md

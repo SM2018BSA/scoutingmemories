@@ -1,0 +1,21 @@
+# Ignore dependencies from npm and Composer:
+/node_modules
+/vendor
+
+# Built files ARE committed in this repository, unlike stock _tw: the DDEV sites, the
+# combined test site and the live deploy all take files from Git, and only the owner's
+# Windows host runs Node. Rebuild with `npm run production` before committing.
+# (Only the editor-intellisense scratch output stays ignored.)
+tailwind-intellisense.css
+
+# Ignore the generated zip file:
+scouting-memories-2026.zip
+
+# Ignore .DS_Store files from macOS:
+.DS_Store
+
+# Test session and screenshot output (never committed):
+/tests/.auth
+/tests/.env
+/tests/screenshots
+/test-results

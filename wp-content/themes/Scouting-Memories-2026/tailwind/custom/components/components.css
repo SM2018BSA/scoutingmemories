@@ -1,0 +1,69 @@
+/**
+ * Custom styles to immediately follow Tailwind’s `components` layer
+ *
+ * “Use the `components` layer for any more complicated classes you want to add
+ *  to your project that you'd still like to be able to override with utility
+ *  classes.”
+ *
+ *  — from https://tailwindcss.com/docs/adding-custom-styles#adding-component-classes
+ */
+
+/**
+ * Post title styles
+ *
+ * These will be applied to all headings with a `page-title` or `entry-title`
+ * class on the frontend and to the post title in the block editor.
+ *
+ * The supplied styles are meant to match the default `h1` classes from
+ * Tailwind Typography.
+ */
+.page-title,
+.entry-title {
+	@apply max-w-content mx-auto mb-6 text-3xl font-extrabold;
+}
+
+/**
+ * Post meta and footer styles
+ *
+ * These will be applied to the post-specific elements to keep the post itself
+ * at content width pending custom styling.
+ */
+.entry-meta,
+.entry-footer,
+.post-navigation,
+#comments {
+	@apply max-w-content mx-auto mb-6;
+}
+
+/**
+ * Layout styles for centered content areas
+ *
+ * If you are controlling the width of your content area with styles applied
+ * to its container, you can delete the following styles whose selectors begin
+ * with `.page-content >` and `.entry-content >`. For more details, please see
+ * the following:
+ *
+ * https://make.wordpress.org/core/2021/06/29/on-layout-and-content-width-in-wordpress-5-8/
+ */
+.page-content > *,
+.entry-content > * {
+	/* Content width from the `theme.json` file */
+	@apply max-w-content mx-auto;
+}
+
+.entry-content > .alignwide {
+	/* Wide width from the `theme.json` file */
+	@apply max-w-wide;
+}
+
+.entry-content > .alignfull {
+	@apply max-w-none;
+}
+
+.entry-content > .alignleft {
+	@apply float-left mr-8;
+}
+
+.entry-content > .alignright {
+	@apply float-right ml-8;
+}
