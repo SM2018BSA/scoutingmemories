@@ -490,14 +490,17 @@ def read_page(job_id, url, page):
         os.makedirs(work)
         try:
             pages, dpi = page_dpi(pdf, page)
-            # -cropbox: the same part of the page that pdfinfo measured and that PDF viewers show
-            run(['pdftoppm', '-f', str(page), '-l', str(page), '-r', str(dpi), '-cropbox', '-gray', '-png', '-singlefile',
+            # -cropbox: the same part of the page that pdfinfo measured and that PDF viewers show.
+            # No -png: the picture is written as plain PGM. Measured on the development server
+            # (poppler 24.02), writing a scanned book page as PNG took 45 to 68 seconds and timed
+            # out, the same page as PGM took 2, and tesseract read exactly the same words from both.
+            run(['pdftoppm', '-f', str(page), '-l', str(page), '-r', str(dpi), '-cropbox', '-gray', '-singlefile',
                  pdf, os.path.join(work, 'page')], RENDER_SECONDS, 'render_failed')
         except OcrError as problem:
             if str(problem) in ('not_pdf', 'render_failed'):
                 forget_pdf(url)  # the copy on disk may be damaged: download it again next time
             raise
-        picture = os.path.join(work, 'page.png')
+        picture = os.path.join(work, 'page.pgm')
         if not os.path.isfile(picture):
             raise OcrError('render_failed')
         environment = dict(os.environ, OMP_THREAD_LIMIT='1')  # one processor thread per reader

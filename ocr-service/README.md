@@ -145,8 +145,10 @@ When systemd does not provide `STATE_DIRECTORY` and `CACHE_DIRECTORY` (running b
    60-second limit; it must be a PDF and arrive complete. The copy is kept so the next page of the
    same document is quick.
 2. `pdfinfo` gives the page count and the page's size.
-3. `pdftoppm -f N -l N -r 300 -cropbox -gray -png -singlefile` makes one grey picture of the page.
-4. `tesseract page.png out -l eng --psm 1 --dpi 300 txt tsv` reads it (`--psm 1` also works out
+3. `pdftoppm -f N -l N -r 300 -cropbox -gray -singlefile` makes one grey picture of the page, in
+   the plain PGM format. It has a 60-second limit. (Not PNG: on some scanned books writing the PNG
+   took about a minute a page and ran into that limit; PGM takes about 2 seconds and reads the same.)
+4. `tesseract page.pgm out -l eng --psm 1 --dpi 300 txt tsv` reads it (`--psm 1` also works out
    which way up the page is).
 5. The text and the word positions are saved; the picture is deleted.
 
