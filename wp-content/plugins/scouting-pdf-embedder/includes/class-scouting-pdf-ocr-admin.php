@@ -20,6 +20,7 @@ class Scouting_PDF_OCR_Admin {
     const MAX_TEXT = 200000;      // the service's own cap on a page's text
     const DOCS_PER_PAGE = 50;
     const TEXT_ROWS_PER_PAGE = 20;
+    const RETRY_BATCH = 100;      // documents put back in line per call of "Try every failed document again"
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -113,6 +114,14 @@ class Scouting_PDF_OCR_Admin {
             'methods'             => 'POST',
             'callback'            => array($this, 'rest_retry_doc'),
             'permission_callback' => array($this, 'permission_admin'),
+        ));
+        register_rest_route($ns, '/ocr/admin/retry-failed', array(
+            'methods'             => 'POST',
+            'callback'            => array($this, 'rest_retry_failed'),
+            'permission_callback' => array($this, 'permission_admin'),
+            'args' => array(
+                'after_id' => array('type' => 'integer', 'default' => 0, 'minimum' => 0),
+            ),
         ));
         register_rest_route($ns, '/ocr/admin/docs/(?P<id>[0-9]+)/remove', array(
             'methods'             => 'POST',
@@ -362,7 +371,6 @@ class Scouting_PDF_OCR_Admin {
         }
         global $wpdb;
         $docs = Scouting_PDF_OCR::docs_table();
-        $pages = Scouting_PDF_OCR::table();
         $doc = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs WHERE id = %d", (int) $request['id']));
         if (!$doc) {
             return new WP_Error('no_such_doc', 'There is no such document.', array('status' => 404));
@@ -370,6 +378,46 @@ class Scouting_PDF_OCR_Admin {
         if (!($doc->status === 'failed' || ($doc->status === 'done' && (int) $doc->pages_failed > 0))) {
             return new WP_Error('not_retryable', 'This document has nothing to try again.', array('status' => 409));
         }
+        $this->put_back($doc);
+        return rest_ensure_response(array('status' => 'queued'));
+    }
+
+    /**
+     * POST /ocr/admin/retry-failed with {"after_id": n}: Try again for every document that
+     * has something to try again, one bounded batch a call. The dashboard repeats the call
+     * with the last id until "done".
+     */
+    public function rest_retry_failed($request) {
+        $off = self::queue_off();
+        if ($off) {
+            return $off;
+        }
+        global $wpdb;
+        $docs = Scouting_PDF_OCR::docs_table();
+        $last = (int) $request['after_id'];
+        $batch = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $docs WHERE id > %d AND (status = 'failed' OR (status = 'done' AND pages_failed > 0)) ORDER BY id LIMIT %d",
+            $last, self::RETRY_BATCH
+        ));
+        foreach ($batch as $doc) {
+            $this->put_back($doc);
+            $last = (int) $doc->id;
+        }
+        return rest_ensure_response(array(
+            'retried' => count($batch),
+            'last_id' => $last,
+            'done'    => count($batch) < self::RETRY_BATCH,
+        ));
+    }
+
+    /**
+     * One failed document (or a done one with failed pages) back in line: its failed page
+     * rows are deleted, everything already read stays.
+     */
+    private function put_back($doc) {
+        global $wpdb;
+        $docs = Scouting_PDF_OCR::docs_table();
+        $pages = Scouting_PDF_OCR::table();
         $first_failed = $wpdb->get_var($wpdb->prepare(
             "SELECT status FROM $pages WHERE doc_key = %s AND page = 1", $doc->doc_key
         )) === 'failed';
@@ -388,7 +436,6 @@ class Scouting_PDF_OCR_Admin {
             'started_at'   => null,
             'finished_at'  => null,
         ), array('id' => $doc->id));
-        return rest_ensure_response(array('status' => 'queued'));
     }
 
     /**
@@ -705,6 +752,10 @@ class Scouting_PDF_OCR_Admin {
                 <p>
                     <button type="button" class="button" id="sm-ocr-scan">Find every document on the site</button>
                     <span id="sm-ocr-scan-progress"></span>
+                </p>
+                <p>
+                    <button type="button" class="button" id="sm-ocr-retry-all">Try every failed document again</button>
+                    <span id="sm-ocr-retry-all-progress"></span>
                 </p>
                 <?php endif; ?>
                 <table class="widefat striped">

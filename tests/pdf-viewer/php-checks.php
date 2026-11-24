@@ -710,6 +710,7 @@ try {
         array('POST', "$v1/ocr/admin/approve/$p1", array(), array()),
         array('POST', "$v1/ocr/admin/approve-doc", array('doc_key' => $d->key), array()),
         array('POST', "$v1/ocr/admin/enqueue-post", array('post_id' => $matrix_post), array()),
+        array('POST', "$v1/ocr/admin/retry-failed", array('after_id' => 0), array()),
     );
     wp_set_current_user(0);
     foreach ($matrix as $i => $m) {
@@ -720,7 +721,7 @@ try {
         check("admin endpoints: a subscriber is refused ($i)", $call($m[0], $m[1], $m[2], $m[3])[0], 403);
     }
     wp_set_current_user($admin_users['editor']);
-    foreach (array(1, 3, 4, 5, 6) as $i) {
+    foreach (array(1, 3, 4, 5, 6, 11) as $i) {
         $m = $matrix[$i];
         check("admin endpoints: an editor cannot run the queue ($i)", $call($m[0], $m[1], $m[2], $m[3])[0], 403);
     }
@@ -830,6 +831,35 @@ try {
     $r = $with(array('queue_enabled' => 1), function() use ($call, $v1, $added_doc) { return $call('POST', "$v1/ocr/admin/docs/{$added_doc->id}/remove", array()); });
     check('remove: a read document is refused', array($r[0], $r[1]), array(409, 'already_started'));
     check('remove: no such document', $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/docs/999999/remove", array()); })[1], 'no_such_doc');
+
+    // Try every failed document again: a failed document (page 1 failed), a done one with a
+    // failed page, and a clean done one that must stay as it is
+    $d_f = $make_doc('retry-all-failed', array('status' => 'failed', 'pages_failed' => 1, 'started_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $seed_page($d_f, 1, 'failed', '', '');
+    $d_p = $make_doc('retry-all-partly', array('status' => 'done', 'total_pages' => 3, 'pages_done' => 2, 'pages_failed' => 1, 'started_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $seed_page($d_p, 1, 'done', 'auto', 'T');
+    $seed_page($d_p, 2, 'failed', '', '');
+    $seed_page($d_p, 3, 'done', 'auto', 'T');
+    $d_c = $make_doc('retry-all-clean', array('status' => 'done', 'total_pages' => 1, 'pages_done' => 1, 'started_at' => current_time('mysql'), 'finished_at' => current_time('mysql')));
+    $seed_page($d_c, 1, 'done', 'auto', 'T');
+    check('retry all: refused while background reading is off', $call('POST', "$v1/ocr/admin/retry-failed", array('after_id' => 0))[1], 'queue_off');
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/retry-failed", array('after_id' => 0)); });
+    check('retry all: answers how many and that it is finished', array($r[0], $r[2]['retried'] >= 2, $r[2]['done'], $r[2]['last_id'] >= $d_p->id), array(200, true, true, true));
+    $row_f = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE id = %d", $d_f->id));
+    $row_p = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE id = %d", $d_p->id));
+    $row_c = $wpdb->get_row($wpdb->prepare("SELECT * FROM $docs_table WHERE id = %d", $d_c->id));
+    check('retry all: a failed document waits again and learns its page count afresh', array($row_f->status, (int) $row_f->total_pages, (int) $row_f->pages_failed), array('queued', 0, 0));
+    check('retry all: a document with a failed page waits again and keeps what was read', array($row_p->status, (int) $row_p->total_pages, (int) $row_p->pages_done, (int) $row_p->pages_failed), array('queued', 3, 2, 0));
+    check('retry all: a clean document is left alone', array($row_c->status, (int) $row_c->pages_done), array('done', 1));
+    check('retry all: only the failed page rows are gone', array(
+        (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $ocr_table WHERE doc_key IN (%s, %s) AND status = 'failed'", $d_f->key, $d_p->key)),
+        (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $ocr_table WHERE doc_key IN (%s, %s, %s)", $d_f->key, $d_p->key, $d_c->key)),
+    ), array(0, 3));
+    $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/retry-failed", array('after_id' => 0)); });
+    check('retry all: a second press finds nothing', array($r[2]['retried'], $r[2]['done']), array(0, true));
+    foreach (array($d_f, $d_p, $d_c) as $gone) {
+        $drop_doc($gone);
+    }
 
     // The scan endpoint answers batch bookkeeping (as an administrator)
     $r = $with(array('queue_enabled' => 1), function() use ($call, $v1) { return $call('POST', "$v1/ocr/admin/scan", array('after_id' => 999999999)); });

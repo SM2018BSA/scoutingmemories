@@ -57,7 +57,7 @@ development server.
 `dashboard.spec.mjs` drives the PDF Text page (wp-admin > PDF Text, as `admin` /
 `admin-pass-123`) and the "PDF text" box on the post edit screen against the same stand-in
 service: documents added by link and by the site scan, the queue walking a 12-page document
-to the end one tick at a time, Pause and Resume, the busy backoff, checking, correcting and
+to the end one tick at a time, Pause and Resume, the busy backoff, Try every failed document again, checking, correcting and
 approving text in the box, and the auto-approve setting. `ocr-state.php` gained the commands
 it needs (`queue-on`, `queue-off`, `auto-approve`, `docs`, `approve`, `page-row`,
 `post-id`). The two spec files share the service and the settings, so Playwright runs with

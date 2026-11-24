@@ -472,6 +472,38 @@
             });
         }
 
+        // Try again for every document that failed or has failed pages, a batch a call
+        var retryAll = document.getElementById('sm-ocr-retry-all');
+        if (retryAll) {
+            retryAll.addEventListener('click', function() {
+                if (retryAll.disabled) {
+                    return;
+                }
+                retryAll.disabled = true;
+                var retryProgress = document.getElementById('sm-ocr-retry-all-progress');
+                var retried = 0;
+                (function step(after) {
+                    api('POST', 'retry-failed', { after_id: after }).then(function(r) {
+                        if (!r.ok) {
+                            retryProgress.textContent = errorText(r, 'That stopped early. Press the button to go on.');
+                            retryAll.disabled = false;
+                            return;
+                        }
+                        retried += r.data.retried;
+                        if (r.data.done) {
+                            retryProgress.textContent = retried === 0 ? 'Nothing has failed, so there is nothing to try again.'
+                                : 'Done: ' + retried + ' document(s) put back in the queue.';
+                            retryAll.disabled = false;
+                            refresh();
+                        } else {
+                            retryProgress.textContent = retried + ' document(s) put back in the queue so far…';
+                            step(r.data.last_id);
+                        }
+                    });
+                })(0);
+            });
+        }
+
         refresh();
         var timer = setInterval(function() {
             if (!document.hidden) {

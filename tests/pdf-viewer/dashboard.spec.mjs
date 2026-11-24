@@ -220,6 +220,30 @@ test.describe('PDF Text dashboard and the PDF text box', () => {
         expect(docFor(WALK_PDF).pages_done).toBe(0);
     });
 
+    test('Try every failed document again puts a failed document back and it is read', async ({ page }) => {
+        await setMode('fail');
+        await logInAdmin(page);
+        await page.goto(DASHBOARD + '&tab=queue');
+        await page.locator('#sm-ocr-add-url').fill(WALK_PDF);
+        await page.locator('#sm-ocr-add').click();
+        await expect(page.locator('#sm-ocr-add-result')).toHaveText('Added. It will be read next.');
+        await tickUntil(page, () => docFor(WALK_PDF)?.status === 'failed');
+
+        await setMode('fast');
+        await page.reload();
+        await expect(page.locator('#sm-ocr-docs')).toContainText('Failed');
+        await page.locator('#sm-ocr-retry-all').click();
+        await expect(page.locator('#sm-ocr-retry-all-progress')).toHaveText('Done: 1 document(s) put back in the queue.');
+        await expect(page.locator('#sm-ocr-docs')).toContainText('Waiting');
+        expect(docFor(WALK_PDF)).toMatchObject({ status: 'queued', pages_failed: 0 });
+
+        await tickUntil(page, () => docFor(WALK_PDF)?.status === 'done');
+        expect(docFor(WALK_PDF)).toMatchObject({ status: 'done', total_pages: 12, pages_done: 12, pages_failed: 0 });
+
+        await page.locator('#sm-ocr-retry-all').click();
+        await expect(page.locator('#sm-ocr-retry-all-progress')).toHaveText('Nothing has failed, so there is nothing to try again.');
+    });
+
     test('the PDF text box: read the document, check, correct and approve its text', async ({ page }) => {
         test.setTimeout(120000);
         const postId = ocrState('post-id', '/ocr-document/').trim();
