@@ -449,7 +449,8 @@ onMounted(async () => {
     <!-- Top Hero Header -->
     <header class="bg-gradient-to-r from-slate-900 via-slate-800 to-[#025600] text-white p-6 rounded-2xl shadow-md mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-black tracking-tight flex items-center gap-2.5">
+        <!-- text-white! : WordPress's own .wrap h1 and link colours would win over Tailwind here -->
+        <h1 class="text-2xl font-black tracking-tight flex items-center gap-2.5 text-white!">
           <span>Scouting Forms & Views Studio</span>
           <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/20 text-white border border-white/25">
             Tailwind v4 + Reka UI
@@ -463,7 +464,7 @@ onMounted(async () => {
       <div class="flex items-center gap-2">
         <a
           :href="adminUrl + 'admin.php?page=scouting-archives'"
-          class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white! border border-white/20 transition-all cursor-pointer"
         >
           <BookOpen class="w-4 h-4" />
           <span>User Guide</span>

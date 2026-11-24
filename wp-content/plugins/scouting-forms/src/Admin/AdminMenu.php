@@ -141,18 +141,30 @@ class AdminMenu {
         );
     }
 
+    /**
+     * The screens built by the Vue builder (renderBuilderPage). They are the only ones made with
+     * Tailwind; every other Scouting Forms screen is plain WordPress markup.
+     */
+    private const BUILDER_PAGES = ['scouting-forms-builder', 'scouting-forms-views', 'scouting-forms-entries'];
+
     public static function enqueueAdminAssets(string $hook): void {
-        $is_builder_page = (strpos($hook, 'scouting-forms') !== false);
+        // Matched on the page's own slug: the hook name of every Scouting Forms screen starts with
+        // "scouting-forms_page_", so a test on the hook alone matched all of them
+        $page = sanitize_key(wp_unslash((string) ($_GET['page'] ?? '')));
+        $is_builder_page = in_array($page, self::BUILDER_PAGES, true);
         $is_archive_page = (strpos($hook, 'scouting-archives') !== false);
 
         if (!$is_builder_page && !$is_archive_page) {
             return;
         }
 
-        // Always ensure canonical Tailwind CSS v4 is registered and available
-        wp_enqueue_style('tailwindcss-v4');
-
         if ($is_builder_page) {
+            // Tailwind only here. On WordPress's own screens its utility classes clash with
+            // WordPress class names: WordPress's table.fixed means "fixed column widths",
+            // Tailwind's .fixed pins the element to the window, so the Councils, Camps and
+            // Lodges lists stayed put while the page scrolled and ran off the right edge
+            wp_enqueue_style('tailwindcss-v4');
+
             $builder_css = SM_FORMS_PLUGIN_DIR . 'assets/builder/builder.css';
             $builder_js  = SM_FORMS_PLUGIN_DIR . 'assets/builder/builder.js';
 

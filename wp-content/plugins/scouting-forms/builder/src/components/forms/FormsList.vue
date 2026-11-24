@@ -78,7 +78,7 @@ function copyShortcode(id: number) {
         <p class="text-sm">No forms found matching your query.</p>
       </div>
 
-      <div v-else class="overflow-x-auto -mx-6 -my-6">
+      <div v-else class="relative overflow-x-auto -mx-6 -my-6">
         <table class="min-w-full divide-y divide-slate-200 text-sm text-left">
           <thead class="bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wider">
             <tr>
