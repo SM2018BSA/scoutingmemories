@@ -3,6 +3,7 @@
 namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Models\ArchiveRepository;
+use ScoutingMemories\Forms\Support\Permissions;
 
 /**
  * IndexingBrowser
@@ -17,6 +18,16 @@ class IndexingBrowser extends FormHandler {
         add_action('init', [__CLASS__, 'handleBatchUpdate']);
     }
 
+    /**
+     * Who may run the end-dates tool. It rewrites the end date of every active council, camp and
+     * lodge, so it is for administrators only (owner, 2026-11-24): the same people who get the
+     * Admin tab. Checked by role, not by manage_options: a person holding administrator plus a
+     * second role can lose that capability to the second role.
+     */
+    public static function canUpdateEndDates(): bool {
+        return Permissions::hasRole('administrator');
+    }
+
     public static function handleBatchUpdate(): void {
         // Own action name: the theme's My Account page handles `smp_action=update_end_dates`
         // itself, and the plugin must not intercept it while both are in use.
@@ -29,8 +40,8 @@ class IndexingBrowser extends FormHandler {
             wp_die(__('Security check failed. Please reload the page and try again.', 'scouting-forms'), 403);
         }
 
-        if (!current_user_can('edit_others_posts') && !in_array('index_contributor', (array) wp_get_current_user()->roles)) {
-            wp_die(__('Permission denied.', 'scouting-forms'));
+        if (!self::canUpdateEndDates()) {
+            wp_die(__('Permission denied.', 'scouting-forms'), 403);
         }
 
         $counts = ArchiveRepository::updateActiveEndDates();
@@ -74,7 +85,8 @@ class IndexingBrowser extends FormHandler {
             'councils' => $councils,
             'camps'    => $camps,
             'lodges'   => $lodges,
-            'updated'  => $updated
+            'updated'  => $updated,
+            'canUpdate' => self::canUpdateEndDates()
         ]);
     }
 }
