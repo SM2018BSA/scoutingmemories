@@ -32,40 +32,99 @@ h6 {
 	cursor: pointer;
 }
 
-/* The masthead logo grows with the viewport, exactly as before. */
+/* The masthead. The round badge logo hangs below the green bar, as on the old site.
+   Its size and the bar's height are set here once per screen size; --sm-logo-hang is how
+   far the badge reaches below the bar, and the page content starts below that, so the
+   badge can never sit on top of a page. */
+:root {
+	--sm-bar: 5rem;
+	--sm-logo: 5.5rem;
+	--sm-logo-hang: calc(var(--sm-logo) + 0.25rem - var(--sm-bar));
+}
+@media (min-width: 640px) {
+	:root {
+		--sm-logo: 6.5rem;
+	}
+}
+@media (min-width: 1024px) {
+	:root {
+		--sm-bar: 6rem;
+		--sm-logo: 8.5rem;
+	}
+}
+.sm-masthead-bar {
+	min-height: var(--sm-bar);
+	grid-template-columns: var(--sm-logo) minmax(0, 1fr) auto;
+}
+@media (min-width: 1280px) {
+	.sm-masthead-bar {
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	}
+}
+.sm-masthead-logo {
+	min-width: var(--sm-logo);
+}
+#sm_logo {
+	position: absolute;
+	top: 0.25rem;
+	left: 0;
+	display: block;
+	width: var(--sm-logo);
+	height: var(--sm-logo);
+}
 #sm_logo img {
-	width: 40%;
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 }
-@media (min-width: 576px) {
-	#sm_logo img {
-		width: 45% !important;
-	}
+.sm-masthead-banner {
+	max-height: calc(var(--sm-bar) - 1rem);
 }
-@media (min-width: 768px) {
-	#sm_logo img {
-		width: 50% !important;
-	}
+#content {
+	padding-top: calc(var(--sm-logo-hang) + 0.5rem);
 }
-@media (min-width: 992px) {
-	#sm_logo img {
-		width: 75% !important;
-	}
+
+/* The small-screen menu: a panel under the bar, over the page, scrolling when long. */
+.sm-mobile-navigation {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	max-height: calc(100vh - var(--sm-bar));
+	overflow-y: auto;
+	box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.25);
 }
-@media (min-width: 1200px) {
-	#sm_logo img {
-		width: 85% !important;
-	}
+.sm-mobile-navigation[hidden] {
+	display: none;
 }
-@media (min-width: 1600px) {
-	#sm_logo img {
-		width: 100% !important;
-	}
+.sm-mobile-navigation .menu :where(a, summary) {
+	min-height: 2.75rem;
+	align-items: center;
+}
+
+/* Keyboard focus is always visible, on the green bar too. */
+:where(a, button, summary, input, select, textarea, label.tab, [tabindex]):focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 2px;
 }
 
 /* Front page card-tabs: three radios switched entirely in CSS. The checked radio
    shows its pane and paints its card green, replacing the old Bootstrap tab JS. */
-.ft-tabs input[type="radio"] {
-	display: none;
+.ft-tabs input[type="radio"],
+.ma-tabs input[type="radio"] {
+	/* Out of sight but still reachable with the keyboard (arrow keys switch the panes). */
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+#ft-about:focus-visible ~ .ft-cards label[for="ft-about"] .card,
+#ft-search:focus-visible ~ .ft-cards label[for="ft-search"] .card,
+#ft-video:focus-visible ~ .ft-cards label[for="ft-video"] .card {
+	outline: 3px solid #025600;
+	outline-offset: 3px;
 }
 .ft-tabs .ft-pane {
 	display: none;
@@ -93,9 +152,6 @@ h6 {
 /* My Account dashboard tabs: radios switched entirely in CSS, one group for the
    main tabs (ma-tab), one for the Indexing pills (ma-idx), one for the Admin
    pills (ma-adm). The checked radio shows its pane and marks its label. */
-.ma-tabs input[type="radio"] {
-	display: none;
-}
 .ma-tabs .ma-pane,
 .ma-tabs .ma-subpane {
 	display: none;
@@ -128,7 +184,11 @@ h6 {
 #tab-myDefaults:checked ~ .ma-tablist label[for="tab-myDefaults"],
 #tab-myIndexing:checked ~ .ma-tablist label[for="tab-myIndexing"],
 #tab-myAdmin:checked ~ .ma-tablist label[for="tab-myAdmin"],
-#tab-myAdmin2:checked ~ .ma-tablist label[for="tab-myAdmin2"],
+#tab-myAdmin2:checked ~ .ma-tablist label[for="tab-myAdmin2"] {
+	color: #025600;
+	font-weight: 700;
+	box-shadow: inset 0 -3px 0 #025600;
+}
 #idx-myCouncils:checked ~ .ma-sublist label[for="idx-myCouncils"],
 #idx-myCamps:checked ~ .ma-sublist label[for="idx-myCamps"],
 #idx-myLodges:checked ~ .ma-sublist label[for="idx-myLodges"],
@@ -142,6 +202,47 @@ h6 {
 #adm-tools:checked ~ .ma-sublist label[for="adm-tools"] {
 	background-color: #025600;
 	color: #ffffff;
+}
+/* Tab rows wrap onto more lines on small screens, every tab is tall enough to tap, and the
+   tabs that are not open keep full-strength text (the faded default is too faint to read). */
+.ma-tabs .tabs {
+	flex-wrap: wrap;
+}
+.ma-tabs .tab {
+	min-height: 2.75rem;
+	height: auto;
+	color: var(--color-base-content);
+}
+/* The keyboard's place among the tabs is shown on the tab's label. */
+.ma-tabs:has(input[type="radio"]:focus-visible) .tabs label {
+	outline-offset: 2px;
+}
+#tab-myHome:focus-visible ~ .ma-tablist label[for="tab-myHome"],
+#tab-myPosts:focus-visible ~ .ma-tablist label[for="tab-myPosts"],
+#tab-myMedia:focus-visible ~ .ma-tablist label[for="tab-myMedia"],
+#tab-myDefaults:focus-visible ~ .ma-tablist label[for="tab-myDefaults"],
+#tab-myIndexing:focus-visible ~ .ma-tablist label[for="tab-myIndexing"],
+#tab-myAdmin:focus-visible ~ .ma-tablist label[for="tab-myAdmin"],
+#idx-myCouncils:focus-visible ~ .ma-sublist label[for="idx-myCouncils"],
+#idx-myCamps:focus-visible ~ .ma-sublist label[for="idx-myCamps"],
+#idx-myLodges:focus-visible ~ .ma-sublist label[for="idx-myLodges"],
+#idx-myTools:focus-visible ~ .ma-sublist label[for="idx-myTools"],
+#adm-users:focus-visible ~ .ma-sublist label[for="adm-users"],
+#adm-posts:focus-visible ~ .ma-sublist label[for="adm-posts"],
+#adm-states:focus-visible ~ .ma-sublist label[for="adm-states"],
+#adm-councils:focus-visible ~ .ma-sublist label[for="adm-councils"],
+#adm-camps:focus-visible ~ .ma-sublist label[for="adm-camps"],
+#adm-lodges:focus-visible ~ .ma-sublist label[for="adm-lodges"],
+#adm-tools:focus-visible ~ .ma-sublist label[for="adm-tools"] {
+	outline: 2px solid #025600;
+}
+
+/* Phones zoom the whole page when a field's text is smaller than 16px: fields stay at 16px. */
+.input,
+.select,
+.textarea,
+.select2-container .select2-search__field {
+	font-size: 1rem;
 }
 
 /* Formidable view pagination inside the dashboard (markup comes from the

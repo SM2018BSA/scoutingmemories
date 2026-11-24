@@ -132,7 +132,7 @@ class SearchForm
         // without one - the old Bootstrap theme - the legacy markup below renders.
         $override = locate_template('template-parts/search/search-form.php');
         if ($override) {
-            $sm_states_options = (new View(2300))->show_view();
+            $smem_states_options = (new View(2300))->show_view();
             ob_start();
             include $override;
             return ob_get_clean();
@@ -249,7 +249,7 @@ class SearchForm
         // Theme override, as in show_form().
         $override = locate_template('template-parts/search/search-form2.php');
         if ($override) {
-            $sm_states_options = (new View(2300))->show_view();
+            $smem_states_options = (new View(2300))->show_view();
             ob_start();
             include $override;
             return ob_get_clean();
@@ -365,8 +365,8 @@ class SearchForm
         // Theme override, as in show_form().
         $override = locate_template('template-parts/search/category-form.php');
         if ($override) {
-            $sm_states_options = (new View(2300))->show_view();
-            $sm_category       = $category;
+            $smem_states_options = (new View(2300))->show_view();
+            $smem_category       = $category;
             ob_start();
             include $override;
             return ob_get_clean();

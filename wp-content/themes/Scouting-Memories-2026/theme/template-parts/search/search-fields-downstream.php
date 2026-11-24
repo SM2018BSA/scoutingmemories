@@ -13,7 +13,7 @@
 	<span class="loading loading-spinner loading-lg sm_green_color" role="status"></span>
 </div>
 <div class="mb-2 col-span-12 hidden">
-	<label class="block text-sm mb-1" for="select_council">Select Council</label>
+	<label class="block text-sm mb-1" for="select_council"><?php esc_html_e( 'Select Council', 'scouting-memories-2026' ); ?></label>
 	<select name="select_council[]" class="select w-full" id="select_council" multiple="multiple"></select>
 </div>
 
@@ -21,7 +21,7 @@
 	<span class="loading loading-spinner loading-lg sm_green_color" role="status"></span>
 </div>
 <div class="mb-2 col-span-12 hidden">
-	<label class="block text-sm mb-1" for="select_merged_council">Selected Merged Council</label>
+	<label class="block text-sm mb-1" for="select_merged_council"><?php esc_html_e( 'Selected Merged Council', 'scouting-memories-2026' ); ?></label>
 	<select name="select_merged_council[]" class="select w-full" id="select_merged_council" multiple="multiple"></select>
 </div>
 
@@ -29,7 +29,7 @@
 	<span class="loading loading-spinner loading-lg sm_green_color" role="status"></span>
 </div>
 <div class="mb-2 col-span-12 hidden">
-	<label class="block text-sm mb-1" for="select_lodge">Select Lodge</label>
+	<label class="block text-sm mb-1" for="select_lodge"><?php esc_html_e( 'Select Lodge', 'scouting-memories-2026' ); ?></label>
 	<select name="select_lodge[]" class="select w-full" id="select_lodge" multiple="multiple"></select>
 </div>
 
@@ -37,6 +37,6 @@
 	<span class="loading loading-spinner loading-lg sm_green_color" role="status"></span>
 </div>
 <div class="mb-2 col-span-12 hidden">
-	<label class="block text-sm mb-1" for="select_camp">Select Camp</label>
+	<label class="block text-sm mb-1" for="select_camp"><?php esc_html_e( 'Select Camp', 'scouting-memories-2026' ); ?></label>
 	<select name="select_camp[]" class="select w-full" id="select_camp" multiple="multiple"></select>
 </div>

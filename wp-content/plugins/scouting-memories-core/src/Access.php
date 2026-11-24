@@ -105,6 +105,25 @@ final class Access {
 		return array( 'myHome', 'myPosts', 'myMedia', 'myDefaults', 'myIndexing', 'myAdmin', 'myAdmin2' );
 	}
 
+	/** The My Account tabs the current visitor can see, in page order. Asking for any other
+	 *  tab by its address opens Home instead of an empty panel. */
+	public static function visible_tabs(): array {
+		$tabs = array( 'myHome' );
+		if ( self::can_see_posts_tab() ) {
+			$tabs[] = 'myPosts';
+		}
+		$tabs[] = 'myMedia';
+		$tabs[] = 'myDefaults';
+		if ( self::can_see_indexing_tab() ) {
+			$tabs[] = 'myIndexing';
+		}
+		if ( self::can_see_admin_tabs() ) {
+			$tabs[] = 'myAdmin';
+			$tabs[] = 'myAdmin2';
+		}
+		return $tabs;
+	}
+
 	public static function allowed_sub_tabs(): array {
 		return array( 'myCouncils', 'myCamps', 'myLodges' );
 	}

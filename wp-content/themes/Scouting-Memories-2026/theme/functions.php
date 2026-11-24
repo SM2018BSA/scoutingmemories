@@ -15,7 +15,7 @@ if ( ! defined( 'SCOUTING_MEMORIES_2026_VERSION' ) ) {
 	 * to create your production build, the value below will be replaced in the
 	 * generated zip file with a timestamp, converted to base 36.
 	 */
-	define( 'SCOUTING_MEMORIES_2026_VERSION', '0.1.0' );
+	define( 'SCOUTING_MEMORIES_2026_VERSION', '1.0.0' );
 }
 
 /*
@@ -24,14 +24,14 @@ if ( ! defined( 'SCOUTING_MEMORIES_2026_VERSION' ) ) {
  * checks) lives in the scouting-memories-core plugin; this flag tells the
  * plugin to wire itself up.
  */
-define( 'SM_THEME_DELEGATES_TO_CORE', true );
+define( 'SM_THEME_DELEGATES_TO_CORE', true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- the core plugin's own name for this switch.
 
 /**
  * The site cannot work without the core plugin: say so plainly in wp-admin.
  */
 function scouting_memories_2026_core_missing_notice() {
 	if ( ! defined( 'SM_CORE_VERSION' ) ) {
-		echo '<div class="notice notice-error"><p>Scouting Memories 2026: the <strong>Scouting Memories Core</strong> plugin must be active. The search, dashboard and indexing features are switched off until it is.</p></div>';
+		echo '<div class="notice notice-error"><p>' . wp_kses_post( __( 'Scouting Memories 2026: the <strong>Scouting Memories Core</strong> plugin must be active. The search, dashboard and indexing features are switched off until it is.', 'scouting-memories-2026' ) ) . '</p></div>';
 	}
 }
 add_action( 'admin_notices', 'scouting_memories_2026_core_missing_notice' );
@@ -39,7 +39,7 @@ add_action( 'admin_notices', 'scouting_memories_2026_core_missing_notice' );
 /**
  * The daisyUI nav walker for the primary menu.
  */
-require get_template_directory() . '/inc/class-sm-nav-walker.php';
+require get_template_directory() . '/inc/class-scouting-memories-2026-nav-walker.php';
 
 /**
  * Numbered pagination that keeps the search filters on every page link.
@@ -53,7 +53,11 @@ require get_template_directory() . '/inc/pagination.php';
 // Hide the admin bar on the front end.
 add_filter( 'show_admin_bar', '__return_false' );
 
-// Category archives show 10 posts per page.
+/**
+ * Category archives show 10 posts per page.
+ *
+ * @param WP_Query $query The query about to run.
+ */
 function scouting_memories_2026_category_query( $query ) {
 	if ( ! is_admin() && $query->is_main_query() && is_category() ) {
 		$query->set( 'posts_per_page', 10 );
@@ -61,7 +65,12 @@ function scouting_memories_2026_category_query( $query ) {
 }
 add_action( 'pre_get_posts', 'scouting_memories_2026_category_query' );
 
-// Paged single posts must not be redirected back to page one.
+/**
+ * Paged single posts must not be redirected back to page one.
+ *
+ * @param string|false $redirect_url The address WordPress wants to redirect to.
+ * @return string|false
+ */
 function scouting_memories_2026_disable_redirect_canonical( $redirect_url ) {
 	if ( is_paged() && is_singular() ) {
 		$redirect_url = false;
@@ -144,7 +153,7 @@ if ( ! function_exists( 'scouting_memories_2026_setup' ) ) :
 			array(
 				// Same location slug as the old theme, so the existing menu carries over.
 				'primary' => __( 'Primary', 'scouting-memories-2026' ),
-				'menu-2' => __( 'Footer Menu', 'scouting-memories-2026' ),
+				'menu-2'  => __( 'Footer Menu', 'scouting-memories-2026' ),
 			)
 		);
 
@@ -177,6 +186,20 @@ if ( ! function_exists( 'scouting_memories_2026_setup' ) ) :
 		// Add support for responsive embedded content.
 		add_theme_support( 'responsive-embeds' );
 
+		// Wide and full-width blocks in the editor.
+		add_theme_support( 'align-wide' );
+
+		// The badge in the masthead can be replaced in Appearance > Customize > Site Identity.
+		add_theme_support(
+			'custom-logo',
+			array(
+				'height'      => 300,
+				'width'       => 300,
+				'flex-height' => true,
+				'flex-width'  => true,
+			)
+		);
+
 		// Remove support for block templates.
 		remove_theme_support( 'block-templates' );
 	}
@@ -204,16 +227,49 @@ function scouting_memories_2026_widgets_init() {
 add_action( 'widgets_init', 'scouting_memories_2026_widgets_init' );
 
 /**
+ * A version for one of the theme's built files: the time the file last changed, so a new
+ * build is never hidden by a browser's cache. Falls back to the theme's version number.
+ *
+ * @param string $relative_path The file's path inside the theme folder.
+ * @return string
+ */
+function scouting_memories_2026_asset_version( $relative_path ) {
+	$file = get_template_directory() . '/' . ltrim( $relative_path, '/' );
+	return is_file( $file ) ? (string) filemtime( $file ) : SCOUTING_MEMORIES_2026_VERSION;
+}
+
+/**
+ * The masthead badge: the Site Identity logo when one is set, the Scouting Memories badge otherwise.
+ *
+ * @return string The image address, not yet escaped.
+ */
+function scouting_memories_2026_logo_url() {
+	$logo_id = (int) get_theme_mod( 'custom_logo' );
+	$custom  = $logo_id ? wp_get_attachment_image_url( $logo_id, 'medium' ) : '';
+	return $custom ? $custom : 'https://storage.scoutingmemories.org/2021/02/b5564491-scouting_memories_project-e1613015799300.png';
+}
+
+/**
  * Enqueue scripts and styles.
  */
 function scouting_memories_2026_scripts() {
-	// Roboto Slab for headings, from Google Fonts like the old theme.
-	wp_enqueue_style( 'roboto-slab', 'https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;700&display=swap', array(), null );
-	// select2 for the chained search dropdowns, self-hosted (the old theme used a CDN).
-	wp_enqueue_style( 'select2', get_template_directory_uri() . '/css/select2.min.css', array(), '4.1.0' );
-	wp_enqueue_script( 'select2', get_template_directory_uri() . '/js/vendor/select2.min.js', array( 'jquery' ), '4.1.0', false );
-	wp_enqueue_style( 'scouting-memories-2026-style', get_stylesheet_uri(), array(), SCOUTING_MEMORIES_2026_VERSION );
-	wp_enqueue_script( 'scouting-memories-2026-script', get_template_directory_uri() . '/js/script.min.js', array(), SCOUTING_MEMORIES_2026_VERSION, true );
+	$uri = get_template_directory_uri();
+
+	// select2 for the chained search dropdowns, self-hosted. Nothing in this theme loads from a CDN.
+	wp_enqueue_style( 'select2', $uri . '/css/select2.min.css', array(), '4.1.0' );
+	wp_enqueue_script( 'select2', $uri . '/js/vendor/select2.min.js', array( 'jquery' ), '4.1.0', false );
+
+	wp_enqueue_style( 'scouting-memories-2026-style', get_stylesheet_uri(), array(), scouting_memories_2026_asset_version( 'style.css' ) );
+	wp_enqueue_script(
+		'scouting-memories-2026-script',
+		$uri . '/js/script.min.js',
+		array(),
+		scouting_memories_2026_asset_version( 'js/script.min.js' ),
+		array(
+			'strategy'  => 'defer',
+			'in_footer' => true,
+		)
+	);
 
 	if ( is_singular() && comments_open() && get_option( 'thread_comments' ) ) {
 		wp_enqueue_script( 'comment-reply' );

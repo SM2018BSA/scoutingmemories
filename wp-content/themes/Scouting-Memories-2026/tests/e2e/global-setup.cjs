@@ -1,40 +1,37 @@
-// Logs each test role in once and saves its session for the specs.
-// The only POST the suite ever makes is this sign-in.
+// Signs each test login in once, through the site's own login page, and saves its session
+// for the specs. This sign-in is the only form the suite ever submits.
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright-core');
+const { Site } = require('./support/Site.cjs');
+const { ROLES } = require('./support/Roles.cjs');
 
-function readEnv() {
-	const file = path.join(__dirname, '..', '.env');
-	return Object.fromEntries(
-		fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map((l) => l.split('='))
-	);
-}
-
-async function login(browser, user, password, stateFile) {
-	const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
-	const page = await ctx.newPage();
-	await page.goto('https://sm-tailwind.ddev.site/wp-login.php', { waitUntil: 'domcontentloaded' });
-	if (await page.locator('#user_login').count()) {
-		await page.fill('#user_login', user);
-		await page.fill('#user_pass', password);
-		await Promise.all([page.waitForNavigation(), page.click('#wp-submit')]);
-	} else {
-		await page.fill('input[name="log"]', user);
-		await page.fill('input[name="pwd"]', password);
-		await Promise.all([page.waitForNavigation(), page.click('input[type="submit"], button[type="submit"]')]);
+async function signIn(browser, role, password) {
+	const context = await browser.newContext({ ignoreHTTPSErrors: true, baseURL: Site.baseURL, httpCredentials: Site.gate });
+	const page = await context.newPage();
+	await page.goto('/login/', { waitUntil: 'domcontentloaded' });
+	const form = page.locator('form:has(input[name="log"])').first();
+	await form.locator('input[name="log"]').fill(role.username);
+	await form.locator('input[name="pwd"]').fill(password);
+	await Promise.all([
+		page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+		form.locator('[type="submit"]').first().click(),
+	]);
+	const cookies = await context.cookies();
+	if (!cookies.some((c) => c.name.startsWith('wordpress_logged_in_'))) {
+		throw new Error(`Sign-in failed for the test login "${role.key}" on ${Site.baseURL} (ended on ${page.url()}).`);
 	}
-	await ctx.storageState({ path: stateFile });
-	await ctx.close();
+	fs.mkdirSync(path.dirname(role.authFile), { recursive: true });
+	await context.storageState({ path: role.authFile });
+	await context.close();
 }
 
 module.exports = async () => {
-	const env = readEnv();
-	const authDir = path.join(__dirname, '..', '.auth');
-	fs.mkdirSync(authDir, { recursive: true });
+	const password = Site.env.SM_TEST_PASSWORD;
 	const browser = await chromium.launch({ channel: 'chrome', headless: true });
-	await login(browser, env.SM_TEST_ADMIN, env.SM_TEST_PASSWORD, path.join(authDir, 'admin.json'));
-	await login(browser, env.SM_TEST_INDEXER, env.SM_TEST_PASSWORD, path.join(authDir, 'indexer.json'));
-	await login(browser, env.SM_TEST_SUBSCRIBER, env.SM_TEST_PASSWORD, path.join(authDir, 'subscriber.json'));
-	await browser.close();
+	try {
+		for (const role of ROLES) await signIn(browser, role, password);
+	} finally {
+		await browser.close();
+	}
 };

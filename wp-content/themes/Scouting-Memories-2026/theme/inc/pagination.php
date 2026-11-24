@@ -9,10 +9,13 @@
 
 if ( ! function_exists( 'scouting_memories_2026_pagination' ) ) :
 	/**
+	 * Prints or returns the numbered page links for a query.
+	 *
 	 * @param WP_Query|null $the_query A custom query, or null for the global one.
-	 * @param bool          $echo      Print (default) or return the markup.
+	 * @param bool          $display   Print (default) or return the markup.
+	 * @return string|void The markup when $display is false.
 	 */
-	function scouting_memories_2026_pagination( $the_query = null, $echo = true ) {
+	function scouting_memories_2026_pagination( $the_query = null, $display = true ) {
 		if ( null === $the_query ) {
 			global $wp_query;
 			$the_query = $wp_query;
@@ -65,7 +68,7 @@ if ( ! function_exists( 'scouting_memories_2026_pagination' ) ) :
 		}
 		$pagination .= '</div></nav>';
 
-		if ( $echo ) {
+		if ( $display ) {
 			echo $pagination; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			return null;
 		}

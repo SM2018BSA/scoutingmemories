@@ -1,7 +1,7 @@
 <?php
 /**
  * The wide search form (Info Page and /category/ archives). Included by the
- * core plugin's SearchForm::show_form2(), which provides $sm_states_options.
+ * core plugin's SearchForm::show_form2(), which provides $smem_states_options.
  *
  * @package Scouting_Memories_2026
  */
@@ -15,26 +15,26 @@
 		<input type="hidden" name="page" value="info-page">
 
 		<div class="mb-2 col-span-12">
-			<label class="block text-sm">Select the following optional fields to search memories.</label>
+			<label class="block text-sm"><?php esc_html_e( 'Select the following optional fields to search memories.', 'scouting-memories-2026' ); ?></label>
 		</div>
 
 		<div class="mb-2 col-span-12 md:col-span-4">
-			<label class="block text-sm mb-1" for="select_state">Select State</label>
+			<label class="block text-sm mb-1" for="select_state"><?php esc_html_e( 'Select State', 'scouting-memories-2026' ); ?></label>
 			<select name="select_state[]" class="select w-full" id="select_state" multiple="multiple">
-				<?php echo $sm_states_options; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<?php echo $smem_states_options; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			</select>
 		</div>
 		<div class="mb-2 col-span-6 md:col-span-4">
-			<label class="block text-sm mb-1" for="start_date">Start Date</label>
+			<label class="block text-sm mb-1" for="start_date"><?php esc_html_e( 'Start Date', 'scouting-memories-2026' ); ?></label>
 			<input name="start_date" class="input w-full" id="start_date" value="1900" />
 		</div>
 		<div class="mb-2 col-span-6 md:col-span-4">
-			<label class="block text-sm mb-1" for="end_date">End Date</label>
+			<label class="block text-sm mb-1" for="end_date"><?php esc_html_e( 'End Date', 'scouting-memories-2026' ); ?></label>
 			<input name="end_date" class="input w-full" id="end_date" value="2020" />
 		</div>
 
-		<?php include __DIR__ . '/search-fields-downstream.php'; ?>
+		<?php require __DIR__ . '/search-fields-downstream.php'; ?>
 
-		<?php include __DIR__ . '/search-footer.php'; ?>
+		<?php require __DIR__ . '/search-footer.php'; ?>
 	</form>
 </div>

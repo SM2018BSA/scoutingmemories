@@ -48,6 +48,6 @@
 	 * Add your theme below:
 	 */
 
-	/* The site's heading font (Roboto Slab, loaded from Google Fonts in functions.php). */
+	/* The site's heading font (Roboto Slab, served from the theme's fonts folder; see custom/fonts.css). */
 	--font-slab: "Roboto Slab", serif;
 }

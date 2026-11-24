@@ -321,7 +321,15 @@ if ( ! function_exists( 'scouting_memories_2026_sm_posted_on' ) ) :
 			sprintf(
 				/* translators: %s: post date. */
 				esc_html_x( 'Posted on %s', 'post date', 'scouting-memories-2026' ),
-				'<a href="' . esc_url( get_permalink() ) . '" rel="bookmark">' . $time_string . '</a>'
+				'<a href="' . esc_url( get_permalink() ) . '" rel="bookmark">' . wp_kses(
+					$time_string,
+					array(
+						'time' => array(
+							'class'    => true,
+							'datetime' => true,
+						),
+					)
+				) . '</a>'
 			)
 		); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}

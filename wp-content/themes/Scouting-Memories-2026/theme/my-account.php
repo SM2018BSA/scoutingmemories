@@ -1,14 +1,13 @@
 <?php
 /**
- * The My Account dashboard: profile sidebar plus the tabbed panels (Home,
- * Posts, Media, Defaults, Indexing, Admin, Admin 2), every panel the same
- * Formidable form or view as the old theme.
+ * The My Account dashboard: the profile card and the tabbed panels (Home, Posts,
+ * Media, Defaults, Indexing, Admin, Admin 2).
  *
- * Rebuilt as radio-driven daisyUI tabs: the ?tab= / ?tab2= deep links are
- * resolved SERVER-side against the Access whitelists (which kills the old
- * reflected-XSS echo), every id is unique (the old page repeated ids five
- * times), who-sees-what comes from the Access class, and the end-dates tool
- * is a nonce'd POST to the core plugin instead of an open GET.
+ * Presentation only. Who sees which tab comes from the core plugin's Access class;
+ * which tab is open comes from its Tabs class (worked out on the server, from
+ * whitelists); every form and view comes from its forms gateway, so the same page
+ * runs on Scouting Forms or on Formidable. The tabs are radio-driven daisyUI tabs:
+ * they work without JavaScript and every id on the page is unique.
  *
  * Template Name: My Account Page
  *
@@ -16,135 +15,121 @@
  */
 
 use ScoutingMemories\Core\Access;
-use ScoutingMemories\Core\Ajax;
+use ScoutingMemories\Core\Dashboard\Tabs;
+use ScoutingMemories\Core\Forms\FormsGateway;
+use ScoutingMemories\Core\Forms\GatewayFactory;
 
 get_header();
 
-$sm_user = isset( $GLOBALS['the_user'] ) && $GLOBALS['the_user'] instanceof CurrentUser ? $GLOBALS['the_user'] : new CurrentUser();
-
-$sm_account_form  = new Form( MY_ACCOUNT_FORMID );
-$sm_users_form    = new Form( EDIT_USERS_FORMID );
-$sm_defaults_form = new Form( EDIT_USER_DEFAULTS_FORMID );
-
-$sm_posts_view    = new View( POSTS_VIEWID );
-$sm_users_view    = new View( EDIT_USERS_VIEWID );
-$sm_councils_view = new CouncilView( ALL_COUNCILS_VIEWID );
-$sm_lodges_view   = new LodgeView( ALL_LODGES_VIEWID );
-$sm_camps_view    = new CampView( ALL_CAMPS_VIEWID );
-
-// Deep links, resolved server-side against the whitelists (AUDIT row I).
-$sm_tab  = isset( $_GET['tab'] ) && in_array( $_GET['tab'], Access::allowed_tabs(), true ) ? $_GET['tab'] : 'myHome'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-$sm_tab2 = isset( $_GET['tab2'] ) && in_array( $_GET['tab2'], Access::allowed_sub_tabs(), true ) ? $_GET['tab2'] : 'myCouncils'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-
-/** Prints checked when this tab is the open one. */
-function sm_checked( $value, $current ) {
-	echo $value === $current ? ' checked' : '';
+if ( ! is_user_logged_in() ) {
+	get_template_part( 'template-parts/account/login-prompt' );
+	get_footer();
+	return;
 }
+
+$smem_user  = isset( $GLOBALS['the_user'] ) && $GLOBALS['the_user'] instanceof CurrentUser ? $GLOBALS['the_user'] : new CurrentUser();
+$smem_forms = GatewayFactory::current();
+
+// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only: these only choose which tab is open.
+$smem_tab        = Tabs::current( $_GET );
+$smem_tab2       = Tabs::current_sub( $_GET );
+$smem_dates_done = isset( $_GET['enddates'] ) && 'done' === $_GET['enddates'];
+// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+$smem_part_args = array(
+	'forms' => $smem_forms,
+	'sub'   => $smem_tab2,
+);
 ?>
 
 	<section id="primary" class="content-area w-full">
-		<main id="main" class="site-main max-w-7xl mx-auto mt-8">
+		<main id="main" class="site-main mx-auto mt-4 mb-8 max-w-7xl">
 
-			<?php if ( isset( $_GET['enddates'] ) && 'done' === $_GET['enddates'] ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
-				<div class="alert alert-success alert-soft mb-4" role="status">Active end dates were updated for councils, camps and lodges.</div>
+			<h1 class="sr-only"><?php the_title(); ?></h1>
+
+			<?php if ( $smem_dates_done ) : ?>
+				<div class="alert alert-success alert-soft mb-4" role="status"><?php esc_html_e( 'Active end dates were updated for councils, camps and lodges.', 'scouting-memories-2026' ); ?></div>
 			<?php endif; ?>
 
-			<div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+			<div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
 
-				<div class="card card-border bg-base-100 p-4"><!-- profile sidebar -->
-					<div class="flex flex-col items-center gap-2 text-center">
-						<div><?php echo $sm_user->show_avatar(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-						<p class="mt-2"><?php echo $sm_user->show_first_name(); ?> <?php echo $sm_user->show_last_name(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
-						<p class="font-bold">User Roles:</p>
-						<p><?php echo $sm_user->show_user_roles(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
-						<div><a class="btn btn-secondary btn-sm" href="<?php echo esc_url( wp_logout_url() ); ?>">Logout</a></div>
+				<aside class="card card-border bg-base-100 self-start p-4" aria-label="<?php esc_attr_e( 'Your profile', 'scouting-memories-2026' ); ?>">
+					<div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-center lg:flex-col">
+						<div><?php echo $smem_user->show_avatar(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
+						<div>
+							<p class="font-semibold"><?php echo $smem_user->show_first_name(); ?> <?php echo $smem_user->show_last_name(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
+							<p class="mt-1 font-bold"><?php esc_html_e( 'User Roles:', 'scouting-memories-2026' ); ?></p>
+							<p><?php echo $smem_user->show_user_roles(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
+						</div>
+						<div><a class="btn btn-secondary" href="<?php echo esc_url( wp_logout_url() ); ?>"><?php esc_html_e( 'Logout', 'scouting-memories-2026' ); ?></a></div>
 					</div>
-				</div>
+				</aside>
 
-				<div class="sm:col-span-3 min-w-0 ma-tabs">
+				<div class="ma-tabs min-w-0 lg:col-span-3">
 
-					<input type="radio" name="ma-tab" id="tab-myHome"<?php sm_checked( 'myHome', $sm_tab ); ?>>
+					<input type="radio" name="ma-tab" id="tab-myHome"<?php checked( 'myHome', $smem_tab ); ?>>
 					<?php if ( Access::can_see_posts_tab() ) : ?>
-						<input type="radio" name="ma-tab" id="tab-myPosts"<?php sm_checked( 'myPosts', $sm_tab ); ?>>
+						<input type="radio" name="ma-tab" id="tab-myPosts"<?php checked( 'myPosts', $smem_tab ); ?>>
 					<?php endif; ?>
-					<input type="radio" name="ma-tab" id="tab-myMedia"<?php sm_checked( 'myMedia', $sm_tab ); ?>>
-					<input type="radio" name="ma-tab" id="tab-myDefaults"<?php sm_checked( 'myDefaults', $sm_tab ); ?>>
+					<input type="radio" name="ma-tab" id="tab-myMedia"<?php checked( 'myMedia', $smem_tab ); ?>>
+					<input type="radio" name="ma-tab" id="tab-myDefaults"<?php checked( 'myDefaults', $smem_tab ); ?>>
 					<?php if ( Access::can_see_indexing_tab() ) : ?>
-						<input type="radio" name="ma-tab" id="tab-myIndexing"<?php sm_checked( 'myIndexing', $sm_tab ); ?>>
+						<input type="radio" name="ma-tab" id="tab-myIndexing"<?php checked( 'myIndexing', $smem_tab ); ?>>
 					<?php endif; ?>
 					<?php if ( Access::can_see_admin_tabs() ) : ?>
-						<input type="radio" name="ma-tab" id="tab-myAdmin"<?php sm_checked( 'myAdmin', $sm_tab ); ?>>
-						<input type="radio" name="ma-tab" id="tab-myAdmin2"<?php sm_checked( 'myAdmin2', $sm_tab ); ?>>
+						<input type="radio" name="ma-tab" id="tab-myAdmin"<?php checked( 'myAdmin', $smem_tab ); ?>>
+						<?php // Admin 2 has no tab of its own: it opens from the Users list's Edit links, so its radio is switched off unless it is the open one. ?>
+						<input type="radio" name="ma-tab" id="tab-myAdmin2" aria-label="<?php esc_attr_e( 'Admin 2: edit a user', 'scouting-memories-2026' ); ?>"<?php checked( 'myAdmin2', $smem_tab ); ?><?php disabled( 'myAdmin2' !== $smem_tab ); ?>>
 					<?php endif; ?>
 
-					<div class="ma-tablist tabs tabs-lift" role="tablist">
-						<label class="tab" for="tab-myHome">Home</label>
+					<div class="ma-tablist tabs tabs-border" role="group" aria-label="<?php esc_attr_e( 'My Account sections', 'scouting-memories-2026' ); ?>">
+						<label class="tab" for="tab-myHome"><?php esc_html_e( 'Home', 'scouting-memories-2026' ); ?></label>
 						<?php if ( Access::can_see_posts_tab() ) : ?>
-							<label class="tab" for="tab-myPosts">Posts</label>
+							<label class="tab" for="tab-myPosts"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></label>
 						<?php endif; ?>
-						<label class="tab" for="tab-myMedia">Media</label>
-						<label class="tab" for="tab-myDefaults">Defaults</label>
+						<label class="tab" for="tab-myMedia"><?php esc_html_e( 'Media', 'scouting-memories-2026' ); ?></label>
+						<label class="tab" for="tab-myDefaults"><?php esc_html_e( 'Defaults', 'scouting-memories-2026' ); ?></label>
 						<?php if ( Access::can_see_indexing_tab() ) : ?>
-							<label class="tab" for="tab-myIndexing">Indexing</label>
+							<label class="tab" for="tab-myIndexing"><?php esc_html_e( 'Indexing', 'scouting-memories-2026' ); ?></label>
 						<?php endif; ?>
 						<?php if ( Access::can_see_admin_tabs() ) : ?>
-							<label class="tab" for="tab-myAdmin">Admin</label>
-							<label class="tab hidden" for="tab-myAdmin2">Admin 2</label><?php // Reached through the Users list's Edit links, like before. ?>
+							<label class="tab" for="tab-myAdmin"><?php esc_html_e( 'Admin', 'scouting-memories-2026' ); ?></label>
+							<label class="tab hidden" for="tab-myAdmin2"><?php esc_html_e( 'Admin 2', 'scouting-memories-2026' ); ?></label><?php // Reached through the Users list's Edit links. ?>
 						<?php endif; ?>
 					</div>
 
-					<div class="ma-panes border border-base-300 border-t-0 bg-base-100 p-4">
+					<div class="ma-panes card card-border bg-base-100 mt-2 p-3 sm:p-4">
 
-						<div class="ma-pane" id="pane-myHome" role="tabpanel">
-							<?php echo $sm_account_form->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+						<div class="ma-pane" id="pane-myHome">
+							<?php echo $smem_forms->form( FormsGateway::FORM_ACCOUNT ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 						</div>
 
 						<?php if ( Access::can_see_posts_tab() ) : ?>
-							<div class="ma-pane" id="pane-myPosts" role="tabpanel">
-								<h2 class="text-xl mb-4">My Posts</h2>
-								<?php echo $sm_posts_view->show_view(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<div class="ma-pane" id="pane-myPosts">
+								<?php get_template_part( 'template-parts/account/posts', $smem_forms->key(), $smem_part_args ); ?>
 							</div>
 						<?php endif; ?>
 
-						<div class="ma-pane" id="pane-myMedia" role="tabpanel">
-							<div class="p-8"><?php echo do_shortcode( '[frontend-button]' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
+						<div class="ma-pane" id="pane-myMedia">
+							<div class="p-2 sm:p-6"><?php echo $smem_forms->media_button(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 						</div>
 
-						<div class="ma-pane" id="pane-myDefaults" role="tabpanel">
+						<div class="ma-pane" id="pane-myDefaults">
 							<?php if ( Access::can_see_defaults_tab() ) : ?>
-								<?php echo $sm_defaults_form->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+								<?php echo $smem_forms->form( FormsGateway::FORM_DEFAULTS ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							<?php else : ?>
-								<p>You do not have permission to upload content.</p>
+								<p><?php esc_html_e( 'You do not have permission to upload content.', 'scouting-memories-2026' ); ?></p>
 							<?php endif; ?>
 						</div>
 
 						<?php if ( Access::can_see_indexing_tab() ) : ?>
-							<div class="ma-pane" id="pane-myIndexing" role="tabpanel">
-
-								<input type="radio" name="ma-idx" id="idx-myCouncils"<?php sm_checked( 'myCouncils', $sm_tab2 ); ?>>
-								<input type="radio" name="ma-idx" id="idx-myCamps"<?php sm_checked( 'myCamps', $sm_tab2 ); ?>>
-								<input type="radio" name="ma-idx" id="idx-myLodges"<?php sm_checked( 'myLodges', $sm_tab2 ); ?>>
-								<input type="radio" name="ma-idx" id="idx-myTools">
-
-								<div class="ma-sublist tabs tabs-box mb-4" role="tablist">
-									<label class="tab" for="idx-myCouncils">Councils</label>
-									<label class="tab" for="idx-myCamps">Camps</label>
-									<label class="tab" for="idx-myLodges">Lodges</label>
-									<label class="tab" for="idx-myTools">Tools</label>
-								</div>
-
-								<div class="ma-subpane" id="idx-pane-councils"><?php echo $sm_councils_view->show_view(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-								<div class="ma-subpane" id="idx-pane-camps"><?php echo $sm_camps_view->show_view(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-								<div class="ma-subpane" id="idx-pane-lodges"><?php echo $sm_lodges_view->show_view(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
-								<div class="ma-subpane" id="idx-pane-tools">
-									<?php get_template_part( 'template-parts/account/end-dates-card' ); ?>
-								</div>
-
+							<div class="ma-pane" id="pane-myIndexing">
+								<?php get_template_part( 'template-parts/account/indexing', $smem_forms->key(), $smem_part_args ); ?>
 							</div>
 						<?php endif; ?>
 
 						<?php if ( Access::can_see_admin_tabs() ) : ?>
-							<div class="ma-pane" id="pane-myAdmin" role="tabpanel">
+							<div class="ma-pane" id="pane-myAdmin">
 
 								<input type="radio" name="ma-adm" id="adm-users" checked>
 								<input type="radio" name="ma-adm" id="adm-posts">
@@ -154,34 +139,34 @@ function sm_checked( $value, $current ) {
 								<input type="radio" name="ma-adm" id="adm-lodges">
 								<input type="radio" name="ma-adm" id="adm-tools">
 
-								<div class="ma-sublist tabs tabs-box mb-4" role="tablist">
-									<span class="px-3 self-center font-semibold">Class Object Tools</span>
-									<label class="tab" for="adm-users">Users</label>
-									<label class="tab" for="adm-posts">Posts</label>
-									<label class="tab" for="adm-states">States</label>
-									<label class="tab" for="adm-councils">Councils</label>
-									<label class="tab" for="adm-camps">Camps</label>
-									<label class="tab" for="adm-lodges">Lodges</label>
-									<label class="tab" for="adm-tools">Tools</label>
+								<p class="mb-2 font-semibold"><?php esc_html_e( 'Class Object Tools', 'scouting-memories-2026' ); ?></p>
+								<div class="ma-sublist tabs tabs-box mb-4" role="group" aria-label="<?php esc_attr_e( 'Class Object Tools', 'scouting-memories-2026' ); ?>">
+									<label class="tab" for="adm-users"><?php esc_html_e( 'Users', 'scouting-memories-2026' ); ?></label>
+									<label class="tab" for="adm-posts"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></label>
+									<label class="tab" for="adm-states"><?php esc_html_e( 'States', 'scouting-memories-2026' ); ?></label>
+									<label class="tab" for="adm-councils"><?php esc_html_e( 'Councils', 'scouting-memories-2026' ); ?></label>
+									<label class="tab" for="adm-camps"><?php esc_html_e( 'Camps', 'scouting-memories-2026' ); ?></label>
+									<label class="tab" for="adm-lodges"><?php esc_html_e( 'Lodges', 'scouting-memories-2026' ); ?></label>
+									<label class="tab" for="adm-tools"><?php esc_html_e( 'Tools', 'scouting-memories-2026' ); ?></label>
 								</div>
 
 								<div class="ma-subpane" id="adm-pane-users">
-									<h2 class="text-xl mb-4">Users</h2>
-									<?php echo $sm_users_view->show_view(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+									<h2 class="mb-4 text-xl"><?php esc_html_e( 'Users', 'scouting-memories-2026' ); ?></h2>
+									<div class="sm-scroll-x"><?php echo $smem_forms->view( FormsGateway::VIEW_USERS ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 								</div>
-								<div class="ma-subpane" id="adm-pane-posts"><h2 class="text-xl">Posts</h2></div>
-								<div class="ma-subpane" id="adm-pane-states"><h2 class="text-xl">States</h2></div>
-								<div class="ma-subpane" id="adm-pane-councils"><h2 class="text-xl">Councils</h2></div>
-								<div class="ma-subpane" id="adm-pane-camps"><h2 class="text-xl">Camps</h2></div>
-								<div class="ma-subpane" id="adm-pane-lodges"><h2 class="text-xl">Lodges</h2></div>
+								<div class="ma-subpane" id="adm-pane-posts"><h2 class="text-xl"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-states"><h2 class="text-xl"><?php esc_html_e( 'States', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-councils"><h2 class="text-xl"><?php esc_html_e( 'Councils', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-camps"><h2 class="text-xl"><?php esc_html_e( 'Camps', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-lodges"><h2 class="text-xl"><?php esc_html_e( 'Lodges', 'scouting-memories-2026' ); ?></h2></div>
 								<div class="ma-subpane" id="adm-pane-tools">
 									<?php get_template_part( 'template-parts/account/end-dates-card' ); ?>
 								</div>
 
 							</div>
 
-							<div class="ma-pane" id="pane-myAdmin2" role="tabpanel">
-								<?php echo $sm_users_form->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+							<div class="ma-pane" id="pane-myAdmin2">
+								<?php echo $smem_forms->form( FormsGateway::FORM_EDIT_USER ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							</div>
 						<?php endif; ?>
 
@@ -193,8 +178,7 @@ function sm_checked( $value, $current ) {
 
 			<?php if ( Access::can_see_admin_tabs() ) : ?>
 				<style>
-					/* Carried over from the old theme: this section of the Defaults form is
-					   hidden from administrators (the class name reads inverted on purpose). */
+					/* Carried over from the old theme: hidden from administrators (the class name reads inverted on purpose). */
 					.show_only_for_admin {
 						display: none !important;
 					}
@@ -205,9 +189,8 @@ function sm_checked( $value, $current ) {
 	</section><!-- #primary -->
 
 	<script>
-		// The Users list's Edit links open the Admin 2 tab, as before - but only
-		// those links, not every link in the Admin pane (the old page broke its
-		// own sub-tabs doing that).
+		// The Users list's Edit links open the Admin 2 tab - only those links, not
+		// every link in the Admin pane.
 		(function () {
 			document.querySelectorAll('#adm-pane-users a[href*="entry="]').forEach(function (a) {
 				var url = new URL(a.href, location.origin);

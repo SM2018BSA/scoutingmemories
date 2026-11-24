@@ -1,7 +1,7 @@
 <?php
 /**
- * Add a Council (Formidable form 8), gated by the real add_council capability
- * set (AUDIT fix D) instead of the old broken check.
+ * Add a Council: the form comes from the forms gateway; who may use the page
+ * comes from the core plugin's Access class.
  *
  * Template Name: Add Council
  *
@@ -9,17 +9,19 @@
  */
 
 use ScoutingMemories\Core\Access;
+use ScoutingMemories\Core\Forms\FormsGateway;
+use ScoutingMemories\Core\Forms\GatewayFactory;
 
 get_header();
 ?>
 
-	<div id="primary" class="content-area max-w-4xl mx-auto mt-8">
-		<main id="main" class="site-main" role="main">
+	<div id="primary" class="content-area mx-auto mt-4 mb-8 max-w-4xl">
+		<main id="main" class="site-main">
 			<?php if ( Access::can_add_council() ) : ?>
-				<h1 class="text-3xl mb-4"><?php the_title(); ?></h1>
-				<?php echo ( new Form( ADD_A_COUNCIL_FORMID ) )->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+				<h1 class="mb-4 text-3xl"><?php the_title(); ?></h1>
+				<?php echo GatewayFactory::current()->form( FormsGateway::FORM_ADD_COUNCIL ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php else : ?>
-				<p>You do not have permissions to add a council.</p>
+				<p><?php esc_html_e( 'You do not have permissions to add a council.', 'scouting-memories-2026' ); ?></p>
 			<?php endif; ?>
 		</main><!-- #main -->
 	</div>

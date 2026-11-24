@@ -10,13 +10,13 @@
  * @package Scouting_Memories_2026
  */
 
-$sm_the_post = class_exists( 'Post' ) ? new Post( get_the_ID() ) : null;
+$smem_the_post = class_exists( 'Post' ) ? new Post( get_the_ID() ) : null;
 
 get_header();
 ?>
 
 	<div id="primary" class="content-area max-w-5xl mx-auto mt-8">
-		<main id="main" class="site-main" role="main">
+		<main id="main" class="site-main">
 			<?php
 			while ( have_posts() ) :
 				the_post();
@@ -24,22 +24,22 @@ get_header();
 
 				<div class="post-content"><?php get_template_part( 'template-parts/content/content', 'single' ); ?></div>
 
-				<?php if ( $sm_the_post ) : ?>
+				<?php if ( $smem_the_post ) : ?>
 					<div class="post-meta mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
 
 						<ul class="card card-border bg-base-100 divide-y divide-base-300">
-							<li class="bg-base-200/50 font-bold uppercase p-4 rounded-t-[inherit]">Timeline</li>
-							<li class="p-3"><strong>State:</strong> <?php echo $sm_the_post->say_states(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Council:</strong> <?php echo $sm_the_post->say_councils(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Camp:</strong> <?php echo $sm_the_post->say_camps(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Lodge:</strong> <?php echo $sm_the_post->say_lodges(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Start Date:</strong> <span class="text-sm"><?php echo esc_html( (string) $sm_the_post->start_date ); ?></span></li>
-							<li class="p-3"><strong>End Date:</strong> <span class="text-sm"><?php echo esc_html( (string) $sm_the_post->end_date ); ?></span></li>
+							<li class="bg-base-200/50 font-bold uppercase p-4 rounded-t-[inherit]"><?php esc_html_e( 'Timeline', 'scouting-memories-2026' ); ?></li>
+							<li class="p-3"><strong>State:</strong> <?php echo $smem_the_post->say_states(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+							<li class="p-3"><strong>Council:</strong> <?php echo $smem_the_post->say_councils(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+							<li class="p-3"><strong>Camp:</strong> <?php echo $smem_the_post->say_camps(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+							<li class="p-3"><strong>Lodge:</strong> <?php echo $smem_the_post->say_lodges(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+							<li class="p-3"><strong>Start Date:</strong> <span class="text-sm"><?php echo esc_html( (string) $smem_the_post->start_date ); ?></span></li>
+							<li class="p-3"><strong>End Date:</strong> <span class="text-sm"><?php echo esc_html( (string) $smem_the_post->end_date ); ?></span></li>
 						</ul>
 
 						<?php if ( function_exists( 'the_field' ) ) : ?>
 							<ul class="card card-border bg-base-100 divide-y divide-base-300">
-								<li class="bg-base-200/50 font-bold uppercase p-4 rounded-t-[inherit]">Meta</li>
+								<li class="bg-base-200/50 font-bold uppercase p-4 rounded-t-[inherit]"><?php esc_html_e( 'Meta', 'scouting-memories-2026' ); ?></li>
 								<li class="p-3"><strong>Publisher of Digital:</strong> <?php the_field( 'publisher_of_digital' ); ?></li>
 								<li class="p-3"><strong>Date of Original:</strong> <?php the_field( 'date_of_original' ); ?></li>
 								<li class="p-3"><strong>Date of Digital:</strong> <?php the_field( 'date_of_digital' ); ?></li>
@@ -66,15 +66,15 @@ get_header();
 
 		<?php
 		// The "Related Info" widget area shows on museum posts only, as before.
-		$sm_show_related = false;
-		foreach ( wp_get_post_categories( get_the_ID() ) as $sm_cat_id ) {
-			$sm_cat = get_category( $sm_cat_id );
-			if ( $sm_cat && ! is_wp_error( $sm_cat ) && 'museums' === $sm_cat->slug ) {
-				$sm_show_related = true;
+		$smem_show_related = false;
+		foreach ( wp_get_post_categories( get_the_ID() ) as $smem_cat_id ) {
+			$smem_cat = get_category( $smem_cat_id );
+			if ( $smem_cat && ! is_wp_error( $smem_cat ) && 'museums' === $smem_cat->slug ) {
+				$smem_show_related = true;
 				break;
 			}
 		}
-		if ( $sm_show_related && function_exists( 'dynamic_sidebar' ) ) {
+		if ( $smem_show_related && function_exists( 'dynamic_sidebar' ) ) {
 			dynamic_sidebar( 'Related Info' );
 		}
 		?>

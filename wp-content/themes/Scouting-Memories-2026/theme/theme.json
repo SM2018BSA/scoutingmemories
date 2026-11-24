@@ -34,6 +34,40 @@
 		"layout": {
 			"contentSize": "40rem",
 			"wideSize": "60rem"
+		},
+		"typography": {
+			"fontFamilies": [
+				{
+					"fontFamily": "ui-sans-serif, system-ui, sans-serif",
+					"slug": "sans",
+					"name": "System Sans"
+				},
+				{
+					"fontFamily": "\"Roboto Slab\", serif",
+					"slug": "slab",
+					"name": "Roboto Slab (headings)",
+					"fontFace": [
+						{
+							"fontFamily": "Roboto Slab",
+							"fontWeight": "100 900",
+							"fontStyle": "normal",
+							"fontDisplay": "swap",
+							"src": [
+								"file:./fonts/roboto-slab-latin-wght-normal.woff2"
+							]
+						}
+					]
+				}
+			]
+		}
+	},
+	"styles": {
+		"elements": {
+			"heading": {
+				"typography": {
+					"fontFamily": "var(--wp--preset--font-family--slab)"
+				}
+			}
 		}
 	}
 }

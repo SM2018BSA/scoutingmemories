@@ -24,8 +24,8 @@
 <?php wp_body_open(); ?>
 
 <div id="page" class="flex min-h-screen w-full flex-col">
-	<a href="#content" class="sr-only"><?php esc_html_e( 'Skip to content', 'scouting-memories-2026' ); ?></a>
+	<a href="#content" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-4 focus:py-2 focus:text-black"><?php esc_html_e( 'Skip to content', 'scouting-memories-2026' ); ?></a>
 
 	<?php get_template_part( 'template-parts/layout/header', 'content' ); ?>
 
-	<div id="content" class="w-full grow px-3">
+	<div id="content" class="w-full grow px-3 sm:px-4" tabindex="-1">

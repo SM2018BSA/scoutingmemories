@@ -11,16 +11,16 @@
  * @package Scouting_Memories_2026
  */
 
-$sm_interview_form = new Form( '39' );
+$smem_interview_form = new Form( '39' );
 
 get_header();
 ?>
 
 	<div id="primary" class="content-area w-full mt-8">
-		<main id="main" class="site-main p-4 lg:p-12" role="main">
+		<main id="main" class="site-main p-4 lg:p-12">
 			<div class="flex justify-center">
 				<div class="w-full md:w-1/2">
-					<?php echo $sm_interview_form->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php echo $smem_interview_form->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 					<?php echo Helpers::doShortCode( '[cliptakes_interview templateId="brkOaLmaBpyaAaLoi3mw"]' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 			</div>

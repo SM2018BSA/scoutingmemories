@@ -49,14 +49,16 @@ class PostEntry extends Entry {
 		if ( $field->id == AAP_STATES_FID ) {
 
 			// set defaults from user_meta
-			foreach ( $this->the_user->all_user_meta['user_state'] as $value )
+			$new_value = array();
+			foreach ( (array) ( $this->the_user->all_user_meta['user_state'] ?? array() ) as $value )
 				$new_value[] = $value;
 			$values['dyn_default_value'] = $values['default_value'] = $values['value'] = $new_value;
 		}
 
 		if ($field->id == AAP_COUNCIL_FID ) {
 			// set defaults from user_meta
-			foreach ( $this->the_user->all_user_meta['user_council'] as $value )
+			$new_value = array();
+			foreach ( (array) ( $this->the_user->all_user_meta['user_council'] ?? array() ) as $value )
 				$new_value[] = $value;
 			$values['dyn_default_value'] = $values['default_value'] = $values['value'] = $new_value;
 
@@ -64,14 +66,16 @@ class PostEntry extends Entry {
 
         if ($field->id == AAP_CAMP_FID ) {
             // set defaults from user_meta
-            foreach ( $this->the_user->all_user_meta['user_camp'] as $value )
+            $new_value = array();
+			foreach ( (array) ( $this->the_user->all_user_meta['user_camp'] ?? array() ) as $value )
                 $new_value[] = $value;
             $values['dyn_default_value'] = $values['default_value'] = $values['value'] = $new_value;
         }
 
         if ($field->id == AAP_LODGE_FID ) {
             // set defaults from user_meta
-            foreach ( $this->the_user->all_user_meta['user_lodge'] as $value )
+            $new_value = array();
+			foreach ( (array) ( $this->the_user->all_user_meta['user_lodge'] ?? array() ) as $value )
                 $new_value[] = $value;
             $values['dyn_default_value'] = $values['default_value'] = $values['value'] = $new_value;
         }

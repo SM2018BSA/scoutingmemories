@@ -32,6 +32,8 @@
 	"devDependencies": {
 		"@_tw/typography": "^0.5.22",
 		"@angular-eslint/template-parser": "^21.3.1",
+		"@axe-core/playwright": "^4.14.0",
+		"@fontsource-variable/roboto-slab": "^5.3.0",
 		"@playwright/test": "^1.64.1",
 		"@tailwindcss/postcss": "^4.2.2",
 		"@wordpress/prettier-config": "^4.42.0",

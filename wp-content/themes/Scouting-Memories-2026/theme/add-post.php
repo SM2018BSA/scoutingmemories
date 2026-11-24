@@ -16,7 +16,7 @@ get_header();
 ?>
 
 	<div id="primary" class="content-area max-w-4xl mx-auto mt-8">
-		<main id="main" class="site-main" role="main">
+		<main id="main" class="site-main">
 			<?php if ( Access::can_add_post() ) : ?>
 				<?php
 				while ( have_posts() ) :
@@ -25,7 +25,23 @@ get_header();
 				endwhile;
 				?>
 			<?php else : ?>
-				<p>Please <a class="link" href="<?php echo esc_url( home_url( '/login/' ) ); ?>">log in</a> to add a post.</p>
+				<p>
+					<?php
+					printf(
+						wp_kses(
+							/* translators: %s: address of the login page. */
+							__( 'Please <a class="link" href="%s">log in</a> to add a post.', 'scouting-memories-2026' ),
+							array(
+								'a' => array(
+									'class' => true,
+									'href'  => true,
+								),
+							)
+						),
+						esc_url( wp_login_url( get_permalink() ) )
+					);
+					?>
+				</p>
 			<?php endif; ?>
 		</main><!-- #main -->
 	</div>

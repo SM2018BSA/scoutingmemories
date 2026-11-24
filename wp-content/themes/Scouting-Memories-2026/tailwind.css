@@ -90,6 +90,12 @@
  * that files for other WordPress plugins or JavaScript components could be
  * included in any order because they also use library-specific class names.
  */
+/**
+ * daisyUI component classes that appear only in markup printed by the Scouting Forms plugin
+ * (which Tailwind does not scan), so they are listed here to make sure they are built.
+ */
+@source inline("btn btn-sm btn-lg btn-primary btn-secondary btn-success btn-link btn-ghost badge alert alert-success alert-info alert-warning alert-error table card card-body card-title");
+
 @import-glob "./tailwind/custom/components/**/*.css";
 
 /**

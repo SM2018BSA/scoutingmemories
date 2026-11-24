@@ -12,26 +12,30 @@
 /**
  * Builds one category link with the current search filters attached,
  * exactly like the old template's hand-written URLs.
+ *
+ * @param string $path   The category page's path, for example '/history/'.
+ * @param int    $cat_id The category's id.
+ * @return string The address, not yet escaped.
  */
 function scouting_memories_2026_info_link( $path, $cat_id ) {
 	$args = array( 'cat' => $cat_id );
 	foreach ( array( 'state', 'council', 'lodge', 'camp', 'start_date', 'end_date' ) as $param ) {
 		$args[ $param ] = function_exists( 'get_request_parameter' ) ? (string) get_request_parameter( $param ) : '';
 	}
-	return esc_url( add_query_arg( $args, home_url( $path ) ) );
+	return add_query_arg( $args, home_url( $path ) );
 }
 
 get_header();
 ?>
 
-	<div class="content-area max-w-6xl mx-auto mt-8">
+	<main id="main" class="site-main content-area max-w-6xl mx-auto mt-8">
 
 		<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-4">
 
 			<div class="flex flex-col items-center justify-center gap-10 py-6">
-				<a class="btn btn-primary" href="<?php echo scouting_memories_2026_info_link( '/history/', 3 ); ?>">History</a>
-				<a class="btn btn-primary" href="<?php echo scouting_memories_2026_info_link( '/photographs/', 5 ); ?>">Photographs</a>
-				<a class="btn btn-primary" href="<?php echo scouting_memories_2026_info_link( '/movies/', 8 ); ?>">Movies</a>
+				<a class="btn btn-primary" href="<?php echo esc_url( scouting_memories_2026_info_link( '/history/', 3 ) ); ?>"><?php esc_html_e( 'History', 'scouting-memories-2026' ); ?></a>
+				<a class="btn btn-primary" href="<?php echo esc_url( scouting_memories_2026_info_link( '/photographs/', 5 ) ); ?>"><?php esc_html_e( 'Photographs', 'scouting-memories-2026' ); ?></a>
+				<a class="btn btn-primary" href="<?php echo esc_url( scouting_memories_2026_info_link( '/movies/', 8 ) ); ?>"><?php esc_html_e( 'Movies', 'scouting-memories-2026' ); ?></a>
 			</div>
 
 			<div class="hidden md:block">
@@ -39,9 +43,9 @@ get_header();
 			</div>
 
 			<div class="flex flex-col items-center justify-center gap-10 py-6">
-				<a class="btn btn-primary" href="<?php echo scouting_memories_2026_info_link( '/oral-history/', 6 ); ?>">Oral History</a>
-				<a class="btn btn-primary" href="<?php echo scouting_memories_2026_info_link( '/memorabilia/', 4 ); ?>">Memorabilia</a>
-				<a class="btn btn-primary" href="<?php echo scouting_memories_2026_info_link( '/museums/', 7 ); ?>">Museums</a>
+				<a class="btn btn-primary" href="<?php echo esc_url( scouting_memories_2026_info_link( '/oral-history/', 6 ) ); ?>"><?php esc_html_e( 'Oral History', 'scouting-memories-2026' ); ?></a>
+				<a class="btn btn-primary" href="<?php echo esc_url( scouting_memories_2026_info_link( '/memorabilia/', 4 ) ); ?>"><?php esc_html_e( 'Memorabilia', 'scouting-memories-2026' ); ?></a>
+				<a class="btn btn-primary" href="<?php echo esc_url( scouting_memories_2026_info_link( '/museums/', 7 ) ); ?>"><?php esc_html_e( 'Museums', 'scouting-memories-2026' ); ?></a>
 			</div>
 
 		</div>
@@ -54,7 +58,7 @@ get_header();
 			?>
 		</div>
 
-	</div>
+	</main><!-- #main -->
 
 <?php
 get_footer();

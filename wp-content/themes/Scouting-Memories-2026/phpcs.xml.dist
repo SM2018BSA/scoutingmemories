@@ -51,7 +51,7 @@
 	<rule ref="WordPress-Docs"/>
 
 	<!-- Check for PHP cross-version compatibility. -->
-	<config name="testVersion" value="7.4-"/>
+	<config name="testVersion" value="8.0-"/>
 	<rule ref="PHPCompatibilityWP"/>
 
 	<!--
@@ -62,7 +62,7 @@
 	the wiki:
 	https://github.com/WordPress/WordPress-Coding-Standards/wiki/Customizable-sniff-properties
 	-->
-	<config name="minimum_supported_wp_version" value="6.2"/>
+	<config name="minimum_supported_wp_version" value="6.7"/>
 
 	<rule ref="WordPress.WP.I18n">
 		<properties>
@@ -76,6 +76,8 @@
 		<properties>
 			<property name="prefixes" type="array">
 				<element value="scouting_memories_2026"/>
+				<!-- Short prefix for the variables templates set at file level. -->
+				<element value="smem"/>
 			</property>
 		</properties>
 	</rule>
@@ -84,6 +86,9 @@
 		<properties>
 			<property name="is_theme" value="true"/>
 		</properties>
+		<!-- This page template's file name is stored in the database of the live site (pages History,
+			 Photographs, Movies, Memorabilia, Oral History and Museums use it), so it keeps its name. -->
+		<exclude-pattern>/theme/sm_categories\.php</exclude-pattern>
 	</rule>
 
 </ruleset>

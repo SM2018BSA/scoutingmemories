@@ -10,14 +10,14 @@
  * @package Scouting_Memories_2026
  */
 
-$sm_current_category = get_category( get_query_var( 'cat' ) );
-$sm_category_name    = ( $sm_current_category instanceof WP_Term ) ? $sm_current_category->name : single_cat_title( '', false );
-$sm_category_slug    = ( $sm_current_category instanceof WP_Term ) ? $sm_current_category->slug : get_query_var( 'category_name' );
+$smem_current_category = get_category( get_query_var( 'cat' ) );
+$smem_category_name    = ( $smem_current_category instanceof WP_Term ) ? $smem_current_category->name : single_cat_title( '', false );
+$smem_category_slug    = ( $smem_current_category instanceof WP_Term ) ? $smem_current_category->slug : get_query_var( 'category_name' );
 
-$sm_paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
+$smem_paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
 
-$sm_indexing  = class_exists( 'Indexing' ) ? new Indexing( $sm_category_slug, $sm_paged ) : null;
-$sm_the_query = $sm_indexing ? new WP_Query( $sm_indexing->query ) : $GLOBALS['wp_query'];
+$smem_indexing  = class_exists( 'Indexing' ) ? new Indexing( $smem_category_slug, $smem_paged ) : null;
+$smem_the_query = $smem_indexing ? new WP_Query( $smem_indexing->query ) : $GLOBALS['wp_query'];
 
 get_header();
 ?>
@@ -27,7 +27,7 @@ get_header();
 		<div class="page-header mb-8 border-b border-base-300 pb-4">
 			<details class="collapse collapse-arrow card-border bg-base-100">
 				<summary class="collapse-title">
-					<h1 class="text-2xl">Category: <?php echo esc_html( $sm_category_name ); ?></h1>
+					<h1 class="text-2xl">Category: <?php echo esc_html( $smem_category_name ); ?></h1>
 				</summary>
 				<div class="collapse-content">
 					<?php
@@ -40,14 +40,14 @@ get_header();
 		</div>
 
 		<?php
-		if ( $sm_the_query->have_posts() ) :
-			while ( $sm_the_query->have_posts() ) :
-				$sm_the_query->the_post();
+		if ( $smem_the_query->have_posts() ) :
+			while ( $smem_the_query->have_posts() ) :
+				$smem_the_query->the_post();
 				get_template_part( 'template-parts/content/content', 'search' );
 			endwhile;
 			wp_reset_postdata();
 
-			scouting_memories_2026_pagination( $sm_the_query );
+			scouting_memories_2026_pagination( $smem_the_query );
 		else :
 			get_template_part( 'template-parts/content/content', 'none' );
 		endif;

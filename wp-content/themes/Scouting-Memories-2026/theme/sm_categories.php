@@ -11,15 +11,15 @@
  * @package Scouting_Memories_2026
  */
 
-$sm_current_category = get_category( get_query_var( 'cat' ) );
-$sm_is_real_category = $sm_current_category instanceof WP_Term;
-$sm_category_slug    = $sm_is_real_category ? $sm_current_category->slug : '';
-$sm_category_name    = $sm_is_real_category ? $sm_current_category->name : get_the_title();
+$smem_current_category = get_category( get_query_var( 'cat' ) );
+$smem_is_real_category = $smem_current_category instanceof WP_Term;
+$smem_category_slug    = $smem_is_real_category ? $smem_current_category->slug : '';
+$smem_category_name    = $smem_is_real_category ? $smem_current_category->name : get_the_title();
 
-$sm_paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
+$smem_paged = get_query_var( 'paged' ) ? absint( get_query_var( 'paged' ) ) : 1;
 
-$sm_indexing  = class_exists( 'Indexing' ) ? new Indexing( $sm_category_slug, $sm_paged ) : null;
-$sm_the_query = $sm_indexing ? new WP_Query( $sm_indexing->query, array( 'paged' => $sm_paged ) ) : $GLOBALS['wp_query'];
+$smem_indexing  = class_exists( 'Indexing' ) ? new Indexing( $smem_category_slug, $smem_paged ) : null;
+$smem_the_query = $smem_indexing ? new WP_Query( $smem_indexing->query, array( 'paged' => $smem_paged ) ) : $GLOBALS['wp_query'];
 
 get_header();
 ?>
@@ -30,7 +30,7 @@ get_header();
 
 			<details class="collapse collapse-arrow card-border bg-base-100">
 				<summary class="collapse-title">
-					<h1 class="text-2xl">Category: <strong><?php echo esc_html( $sm_category_name ); ?></strong></h1>
+					<h1 class="text-2xl">Category: <strong><?php echo esc_html( $smem_category_name ); ?></strong></h1>
 				</summary>
 				<div class="collapse-content">
 					<?php
@@ -41,24 +41,24 @@ get_header();
 				</div>
 			</details>
 
-			<?php if ( 'Museums' === $sm_category_name ) : ?>
+			<?php if ( 'Museums' === $smem_category_name ) : ?>
 				<div class="flex flex-wrap items-center gap-4 p-4">
 					<h5 class="text-lg">National List of Scout Museums:</h5>
-					<a class="btn btn-neutral" href="http://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf" target="_blank" rel="noopener">Searchable PDF</a>
-					<a class="btn btn-neutral" href="<?php echo esc_url( home_url( '/scouting-memories-museum-list' ) ); ?>">View Online</a>
+					<a class="btn btn-neutral" href="https://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf" target="_blank" rel="noopener"><?php esc_html_e( 'Searchable PDF', 'scouting-memories-2026' ); ?></a>
+					<a class="btn btn-neutral" href="<?php echo esc_url( home_url( '/scouting-memories-museum-list' ) ); ?>"><?php esc_html_e( 'View Online', 'scouting-memories-2026' ); ?></a>
 				</div>
 			<?php endif; ?>
 
 		</div>
 
 		<?php
-		if ( $sm_the_query->have_posts() ) :
-			while ( $sm_the_query->have_posts() ) :
-				$sm_the_query->the_post();
+		if ( $smem_the_query->have_posts() ) :
+			while ( $smem_the_query->have_posts() ) :
+				$smem_the_query->the_post();
 				get_template_part( 'template-parts/content/content', 'search' );
 			endwhile;
 
-			scouting_memories_2026_pagination( $sm_the_query );
+			scouting_memories_2026_pagination( $smem_the_query );
 
 			wp_reset_postdata();
 		else :
