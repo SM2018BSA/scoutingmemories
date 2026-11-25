@@ -202,14 +202,16 @@
                 return;
             }
             box.style.display = '';
-            var running = s.queue === 'running';
+            var left = s.docs.queued + s.docs.working;
+            // Moving stripes mean pages are being read: not while paused or waiting, and not
+            // once every document is finished, even though the queue itself is still switched on
+            var running = s.queue === 'running' && left > 0;
             box.classList.toggle('sm-ocr-running', running);
             var finished = s.docs.done + s.docs.failed;
             var percent = setBar(document.getElementById('sm-ocr-overall-bar'), finished, total);
             setText('sm-ocr-overall-text', number(finished) + ' of ' + number(total) + ' documents finished (' + percent + '%)');
             var timeleft = '';
             var speed = '';
-            var left = s.docs.queued + s.docs.working;
             if (s.speed && s.speed.pages_last_hour > 0) {
                 speed = number(s.speed.pages_last_hour) + ' pages read in the last hour.';
             }

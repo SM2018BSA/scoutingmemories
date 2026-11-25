@@ -180,6 +180,11 @@ test.describe('PDF Text dashboard and the PDF text box', () => {
         await expect(page.locator('#sm-ocr-reading')).toHaveText('Nothing left to read.');
         await expect(page.locator('#sm-ocr-speed')).toContainText('12 pages read in the last hour.');
         await expect(page.locator('#sm-ocr-timeleft')).toHaveText('Time left: none, every document is finished.');
+        // Nothing is being read any more: the stripes stop, though the queue is still switched on
+        await expect(page.locator('#sm-ocr-state')).toHaveText('The queue is running.');
+        await expect(progress).not.toHaveClass(/sm-ocr-running/);
+        const overallFill = page.locator('#sm-ocr-overall-bar > span');
+        expect(await overallFill.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
     });
 
     test('Pause stops the queue; Resume starts it again', async ({ page }) => {
