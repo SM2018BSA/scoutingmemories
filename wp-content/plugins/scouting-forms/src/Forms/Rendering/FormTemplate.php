@@ -10,6 +10,7 @@ use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Support\ShortcodeTrust;
 use ScoutingMemories\Forms\Ui\ButtonStyle;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
+use ScoutingMemories\Forms\Views\LegacyClassMap;
 
 /**
  * FormTemplate
@@ -23,6 +24,9 @@ use ScoutingMemories\Forms\Ui\ThemeClasses;
  * Page breaks split the form into pages the browser steps through; the server still checks
  * everything on the final submit and reopens the page with the first error. Fields hidden by
  * their logic start hidden; assets/js/forms-front.js applies the same rules as values change.
+ *
+ * Formidable's class names stay in the markup as bare hooks; the look is Tailwind classes printed
+ * beside them (FormidableClasses, ThemeClasses). The plugin loads no stylesheet of its own.
  */
 class FormTemplate {
 
@@ -39,7 +43,6 @@ class FormTemplate {
      * @param array<string, bool> $display title, description
      */
     public static function render(array $form, array $fields, array $state, array $display): string {
-        wp_enqueue_style('sm-forms-front');
         $opts = $form['options'];
 
         $html = sprintf('<div class="%s frm_forms" id="frm_form_%d_container">', ThemeClasses::SCOPE, $form['id']);
@@ -86,15 +89,15 @@ class FormTemplate {
 
         $html .= sprintf(
             '<form enctype="multipart/form-data" method="post" class="frm-show-form sm-form%s" id="form_%s" novalidate data-sm-form="%d" data-sm-ajax="%s"%s>',
-            !empty($opts['form_class']) ? ' ' . esc_attr($opts['form_class']) : '',
+            !empty($opts['form_class']) ? ' ' . esc_attr(LegacyClassMap::names((string) $opts['form_class'])) : '',
             esc_attr($form['key']),
             (int) $form['id'],
             esc_url(admin_url('admin-ajax.php')),
             count($pages) > 1 ? ' data-sm-start-page="' . max(1, $errorPage) . '"' : ''
         );
-        $html .= '<div class="frm_form_fields"><fieldset>';
+        $html .= '<div class="frm_form_fields"><fieldset class="min-w-0">';
         $html .= self::before($form, $display);
-        $html .= '<div class="frm_fields_container">';
+        $html .= '<div class="' . esc_attr(FormidableClasses::names('frm_fields_container')) . '">';
 
         if (count($pages) > 1) {
             $last = count($pages) - 1;
@@ -121,7 +124,6 @@ class FormTemplate {
         $html .= '</div></fieldset></div>';
         $html .= self::browserConfig($fields);
         $html .= '</form>';
-        $html .= '<noscript><style>.sm-forms .sm-toggle-container[hidden]{display:block!important}</style></noscript>';
 
         if (!empty($opts['after_html'])) {
             $html .= self::settingsHtml((string) $opts['after_html']);
@@ -168,9 +170,11 @@ class FormTemplate {
                     ? self::repeater($field, $values[$id] ?? [], $values, $errors)
                     : self::range(array_slice($fields, $i + 1, $end - $i - 1), $values, $byId, $errors);
                 if (!empty($field['field_options']['slide'])) {
-                    $inner = '<div class="sm-toggle-container frm_grid_container" hidden>' . $inner . '</div>';
+                    // Closed while it carries data-sm-closed (forms-front.js opens and closes it;
+                    // without scripts it shows, see ThemeClasses::SECTION_BODY)
+                    $inner = '<div class="' . esc_attr(ThemeClasses::classes('sm-toggle-container', FormidableClasses::names('frm_grid_container'), ThemeClasses::SECTION_BODY)) . '" data-sm-closed>' . $inner . '</div>';
                 } elseif (!empty($field['field_options']['repeat'])) {
-                    $inner = '<div class="frm_grid_container">' . $inner . '</div>';
+                    $inner = '<div class="' . esc_attr(FormidableClasses::names('frm_grid_container')) . '">' . $inner . '</div>';
                 }
                 $ctx['inner'] = $inner;
                 $html .= FieldRenderer::render($field, '', '', $ctx);
@@ -221,10 +225,10 @@ class FormTemplate {
             }
             [$rowFields, $rowValues] = Hooks::setupFields($childFields, $rowValues, $fixed, self::$entryId, [FieldRenderer::class, 'choiceList']);
             $html .= sprintf(
-                '<div id="frm_section_%1$d-%2$s" class="frm_repeat_grid frm_repeat_%1$d%3$s frm_grid_container" data-sm-row="%1$d" data-sm-row-key="%2$s">',
+                '<div id="frm_section_%1$d-%2$s" class="%3$s" data-sm-row="%1$d" data-sm-row-key="%2$s">',
                 $sectionId,
                 esc_attr((string) $key),
-                $first ? ' frm_first_repeat' : ''
+                esc_attr(FormidableClasses::names('frm_repeat_grid frm_repeat_' . $sectionId . ($first ? ' frm_first_repeat' : '') . ' frm_grid_container'))
             );
             $html .= sprintf('<input type="hidden" name="item_meta[%d][row_ids][]" value="%s" />', $sectionId, esc_attr((string) $key));
             foreach ($rowFields as $child) {
@@ -290,8 +294,8 @@ class FormTemplate {
         $format = (string) ($end['field_options']['format'] ?? 'icon');
         $addLabel = trim((string) ($end['field_options']['add_label'] ?? ''));
         $removeLabel = trim((string) ($end['field_options']['remove_label'] ?? ''));
-        $addIcon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon"><path d="M11 5H9v4H5v2h4v4h2v-4h4V9h-4V5zm-1-5a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
-        $removeIcon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon"><path d="M5 9v2h10V9H5zm5-9a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
+        $addIcon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon inline fill-current"><path d="M11 5H9v4H5v2h4v4h2v-4h4V9h-4V5zm-1-5a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
+        $removeIcon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon inline fill-current"><path d="M5 9v2h10V9H5zm5-9a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"></path></svg>';
         $content = static function (string $icon, string $label) use ($format): string {
             if ($label === '' || $format === 'icon') {
                 return $icon;
@@ -299,16 +303,18 @@ class FormTemplate {
             return ($format === 'text' ? '' : $icon . ' ') . '<span>' . esc_html($label) . '</span>';
         };
         return sprintf(
-            '<div class="frm_form_field frm_hidden_container frm_repeat_buttons">'
-            . '<button type="button" class="sm-add-row frm_button btn btn-link" data-parent="%1$d" title="%3$s" aria-label="%3$s">%5$s</button>'
-            . '<button type="button" class="sm-remove-row frm_button btn btn-link" data-parent="%1$d" data-key="%2$s" title="%4$s" aria-label="%4$s">%6$s</button>'
+            '<div class="%7$s">'
+            . '<button type="button" class="sm-add-row frm_button %8$s" data-parent="%1$d" title="%3$s" aria-label="%3$s">%5$s</button>'
+            . '<button type="button" class="sm-remove-row frm_button %8$s" data-parent="%1$d" data-key="%2$s" title="%4$s" aria-label="%4$s">%6$s</button>'
             . '</div>',
             $sectionId,
             esc_attr($key),
             esc_attr($addLabel !== '' ? $addLabel : __('Add another row', 'scouting-forms')),
             esc_attr($removeLabel !== '' ? $removeLabel : __('Remove this row', 'scouting-forms')),
             $content($addIcon, $addLabel),
-            $content($removeIcon, $removeLabel)
+            $content($removeIcon, $removeLabel),
+            esc_attr(FormidableClasses::names('frm_form_field frm_hidden_container frm_repeat_buttons')),
+            esc_attr(ThemeClasses::ICON_BUTTON)
         );
     }
 
@@ -368,7 +374,7 @@ class FormTemplate {
 
     private static function pageNav(array $form, int $n, string $nextLabel): string {
         $prev = !empty($form['options']['prev_value']) ? (string) $form['options']['prev_value'] : __('Previous', 'scouting-forms');
-        $html = '<div class="frm_submit sm-page-nav">';
+        $html = '<div class="frm_submit sm-page-nav ' . esc_attr(ThemeClasses::PAGE_NAV) . '">';
         if ($n > 0) {
             $html .= '<button type="button" class="frm_prev_page ' . esc_attr(ThemeClasses::button('secondary')) . '" data-sm-prev>' . esc_html($prev) . '</button> ';
         }
@@ -409,6 +415,8 @@ class FormTemplate {
         }
         $config = [
             'fields' => FieldLogic::rulesForBrowser($all),
+            // forms-front.js has no class names of its own: what it builds is dressed from here
+            'classes' => ThemeClasses::forBrowser(),
             'text' => [
                 'loading' => __('Loading…', 'scouting-forms'),
                 'search' => __('Type to search', 'scouting-forms'),
@@ -424,7 +432,7 @@ class FormTemplate {
      * @param array<string, bool> $display
      */
     private static function before(array $form, array $display): string {
-        $template = !empty($form['options']['before_html']) ? (string) $form['options']['before_html'] : self::DEFAULT_BEFORE;
+        $template = FormidableClasses::formHead(LegacyClassMap::html(!empty($form['options']['before_html']) ? (string) $form['options']['before_html'] : self::DEFAULT_BEFORE));
         $showName = !empty($display['title']) && $form['name'] !== '';
         $showDesc = !empty($display['description']) && trim($form['description']) !== '';
 
@@ -458,7 +466,7 @@ class FormTemplate {
             $label = __('Submit', 'scouting-forms');
         }
 
-        $template = !empty($opts['submit_html']) ? (string) $opts['submit_html'] : self::DEFAULT_SUBMIT;
+        $template = FormidableClasses::html(LegacyClassMap::html(!empty($opts['submit_html']) ? (string) $opts['submit_html'] : self::DEFAULT_SUBMIT));
         // Drafts are not used on the site; on paged forms the Previous button is drawn here
         $template = preg_replace('/\[if save_draft\].*?\[\/if save_draft\]/s', '', $template);
         $prev = '';
@@ -476,10 +484,16 @@ class FormTemplate {
             '[draft_label]' => '',
             '[form_key]' => esc_attr($form['key']),
         ]);
-        // Formidable's button class plus the site's Bootstrap button, coloured per ButtonStyle
-        $styleId = $opts['custom_style'] ?? 1;
-        $style = ButtonStyle::style($styleId);
-        $button = ($style !== '' ? 'style="' . esc_attr($style) . '" ' : '') . 'class="frm_button_submit ' . esc_attr(ButtonStyle::classes($styleId));
+        // A submit button the stored template marks "hidden" (the theme presses it from its own
+        // button) must stay hidden once it is dressed as a button
+        $template = preg_replace_callback(
+            '/class="frm_button_submit[^"]*(?<![\w-])hidden(?![\w-])/',
+            static fn(array $m): string => $m[0] . ' ' . ThemeClasses::HIDDEN,
+            $template,
+            1
+        );
+        // Formidable's button class (a bare hook) plus the site's button, coloured per ButtonStyle
+        $button = 'class="frm_button_submit ' . esc_attr(ButtonStyle::classes($opts['custom_style'] ?? 1));
         $template = preg_replace_callback('/class="frm_button_submit/', static fn() => $button, $template, 1);
         if ($paged) {
             // Only the last page shows the submit button (forms-front.js)
@@ -499,6 +513,8 @@ class FormTemplate {
         if ($html === '') {
             return '';
         }
+        // Bootstrap names typed into the setting are swapped before its shortcodes draw their own markup
+        $html = LegacyClassMap::html($html);
         return ShortcodeTrust::trusted(static fn() => do_shortcode($html));
     }
 }

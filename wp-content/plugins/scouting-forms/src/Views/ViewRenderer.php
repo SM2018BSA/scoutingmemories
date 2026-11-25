@@ -52,7 +52,6 @@ class ViewRenderer {
             return $html;
         }
 
-        wp_enqueue_style('sm-forms-front');
         $notice = self::$depth === 0 ? EntryActions::notice() : '';
         return '<div class="' . ThemeClasses::SCOPE . ' sm-view" data-view="' . (int) $view['id'] . '">' . $notice . $html . '</div>';
     }
@@ -87,7 +86,7 @@ class ViewRenderer {
             }
             $rows .= '<tr><th scope="row">' . esc_html($field['name']) . '</th><td>' . $shown . '</td></tr>';
         }
-        return '<table class="table table-sm frm-show-entry"><tbody>' . $rows . '</tbody></table>';
+        return '<table class="frm-show-entry ' . esc_attr(ThemeClasses::classes(ThemeClasses::TABLE, ThemeClasses::TABLE_CELLS_SM)) . '"><tbody>' . $rows . '</tbody></table>';
     }
 
     /**
@@ -102,7 +101,7 @@ class ViewRenderer {
             $entryId = self::entryFromParam($view, sanitize_text_field(wp_unslash($_GET[$view['param']])));
             if ($entryId) {
                 $values->load([$entryId]);
-                return TemplateTags::render($view['detail'], $entryId, $values, $view, $params);
+                return LegacyClassMap::html(TemplateTags::render($view['detail'], $entryId, $values, $view, $params));
             }
         }
 
@@ -113,7 +112,7 @@ class ViewRenderer {
         $options = $view['options'];
         if (!$result['ids']) {
             $empty = trim((string) ($options['empty_msg'] ?? ''));
-            return $empty !== '' ? '<div class="frm_no_entries">' . self::fillParams($empty, $params) . '</div>' : '';
+            return $empty !== '' ? '<div class="frm_no_entries">' . LegacyClassMap::html(self::fillParams($empty, $params)) . '</div>' : '';
         }
 
         $values->load($result['ids']);
@@ -125,7 +124,10 @@ class ViewRenderer {
         $before = self::fillParams((string) ($options['before_content'] ?? ''), $params);
         $after = self::fillParams((string) ($options['after_content'] ?? ''), $params);
 
-        return $before . $rows . $after . self::pagination($pageParam, $result['page'], $result['pages'], ['view' => get_post((int) $view['id'])] + $params);
+        // The stored list was written with Bootstrap's class names: each is swapped for its
+        // Tailwind classes as the list is drawn (the stored text is not edited). This runs before
+        // the list's shortcodes do, so forms and lists drawn inside it are left as they are.
+        return LegacyClassMap::html($before . $rows . $after) . self::pagination($pageParam, $result['page'], $result['pages'], ['view' => get_post((int) $view['id'])] + $params);
     }
 
     /**
@@ -234,15 +236,14 @@ class ViewRenderer {
             return '';
         }
         $link = static function (int $n, string $label, bool $active = false, bool $disabled = false, string $aria = '') use ($param, $page, $pages, $atts): string {
-            $class = 'page-item' . ($active ? ' active' : '') . ($disabled ? ' disabled' : '');
             $attr = $aria !== '' ? ' aria-label="' . esc_attr($aria) . '"' : '';
             if ($active || $disabled) {
-                return '<li class="' . $class . '"' . ($active ? ' aria-current="page"' : '') . '><span class="page-link"' . $attr . '>' . $label . '</span></li>';
+                return '<li' . ($active ? ' aria-current="page"' : '') . '><span class="' . esc_attr($active ? ThemeClasses::PAGE_LINK_HERE : ThemeClasses::PAGE_LINK_OFF) . '"' . $attr . '>' . $label . '</span></li>';
             }
             $filter = $label === '&laquo;' ? 'frm_prev_page_link' : ($label === '&raquo;' ? 'frm_next_page_link'
                 : ($n === 1 ? 'frm_first_page_link' : ($n === $pages ? 'frm_last_page_link' : 'frm_page_link')));
             $url = (string) apply_filters($filter, add_query_arg($param, $n), $atts);
-            return '<li class="' . $class . '"><a class="page-link" href="' . esc_url($url) . '"' . $attr . '>' . $label . '</a></li>';
+            return '<li><a class="' . esc_attr(ThemeClasses::PAGE_LINK) . '" href="' . esc_url($url) . '"' . $attr . '>' . $label . '</a></li>';
         };
 
         // Like Formidable, no previous arrow on the first page and no next arrow on the last
@@ -257,13 +258,13 @@ class ViewRenderer {
         $prev = 0;
         foreach (array_keys($shown) as $n) {
             if ($prev && $n > $prev + 1) {
-                $items .= '<li class="page-item disabled"><span class="page-link">&hellip;</span></li>';
+                $items .= '<li><span class="' . esc_attr(ThemeClasses::PAGE_LINK_OFF) . '">&hellip;</span></li>';
             }
             $items .= $link($n, (string) $n, $n === $page);
             $prev = $n;
         }
         $items .= $page < $pages ? $link($page + 1, '&raquo;', false, false, __('Next page', 'scouting-forms')) : '';
 
-        return '<nav class="frm_pagination_cont" aria-label="' . esc_attr__('Pages', 'scouting-forms') . '"><ul class="pagination frm_pagination flex-wrap">' . $items . '</ul></nav>';
+        return '<nav class="frm_pagination_cont" aria-label="' . esc_attr__('Pages', 'scouting-forms') . '"><ul class="frm_pagination ' . esc_attr(ThemeClasses::PAGING) . '">' . $items . '</ul></nav>';
     }
 }

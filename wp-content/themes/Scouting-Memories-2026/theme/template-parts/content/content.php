@@ -11,24 +11,25 @@
 
 ?>
 
-<article id="post-<?php the_ID(); ?>" <?php post_class( 'sm-entry' ); ?>>
-	<div class="sm-container">
-		<header class="entry-header">
+<article id="post-<?php the_ID(); ?>" <?php post_class(); ?>>
+	<div class="<?php echo esc_attr( Scouting_Memories_2026_UI::CONTAINER ); ?>">
+		<header>
 			<?php
 			if ( is_singular() ) :
-				the_title( '<h1 class="entry-title">', '</h1>' );
+				the_title( '<h1 class="' . esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::H1, 'break-words' ) ) . '">', '</h1>' );
 			else :
-				the_title( '<h2 class="entry-title"><a href="' . esc_url( get_permalink() ) . '" rel="bookmark">', '</a></h2>' );
+				the_title( '<h2 class="' . esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::H2, 'break-words' ) ) . '"><a class="' . esc_attr( Scouting_Memories_2026_UI::LINK ) . '" href="' . esc_url( get_permalink() ) . '" rel="bookmark">', '</a></h2>' );
 			endif;
 			?>
-		</header><!-- .entry-header -->
+		</header>
 
 		<?php scouting_memories_2026_post_box(); ?>
 	</div>
 
 	<?php scouting_memories_2026_post_thumbnail(); ?>
 
-	<div class="entry-content sm-container">
+	<div class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'my-12' ) ); ?>">
+	<div class="<?php echo esc_attr( scouting_memories_2026_prose_classes() ); ?>">
 		<?php
 		the_content(
 			sprintf(
@@ -47,11 +48,12 @@
 
 		wp_link_pages(
 			array(
-				'before' => '<div class="page-links">' . esc_html__( 'Pages:', 'scouting-memories-2026' ),
+				'before' => '<div>' . esc_html__( 'Pages:', 'scouting-memories-2026' ),
 				'after'  => '</div>',
 			)
 		);
 		?>
-	</div><!-- .entry-content -->
+	</div>
+	</div>
 
 </article><!-- #post-<?php the_ID(); ?> -->

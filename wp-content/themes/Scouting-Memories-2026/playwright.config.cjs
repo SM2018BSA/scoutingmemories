@@ -16,6 +16,8 @@ module.exports = defineConfig({
 	retries: 1,
 	reporter: [['line'], ['json', { outputFile: `test-results/report-${Site.name}.json` }]],
 	globalSetup: require.resolve('./tests/e2e/global-setup.cjs'),
+	// Baseline pictures for visual.spec.cjs live with the other pictures (not in Git).
+	snapshotPathTemplate: 'tests/screenshots/baseline/{arg}{ext}',
 	use: {
 		channel: 'chrome',
 		headless: true,

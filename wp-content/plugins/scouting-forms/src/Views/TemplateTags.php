@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms\Views;
 
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\Permissions;
+use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
  * TemplateTags
@@ -166,7 +167,12 @@ class TemplateTags {
         $pageId = (int) ($atts['page_id'] ?? 0);
         $base = $pageId > 0 ? get_permalink($pageId) : '';
         $url = add_query_arg(['frm_action' => 'edit', 'entry' => (int) $entry['id']], $base ?: remove_query_arg(['frm_action', 'entry']));
+        // The classes typed into the stored shortcode are Bootstrap's; ViewRenderer swaps them for
+        // Tailwind's with the rest of the stored list (LegacyClassMap)
         $class = trim('frm_edit_link ' . ($atts['class'] ?? ''));
+        if (!LegacyClassMap::isButton($class)) {
+            $class = ThemeClasses::classes($class, ThemeClasses::LINK);
+        }
 
         return '<a href="' . esc_url($url) . '" class="' . esc_attr($class) . '">' . esc_html($atts['label'] ?? __('Edit', 'scouting-forms')) . '</a>';
     }

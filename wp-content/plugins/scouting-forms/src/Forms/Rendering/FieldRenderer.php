@@ -5,14 +5,17 @@ namespace ScoutingMemories\Forms\Forms\Rendering;
 use ScoutingMemories\Forms\Models\PostFields;
 use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
+use ScoutingMemories\Forms\Views\LegacyClassMap;
 
 /**
  * FieldRenderer
  *
  * Renders one Formidable field the way Formidable does: the field's own `custom_html` template
  * (with [field_name], [required_label], [input], [description], [error] ... placeholders), and the
- * input itself with the site's Bootstrap classes. Names and IDs match Formidable's
- * (`item_meta[ID]`, `field_KEY`) so existing CSS/JS hooks keep working.
+ * input itself. Names, IDs and Formidable's class names match Formidable's (`item_meta[ID]`,
+ * `field_KEY`, `frm_form_field`) so scripts and stored settings keep finding them; the look is
+ * Tailwind classes printed beside them (FormidableClasses for Formidable's names, ThemeClasses
+ * for the inputs). A field with a mistake carries aria-invalid="true", which turns its line red.
  */
 class FieldRenderer {
 
@@ -49,7 +52,9 @@ class FieldRenderer {
         }
 
         $opts = $field['field_options'];
-        $template = !empty($opts['custom_html']) ? (string) $opts['custom_html'] : self::DEFAULT_TEMPLATE;
+        // The stored template keeps its names; their Tailwind classes are added before the
+        // field's own content goes in (so nothing inside is touched twice)
+        $template = FormidableClasses::html(LegacyClassMap::html(!empty($opts['custom_html']) ? (string) $opts['custom_html'] : self::DEFAULT_TEMPLATE));
         $labelPosition = !empty($opts['label']) ? sanitize_html_class((string) $opts['label']) : 'top';
 
         $required = $field['required'] && !in_array($type, self::NON_INPUT_TYPES, true);
@@ -64,7 +69,9 @@ class FieldRenderer {
             '[required_class]' => $required ? ' frm_required_field' : '',
             '[error_class]' => $error !== '' ? ' frm_blank_field' : '',
             '[label_position]' => $labelPosition,
-            '[collapse_class]' => $type === 'divider' ? ($collapsible ? ' sm-trigger' : ' frm_section_spacing') : '',
+            '[collapse_class]' => $type === 'divider'
+                ? esc_attr($collapsible ? ' sm-trigger ' . ThemeClasses::SECTION_TITLE_TOGGLE : ' frm_section_spacing ' . ThemeClasses::SECTION_TITLE)
+                : '',
             '[collapse_this]' => (string) ($ctx['inner'] ?? ''),
             '[entry_key]' => '',
             '[help]' => '',
@@ -81,9 +88,9 @@ class FieldRenderer {
         $html = strtr($html, $replacements);
 
         // Formidable adds its layout classes (frm_first, frm_full, ...) and the label position
-        // to the container; do the same so layouts and CSS hooks match
-        $extra = trim(sprintf('frm_%s_container %s %s', $labelPosition, (string) ($opts['classes'] ?? ''), (string) ($ctx['class'] ?? '')));
-        $html = preg_replace('/class="frm_form_field /', 'class="frm_form_field ' . esc_attr($extra) . ' ', $html, 1);
+        // to the container; do the same so hooks match, each with its Tailwind classes
+        $extra = FormidableClasses::names(sprintf('frm_%s_container %s %s', $labelPosition, LegacyClassMap::names((string) ($opts['classes'] ?? '')), (string) ($ctx['class'] ?? '')));
+        $html = preg_replace_callback('/class="frm_form_field /', static fn(): string => 'class="frm_form_field ' . esc_attr($extra) . ' ', $html, 1);
 
         // The browser finds fields by data-sm-field; fields hidden by logic start hidden
         $marker = ' data-sm-field="' . (int) $field['id'] . '"' . (!empty($ctx['hidden']) ? ' hidden' : '');
@@ -96,7 +103,7 @@ class FieldRenderer {
 
         if ($collapsible) {
             // A collapsible section heading opens and closes its fields (forms-front.js)
-            $icon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon sm-toggle-icon"><path d="M5 6l5 5 5-5 2 1-7 7-7-7 2-1z"></path></svg>';
+            $icon = '<svg viewBox="0 0 20 20" width="1em" height="1em" aria-hidden="true" class="frmsvg frm-svg-icon sm-toggle-icon ' . esc_attr(ThemeClasses::SECTION_ARROW) . '"><path d="M5 6l5 5 5-5 2 1-7 7-7-7 2-1z"></path></svg>';
             $html = preg_replace('/<h3 class="([^"]*sm-trigger[^"]*)">(.*?)<\/h3>/s', '<h3 class="$1" tabindex="0" role="button" aria-expanded="false">$2 ' . $icon . '</h3>', $html, 1);
         }
 
@@ -133,7 +140,7 @@ class FieldRenderer {
         $domId = 'field_' . $ctx['key'];
         $type = $field['type'];
         $required = $field['required'];
-        $invalidClass = $error !== '' ? ' is-invalid' : '';
+        $invalid = $error !== '';
 
         $attrs = sprintf(' id="%s" name="%s"', esc_attr($domId), esc_attr($name));
         if ($required) {
@@ -174,7 +181,7 @@ class FieldRenderer {
                     '<textarea%s rows="%d" class="%s">%s</textarea>',
                     $attrs,
                     $rows,
-                    esc_attr(ThemeClasses::textarea() . $invalidClass),
+                    esc_attr(ThemeClasses::FIELD),
                     esc_textarea(self::scalar($value))
                 );
 
@@ -185,7 +192,8 @@ class FieldRenderer {
                 if ($dataType === 'data') {
                     $shown = isset($ctx['values']) ? DynamicOptions::displayValue($field, (array) $ctx['values']) : self::scalar($value);
                     return sprintf(
-                        '<p class="frm_show_it">%s</p><input type="hidden" id="%s" name="%s" value="%s" />',
+                        '<p class="%s">%s</p><input type="hidden" id="%s" name="%s" value="%s" />',
+                        esc_attr(FormidableClasses::names('frm_show_it')),
                         esc_html($shown),
                         esc_attr($domId),
                         esc_attr($name),
@@ -209,26 +217,27 @@ class FieldRenderer {
                     return $html;
                 }
                 if ($dataType === 'checkbox' || $dataType === 'radio') {
-                    return self::choices($field, $value, $invalidClass, $ctx);
+                    return self::choices($field, $value, $invalid, $ctx);
                 }
-                return self::select($field, $value, $attrs, $invalidClass, $ctx);
+                return self::select($field, $value, $attrs, $ctx);
 
             case 'select':
-                return self::select($field, $value, $attrs, $invalidClass, $ctx);
+                return self::select($field, $value, $attrs, $ctx);
 
             case 'checkbox':
             case 'radio':
-                return self::choices($field, $value, $invalidClass, $ctx);
+                return self::choices($field, $value, $invalid, $ctx);
 
             case 'toggle':
                 $checkedValue = (string) ($opts['toggle_on'] ?? '1');
                 return sprintf(
-                    '<div class="form-check form-switch"><input type="hidden" name="%1$s" value="" /><input type="checkbox" role="switch"%2$s value="%3$s" class="%4$s"%5$s /></div>',
+                    '<div class="%6$s"><input type="hidden" name="%1$s" value="" /><input type="checkbox" role="switch"%2$s value="%3$s" class="%4$s"%5$s /></div>',
                     esc_attr($name),
                     $attrs,
                     esc_attr($checkedValue),
-                    esc_attr(ThemeClasses::checkbox() . $invalidClass),
-                    checked(self::scalar($value), $checkedValue, false)
+                    esc_attr(ThemeClasses::SWITCH),
+                    checked(self::scalar($value), $checkedValue, false),
+                    esc_attr(ThemeClasses::CHOICE)
                 );
 
             case 'file':
@@ -236,8 +245,8 @@ class FieldRenderer {
                     '<input type="file" id="%s" name="file_%d" class="%s"%s />',
                     esc_attr($domId),
                     $id,
-                    esc_attr(ThemeClasses::input() . $invalidClass),
-                    $required ? ' aria-required="true"' : ''
+                    esc_attr(ThemeClasses::FILE),
+                    ($required ? ' aria-required="true"' : '') . ($invalid ? ' aria-invalid="true"' : '')
                 );
 
             case 'captcha':
@@ -281,7 +290,7 @@ class FieldRenderer {
                     $inputType,
                     $attrs,
                     $inputType === 'password' ? '' : esc_attr(self::scalar($value)),
-                    esc_attr(ThemeClasses::input() . $invalidClass)
+                    esc_attr(ThemeClasses::FIELD)
                 );
         }
     }
@@ -352,7 +361,7 @@ class FieldRenderer {
     /**
      * @param mixed $value
      */
-    private static function select(array $field, $value, string $attrs, string $invalidClass, array $ctx = []): string {
+    private static function select(array $field, $value, string $attrs, array $ctx = []): string {
         $ctx = self::context($field, $ctx);
         $multiple = !empty($field['field_options']['multiple']);
         $selected = array_map('strval', (array) $value);
@@ -360,7 +369,7 @@ class FieldRenderer {
             $attrs = str_replace('name="' . esc_attr($ctx['name']) . '"', 'name="' . esc_attr($ctx['name'] . '[]') . '"', $attrs) . ' multiple';
         }
 
-        $html = sprintf('<select%s class="%s">', $attrs, esc_attr(ThemeClasses::select() . $invalidClass));
+        $html = sprintf('<select%s class="%s">', $attrs, esc_attr(ThemeClasses::SELECT));
         if (!$multiple) {
             $html .= '<option value="">' . esc_html((string) ($field['field_options']['placeholder'] ?? '')) . '</option>';
         }
@@ -378,7 +387,7 @@ class FieldRenderer {
     /**
      * @param mixed $value
      */
-    private static function choices(array $field, $value, string $invalidClass, array $ctx = []): string {
+    private static function choices(array $field, $value, bool $invalid, array $ctx = []): string {
         $ctx = self::context($field, $ctx);
         $type = $field['type'] === 'data' ? (string) $field['field_options']['data_type'] : $field['type'];
         $name = $type === 'checkbox' ? $ctx['name'] . '[]' : $ctx['name'];
@@ -391,15 +400,15 @@ class FieldRenderer {
         foreach (self::choiceList($field, (array) ($ctx['values'] ?? [])) as $optValue => $label) {
             $optId = 'field_' . $ctx['key'] . '-' . $i++;
             $html .= sprintf(
-                '<div class="form-check%s frm_%s"><input type="%s" id="%s" name="%s" value="%s" class="%s"%s /><label class="form-check-label" for="%s">%s</label></div>',
-                $inline ? ' form-check-inline' : '',
+                '<div class="frm_%s %s"><input type="%s" id="%s" name="%s" value="%s" class="%s"%s /><label for="%s">%s</label></div>',
                 $type,
+                esc_attr($inline ? ThemeClasses::CHOICE_INLINE : ThemeClasses::CHOICE),
                 $type,
                 esc_attr($optId),
                 esc_attr($name),
                 esc_attr($optValue),
-                esc_attr(ThemeClasses::checkbox() . $invalidClass),
-                in_array((string) $optValue, $selected, true) ? ' checked' : '',
+                esc_attr(ThemeClasses::CHECK),
+                (in_array((string) $optValue, $selected, true) ? ' checked' : '') . ($invalid ? ' aria-invalid="true"' : ''),
                 esc_attr($optId),
                 esc_html($label)
             );
@@ -415,7 +424,7 @@ class FieldRenderer {
         wp_enqueue_script('sm-recaptcha', 'https://www.google.com/recaptcha/api.js', [], null, true);
         $opts = $field['field_options'];
         return sprintf(
-            '<div id="field_%s" class="g-recaptcha" data-sitekey="%s" data-size="%s" data-theme="%s"></div>',
+            '<div id="field_%s" class="g-recaptcha origin-top-left max-[359px]:scale-[0.85]" data-sitekey="%s" data-size="%s" data-theme="%s"></div>',
             esc_attr($field['key']),
             esc_attr($keys['site_key']),
             esc_attr((string) ($opts['captcha_size'] ?? 'normal')),
@@ -437,21 +446,28 @@ class FieldRenderer {
         $label = (string) ($opts['conf_desc'] ?? '');
         $type = $field['type'] === 'password' ? 'password' : ($field['type'] === 'email' ? 'email' : 'text');
         return sprintf(
-            '<div id="frm_field_conf_%1$s_container" class="frm_form_field form-field frm_top_container frm_conf_field %2$s"%3$s>'
-            . '<label for="field_%4$s" class="frm_primary_label">%5$s%6$s</label>'
+            '<div id="frm_field_conf_%1$s_container" class="%2$s"%3$s>'
+            . '<label for="field_%4$s" class="%11$s">%5$s%6$s</label>'
             . '<input type="%7$s" id="field_%4$s" name="%8$s" value="" class="%9$s" aria-label="%5$s"%10$s />'
-            . '<div class="frm_description">%5$s</div></div>',
+            . '<div class="%12$s">%5$s</div></div>',
             esc_attr((string) $ctx['id']),
             // The first box may be marked "first in its row"; the second one never is
-            esc_attr(trim(implode(' ', array_diff(preg_split('/\s+/', (string) ($opts['classes'] ?? '')), ['frm_first'])) . ($field['required'] ? ' frm_required_field' : ''))),
+            esc_attr(FormidableClasses::names(
+                'frm_form_field form-field frm_top_container frm_conf_field '
+                . LegacyClassMap::names(implode(' ', array_diff(preg_split('/\s+/', (string) ($opts['classes'] ?? '')), ['frm_first'])))
+                . ($field['required'] ? ' frm_required_field' : '')
+            )),
             !empty($ctx['hidden']) ? ' hidden' : '',
             esc_attr($key),
             esc_html($label !== '' ? $label : __('Confirm', 'scouting-forms')),
-            $field['required'] ? ' <span class="frm_required">*</span>' : '',
+            $field['required'] ? ' <span class="' . esc_attr(FormidableClasses::names('frm_required')) . '">*</span>' : '',
             $type,
             esc_attr($name),
-            esc_attr(ThemeClasses::input() . ($error !== '' ? ' is-invalid' : '')),
-            $type === 'password' ? ' autocomplete="new-password"' : ''
+            esc_attr(ThemeClasses::FIELD),
+            ($type === 'password' ? ' autocomplete="new-password"' : '') . ($error !== '' ? ' aria-invalid="true"' : ''),
+            // The label keeps its space beside the first box's label, but is not shown
+            esc_attr(ThemeClasses::classes(FormidableClasses::names('frm_primary_label'), 'invisible')),
+            esc_attr(FormidableClasses::names('frm_description'))
         );
     }
 
@@ -469,7 +485,7 @@ class FieldRenderer {
             'textarea_rows' => isset($opts['max']) && is_numeric($opts['max']) && (int) $opts['max'] > 0 ? (int) $opts['max'] : 8,
             'media_buttons' => false,
             'teeny' => false,
-            'editor_class' => 'form-control',
+            'editor_class' => ThemeClasses::FIELD,
         ], $field);
         if (!is_array($settings)) {
             $settings = [];

@@ -15,8 +15,8 @@ use ScoutingMemories\Core\Access;
 get_header();
 ?>
 
-	<div id="primary" class="content-area sm-container mt-12">
-		<main id="main" class="site-main">
+	<div id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12' ) ); ?>">
+		<main id="main">
 			<?php if ( Access::can_add_post() ) : ?>
 				<?php
 				while ( have_posts() ) :
@@ -36,8 +36,8 @@ get_header();
 					<?php
 					printf(
 						wp_kses(
-							/* translators: %s: address of the login page. */
-							__( 'Please <a class="link" href="%s">log in</a> to add a post.', 'scouting-memories-2026' ),
+							/* translators: 1: address of the login page, 2: the link's class names. */
+							__( 'Please <a class="%2$s" href="%1$s">log in</a> to add a post.', 'scouting-memories-2026' ),
 							array(
 								'a' => array(
 									'class' => true,
@@ -45,7 +45,8 @@ get_header();
 								),
 							)
 						),
-						esc_url( wp_login_url( get_permalink() ) )
+						esc_url( wp_login_url( get_permalink() ) ),
+						esc_attr( Scouting_Memories_2026_UI::LINK )
 					);
 					?>
 				</p>

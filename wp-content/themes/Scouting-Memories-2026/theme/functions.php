@@ -37,7 +37,12 @@ function scouting_memories_2026_core_missing_notice() {
 add_action( 'admin_notices', 'scouting_memories_2026_core_missing_notice' );
 
 /**
- * The daisyUI nav walker for the primary menu.
+ * The shared Tailwind class lists (page container, buttons, cards, fields, headings, tables, paging).
+ */
+require get_template_directory() . '/inc/class-scouting-memories-2026-ui.php';
+
+/**
+ * The primary menu's walker, which prints the menu with its Tailwind classes.
  */
 require get_template_directory() . '/inc/class-scouting-memories-2026-nav-walker.php';
 
@@ -91,16 +96,18 @@ add_action(
 
 if ( ! defined( 'SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES' ) ) {
 	/*
-	 * The old site had no Tailwind Typography ("prose") look: page text was plain
-	 * Bootstrap. So the only class set here is `sm-content`, whose Bootstrap-like
-	 * text rules live in `tailwind/custom/components/scouting-memories.css`.
+	 * Text an editor typed (page and post content) is styled by Tailwind Typography
+	 * ("prose"), with modifiers that give it the old Bootstrap site's look: body text
+	 * at 1rem/1.5 in the site's ink colour, paragraphs and lists with 1rem under them,
+	 * blue underlined links, and Roboto Slab headings at Bootstrap's sizes (growing
+	 * with the screen up to 1200px, like Scouting_Memories_2026_UI::H1 to H6).
 	 *
 	 * Set Tailwind Typography classes for the front end, block editor and
 	 * classic editor using the constant below.
 	 *
 	 * For the front end, these classes are added by the `scouting_memories_2026_content_class`
-	 * function. You will see that function used everywhere an `entry-content`
-	 * or `page-content` class has been added to a wrapper element.
+	 * function. You will see that function used on every wrapper element that
+	 * holds page or post content.
 	 *
 	 * For the block editor, these classes are converted to a JavaScript array
 	 * and then used by the `./javascript/block-editor.js` file, which adds
@@ -113,7 +120,25 @@ if ( ! defined( 'SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES' ) ) {
 	 */
 	define(
 		'SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES',
-		'sm-content'
+		implode(
+			' ',
+			array(
+				'prose max-w-none text-base leading-normal break-words text-ink',
+				'prose-p:mt-0 prose-p:mb-4',
+				'prose-a:font-normal prose-a:text-blue prose-a:underline prose-a:hover:text-blue-link-hover',
+				'prose-strong:font-bold prose-strong:text-inherit',
+				'prose-h1:mt-0 prose-h1:mb-2 prose-h1:font-slab prose-h1:text-[calc(1.375rem+1.5vw)] prose-h1:leading-tight prose-h1:font-medium prose-h1:text-ink xl:prose-h1:text-[2.5rem]',
+				'prose-h2:mt-0 prose-h2:mb-2 prose-h2:font-slab prose-h2:text-[calc(1.325rem+0.9vw)] prose-h2:leading-tight prose-h2:font-medium prose-h2:text-ink xl:prose-h2:text-[2rem]',
+				'prose-h3:mt-0 prose-h3:mb-2 prose-h3:font-slab prose-h3:text-[calc(1.3rem+0.6vw)] prose-h3:leading-tight prose-h3:font-medium prose-h3:text-ink xl:prose-h3:text-[1.75rem]',
+				'prose-h4:mt-0 prose-h4:mb-2 prose-h4:font-slab prose-h4:text-[calc(1.275rem+0.3vw)] prose-h4:leading-tight prose-h4:font-medium prose-h4:text-ink xl:prose-h4:text-2xl',
+				'[&_h5]:mt-0 [&_h5]:mb-2 [&_h5]:font-slab [&_h5]:text-xl [&_h5]:leading-tight [&_h5]:font-medium [&_h5]:text-ink',
+				'[&_h6]:mt-0 [&_h6]:mb-2 [&_h6]:font-slab [&_h6]:text-base [&_h6]:leading-tight [&_h6]:font-medium [&_h6]:text-ink',
+				'prose-ul:mt-0 prose-ul:mb-4 prose-ul:pl-8 prose-ol:mt-0 prose-ol:mb-4 prose-ol:pl-8 prose-li:my-0 prose-li:pl-0 prose-li:marker:text-ink',
+				'prose-blockquote:mt-0 prose-blockquote:mb-4 prose-blockquote:border-s-0 prose-blockquote:ps-0 prose-blockquote:font-normal prose-blockquote:text-ink prose-blockquote:not-italic',
+				'prose-hr:my-4 prose-hr:border-ink/25',
+				'prose-img:my-0',
+			)
+		)
 	);
 }
 
@@ -220,9 +245,9 @@ function scouting_memories_2026_widgets_init() {
 			'name'          => __( 'Sidebar', 'scouting-memories-2026' ),
 			'id'            => 'sidebar-1',
 			'description'   => __( 'Add widgets here.', 'scouting-memories-2026' ),
-			'before_widget' => '<section id="%1$s" class="widget %2$s">',
+			'before_widget' => '<section id="%1$s" class="mb-4">',
 			'after_widget'  => '</section>',
-			'before_title'  => '<h2 class="widget-title">',
+			'before_title'  => '<h2 class="' . esc_attr( Scouting_Memories_2026_UI::H2 ) . '">',
 			'after_title'   => '</h2>',
 		)
 	);
@@ -258,10 +283,8 @@ function scouting_memories_2026_logo_url() {
 function scouting_memories_2026_scripts() {
 	$uri = get_template_directory_uri();
 
-	// select2 for the chained search dropdowns, self-hosted. Nothing in this theme loads from a CDN.
-	wp_enqueue_style( 'select2', $uri . '/css/select2.min.css', array(), '4.1.0' );
-	wp_enqueue_script( 'select2', $uri . '/js/vendor/select2.min.js', array( 'jquery' ), '4.1.0', false );
-
+	// One stylesheet (Tailwind's build) and one script (Alpine.js and the theme's own parts).
+	// Nothing in this theme loads from a CDN, and the theme itself asks for no jQuery.
 	wp_enqueue_style( 'scouting-memories-2026-style', get_stylesheet_uri(), array(), scouting_memories_2026_asset_version( 'style.css' ) );
 	wp_enqueue_script(
 		'scouting-memories-2026-script',
@@ -301,7 +324,7 @@ function scouting_memories_2026_enqueue_block_editor_script() {
 			SCOUTING_MEMORIES_2026_VERSION,
 			true
 		);
-		wp_add_inline_script( 'scouting-memories-2026-editor', "tailwindTypographyClasses = '" . esc_attr( SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES ) . "'.split(' ');", 'before' );
+		wp_add_inline_script( 'scouting-memories-2026-editor', 'tailwindTypographyClasses = ' . wp_json_encode( explode( ' ', SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES ) ) . ';', 'before' );
 	}
 }
 add_action( 'enqueue_block_assets', 'scouting_memories_2026_enqueue_block_editor_script' );

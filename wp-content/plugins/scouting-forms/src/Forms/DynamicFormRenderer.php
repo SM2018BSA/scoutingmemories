@@ -12,6 +12,7 @@ use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\FormAccess;
 use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Support\Permissions;
+use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
  * DynamicFormRenderer
@@ -71,8 +72,7 @@ class DynamicFormRenderer extends FormHandler {
 
         // Forms only some people may use show a notice instead (Support\FormAccess)
         if (!FormAccess::allowed($form)) {
-            wp_enqueue_style('sm-forms-front');
-            return '<div class="sm-forms"><div class="alert alert-info" role="status">' . FormAccess::message($form) . '</div></div>';
+            return '<div class="' . ThemeClasses::SCOPE . '"><div class="' . esc_attr(ThemeClasses::alert('info')) . '" role="status">' . FormAccess::message($form) . '</div></div>';
         }
 
         $fields = FormRepository::fields($form['id']);

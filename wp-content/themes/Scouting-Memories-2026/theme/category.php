@@ -1,9 +1,11 @@
 <?php
 /**
- * Category archives (/category/…/): the filtered memory list, ported from the
+ * Category archives (/category/.../): the filtered memory list, ported from the
  * old theme. The Indexing class (core plugin) turns the URL's search filters
- * into the query; the fold-out search form replaces the old broken Bootstrap 4
- * collapse with a native <details> daisy collapse, so it opens again.
+ * into the query. The card's grey header holds the heading (at the size of
+ * ordinary text, as the old page showed it) and opens the wide search form
+ * under it: a native <details>, so it opens again (the old Bootstrap 4
+ * collapse was broken).
  *
  * @link https://developer.wordpress.org/themes/basics/template-hierarchy/
  *
@@ -22,14 +24,19 @@ $smem_the_query = $smem_indexing ? new WP_Query( $smem_indexing->query ) : $GLOB
 get_header();
 ?>
 
-	<main id="primary" class="site-main sm-container sm-edge mt-12 mb-12">
+	<main id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12 mb-12' ) ); ?>">
 
-		<div class="page-header sm-page-header">
-			<details class="collapse collapse-plus sm-fold sm-fold-plain">
-				<summary class="collapse-title">
-					<h1 class="sm-fold-h1">Category: <?php echo esc_html( $smem_category_name ); ?></h1>
+		<div class="mb-12 border-b border-line">
+			<div class="<?php echo esc_attr( Scouting_Memories_2026_UI::CARD ); ?>">
+			<details class="group">
+				<summary class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CARD_HEADER, 'block cursor-pointer list-none focus-visible:outline-2 focus-visible:outline-blue [&::-webkit-details-marker]:hidden' ) ); ?>">
+					<h1 class="mt-0 mb-2 flex w-full items-center justify-between gap-4 text-left font-slab text-base leading-tight font-medium break-words">
+						<span class="min-w-0">Category: <?php echo esc_html( $smem_category_name ); ?></span>
+						<svg class="size-6 shrink-0 fill-current group-open:hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/></svg>
+						<svg class="hidden size-6 shrink-0 fill-current group-open:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8"/></svg>
+					</h1>
 				</summary>
-				<div class="collapse-content">
+				<div class="<?php echo esc_attr( Scouting_Memories_2026_UI::CARD_BODY ); ?>">
 					<?php
 					if ( class_exists( 'SearchForm' ) ) {
 						echo SearchForm::show_form2(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -37,6 +44,7 @@ get_header();
 					?>
 				</div>
 			</details>
+			</div>
 		</div>
 
 		<?php

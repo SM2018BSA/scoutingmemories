@@ -77,9 +77,9 @@ class CurrentUser {
 		$user_roles = 'none';
 
 		if ( count( $this->roles ) == 1 ) {
-			$user_roles = '<span class="small">' . @implode( ", ", $this->roles ) . '</span>';
+			$user_roles = '<span class="text-[0.875em]">' . @implode( ", ", $this->roles ) . '</span>';
 		} elseif ( count( $this->roles ) > 1 ) {
-			$user_roles = '<ul class="text-capitalize small">';
+			$user_roles = '<ul class="list-disc pl-8 text-[0.875em] capitalize">';
 			foreach ( $this->roles as $role ) {
 				$user_roles .= '<li>' . str_replace( "_", " ", $role ) . '</li>';
 			}

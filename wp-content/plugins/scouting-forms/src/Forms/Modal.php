@@ -3,18 +3,30 @@
 namespace ScoutingMemories\Forms\Forms;
 
 use ScoutingMemories\Forms\Support\ShortcodeTrust;
+use ScoutingMemories\Forms\Ui\ThemeClasses;
+use ScoutingMemories\Forms\Views\LegacyClassMap;
 
 /**
  * Modal
  *
  * [frmmodal-content label="clicking here"]...[/frmmodal-content] and [frmmodal id=26 label=".."]
  * from the Formidable Modal add-on (used in the Add a Post form's help text), when the add-on is
- * not active: a link that opens a Bootstrap 5 modal. The modals are printed in the footer, so a
- * form inside one is never nested in the form that holds the link.
+ * not active: a link-looking button that opens a dialog. The dialog is the browser's own popover
+ * (popover / popovertarget), so it opens, closes with its X, Esc or a click outside, and sits on
+ * top of the page with no script and no stylesheet: its look is Tailwind classes (ThemeClasses).
+ * The dialogs are printed in the footer, so a form inside one is never nested in the form that
+ * holds the link.
  */
 class Modal {
 
-    private const SIZES = ['modal-sm', 'modal-lg', 'modal-xl', 'modal-fullscreen'];
+    /** The add-on's size names (Bootstrap's) => the dialog's width */
+    private const SIZES = [
+        '' => 'max-w-[500px]',
+        'modal-sm' => 'max-w-[300px]',
+        'modal-lg' => 'max-w-[800px]',
+        'modal-xl' => 'max-w-[1140px]',
+        'modal-fullscreen' => 'max-w-none',
+    ];
 
     /** @var array<int, array{title:string, class:string, size:string, content:string, trusted:bool}> */
     private static array $modals = [];
@@ -59,8 +71,9 @@ class Modal {
         $modal = [
             'title' => (string) $atts['modal_title'],
             'class' => self::classes((string) $atts['modal_class']),
-            'size' => in_array($atts['size'], self::SIZES, true) ? $atts['size'] : '',
-            'content' => $content,
+            'size' => self::SIZES[$atts['size']] ?? self::SIZES[''],
+            // Bootstrap names typed into the text are swapped before its shortcodes draw their own markup
+            'content' => LegacyClassMap::html($content),
             // Shortcodes inside run later, in the footer, with the trust of the place they were written
             'trusted' => ShortcodeTrust::isTrusted(),
         ];
@@ -72,8 +85,8 @@ class Modal {
         }
         $label = $atts['label'] !== '' ? $atts['label'] : __('Click here', 'scouting-forms');
 
-        return '<a href="#" class="' . esc_attr(trim('frmmodal-link ' . self::classes((string) $atts['class']))) . '" data-bs-toggle="modal" data-bs-target="#sm-modal-' . $index . '">'
-            . esc_html($label) . '</a>';
+        return '<button type="button" class="' . esc_attr(ThemeClasses::classes('frmmodal-link', self::classes((string) $atts['class']), ThemeClasses::LINK_BUTTON)) . '" popovertarget="sm-modal-' . $index . '">'
+            . esc_html($label) . '</button>';
     }
 
     public static function printModals(): void {
@@ -81,19 +94,19 @@ class Modal {
             $run = static fn() => do_shortcode($modal['content']);
             $body = $modal['trusted'] ? ShortcodeTrust::trusted($run) : $run();
             $labelId = 'sm-modal-' . $index . '-title';
-            echo '<div class="modal fade sm-forms ' . esc_attr($modal['class']) . '" id="sm-modal-' . (int) $index . '" tabindex="-1"'
+            $id = 'sm-modal-' . (int) $index;
+            echo '<div popover role="dialog" class="' . esc_attr(ThemeClasses::classes(ThemeClasses::SCOPE, $modal['class'], ThemeClasses::DIALOG, $modal['size'])) . '" id="' . $id . '"'
                 . ($modal['title'] !== '' ? ' aria-labelledby="' . esc_attr($labelId) . '"' : ' aria-label="' . esc_attr__('Dialog', 'scouting-forms') . '"')
-                . ' aria-hidden="true">'
-                . '<div class="modal-dialog ' . esc_attr($modal['size']) . '"><div class="modal-content">'
-                . '<div class="modal-header">'
-                . ($modal['title'] !== '' ? '<h2 class="modal-title fs-5" id="' . esc_attr($labelId) . '">' . esc_html($modal['title']) . '</h2>' : '')
-                . '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="' . esc_attr__('Close', 'scouting-forms') . '"></button>'
-                . '</div><div class="modal-body">' . $body . '</div></div></div></div>';
+                . '>'
+                . '<div class="' . esc_attr(ThemeClasses::DIALOG_HEAD) . '">'
+                . ($modal['title'] !== '' ? '<h2 class="' . esc_attr(ThemeClasses::DIALOG_TITLE) . '" id="' . esc_attr($labelId) . '">' . esc_html($modal['title']) . '</h2>' : '')
+                . '<button type="button" class="' . esc_attr(ThemeClasses::DIALOG_CLOSE) . '" popovertarget="' . $id . '" popovertargetaction="hide" aria-label="' . esc_attr__('Close', 'scouting-forms') . '"><span aria-hidden="true">&times;</span></button>'
+                . '</div><div class="' . esc_attr(ThemeClasses::DIALOG_BODY) . '">' . $body . '</div></div>';
         }
         self::$modals = [];
     }
 
     private static function classes(string $classes): string {
-        return implode(' ', array_filter(array_map('sanitize_html_class', preg_split('/\s+/', $classes) ?: [])));
+        return LegacyClassMap::names(implode(' ', array_filter(array_map('sanitize_html_class', preg_split('/\s+/', $classes) ?: []))));
     }
 }

@@ -8,6 +8,13 @@
  * - Collapsible sections, repeating sections (add/remove rows) and multi-page forms.
  *
  * No dependencies. Rules come from the JSON in each form's .sm-form-config element.
+ *
+ * Look: this file has no class names of its own. The elements it builds get their Tailwind class
+ * lists from that same JSON ("classes", written by Ui\ThemeClasses::forBrowser() in PHP, where
+ * the theme's Tailwind build reads them). State is an attribute, never a class: a closed section
+ * carries data-sm-closed, a dropdown replaced by a search box data-sm-combo, the option under the
+ * arrow keys data-sm-focus, a field with a mistake aria-invalid, a sent form's button
+ * aria-disabled. The Tailwind classes printed by PHP react to those attributes.
  */
 (function () {
     'use strict';
@@ -96,9 +103,9 @@
         this.ajax = form.getAttribute('data-sm-ajax');
         var configEl = form.querySelector('.sm-form-config');
         try {
-            this.config = configEl ? JSON.parse(configEl.textContent) : { fields: {}, text: {} };
+            this.config = configEl ? JSON.parse(configEl.textContent) : { fields: {}, text: {}, classes: {} };
         } catch (err) {
-            this.config = { fields: {}, text: {} };
+            this.config = { fields: {}, text: {}, classes: {} };
         }
         this.requests = {};
         this.init();
@@ -106,6 +113,11 @@
 
     SmForm.prototype.text = function (key, fallback) {
         return (this.config.text && this.config.text[key]) || fallback;
+    };
+
+    // The Tailwind class list PHP set for something this script builds
+    SmForm.prototype.classes = function (key) {
+        return (this.config.classes && this.config.classes[key]) || '';
     };
 
     SmForm.prototype.rule = function (fieldId) {
@@ -373,7 +385,7 @@
     function clearRow(row) {
         Array.prototype.forEach.call(row.querySelectorAll('.sm-ac'), function (widget) { widget.parentNode.removeChild(widget); });
         Array.prototype.forEach.call(row.querySelectorAll('select'), function (s) {
-            s.classList.remove('sm-ac-native');
+            s.removeAttribute('data-sm-combo');
             delete s.smCombo;
             var container = s.closest('[data-sm-field]');
             var dependent = container && container.getAttribute('data-sm-dependent') === '1';
@@ -399,7 +411,7 @@
         Array.prototype.forEach.call(row.querySelectorAll('.frm_show_it'), function (p) { p.textContent = ''; });
         Array.prototype.forEach.call(row.querySelectorAll('.frm_error'), function (e) { e.parentNode.removeChild(e); });
         Array.prototype.forEach.call(row.querySelectorAll('.frm_blank_field'), function (c) { c.classList.remove('frm_blank_field'); });
-        Array.prototype.forEach.call(row.querySelectorAll('.is-invalid'), function (c) { c.classList.remove('is-invalid'); });
+        Array.prototype.forEach.call(row.querySelectorAll('[aria-invalid]'), function (c) { c.removeAttribute('aria-invalid'); });
     }
 
     // ---------------------------------------------------------------- pages
@@ -435,14 +447,14 @@
         var ok = true;
         var self = this;
         Array.prototype.forEach.call(page.querySelectorAll('[data-sm-field].frm_required_field'), function (container) {
-            if (container.hidden || container.closest('[hidden]')) {
+            if (container.hidden || container.closest('[hidden], [data-sm-closed]')) {
                 return;
             }
             var blank = isBlank(fieldValue(container));
             var existing = container.querySelector('.sm-page-error');
             if (blank && !existing) {
                 var msg = document.createElement('div');
-                msg.className = 'frm_error invalid-feedback d-block sm-page-error';
+                msg.className = ('frm_error sm-page-error ' + self.classes('error')).trim();
                 var label = container.querySelector('.frm_primary_label');
                 var name = label ? label.childNodes[0].textContent.trim() : '';
                 msg.textContent = (name ? name + ' ' : 'This field ') + self.text('blank', 'cannot be blank.');
@@ -470,8 +482,8 @@
         if (!container) {
             return;
         }
-        var show = open === undefined ? container.hidden : open;
-        container.hidden = !show;
+        var show = open === undefined ? container.hasAttribute('data-sm-closed') : open;
+        container.toggleAttribute('data-sm-closed', !show);
         heading.setAttribute('aria-expanded', show ? 'true' : 'false');
         heading.classList.toggle('active', show);
     }
@@ -493,12 +505,12 @@
         var uid = select.id || ('sm-ac-' + Math.random().toString(36).slice(2));
 
         this.wrap = document.createElement('div');
-        this.wrap.className = 'sm-ac position-relative';
+        this.wrap.className = ('sm-ac ' + form.classes('combo')).trim();
         this.chips = document.createElement('div');
-        this.chips.className = 'sm-ac-chips d-flex flex-wrap gap-1 mb-1';
+        this.chips.className = ('sm-ac-chips ' + form.classes('comboChips')).trim();
         this.input = document.createElement('input');
         this.input.type = 'text';
-        this.input.className = 'form-control sm-ac-input';
+        this.input.className = ('sm-ac-input ' + form.classes('comboInput')).trim();
         this.input.setAttribute('role', 'combobox');
         this.input.setAttribute('aria-autocomplete', 'list');
         this.input.setAttribute('aria-expanded', 'false');
@@ -515,7 +527,7 @@
         }
         this.input.id = uid + '-search';
         this.list = document.createElement('ul');
-        this.list.className = 'sm-ac-list list-group position-absolute w-100 shadow-sm';
+        this.list.className = ('sm-ac-list ' + form.classes('comboList')).trim();
         this.list.id = uid + '-list';
         this.list.setAttribute('role', 'listbox');
         if (this.multiple) {
@@ -528,7 +540,7 @@
         }
         this.wrap.appendChild(this.input);
         this.wrap.appendChild(this.list);
-        select.classList.add('sm-ac-native');
+        select.setAttribute('data-sm-combo', '1');
         select.setAttribute('tabindex', '-1');
         select.setAttribute('aria-hidden', 'true');
         select.parentNode.insertBefore(this.wrap, select.nextSibling);
@@ -587,11 +599,12 @@
         this.chips.innerHTML = '';
         this.options().filter(function (o) { return o.selected; }).forEach(function (o) {
             var chip = document.createElement('span');
-            chip.className = 'badge text-bg-light border sm-ac-chip d-inline-flex align-items-center';
+            chip.className = ('sm-ac-chip ' + self.form.classes('comboChip')).trim();
             chip.textContent = o.text;
             var remove = document.createElement('button');
             remove.type = 'button';
-            remove.className = 'btn-close btn-close-sm ms-1';
+            remove.className = self.form.classes('comboChipRemove');
+            remove.textContent = '\u00d7';
             remove.setAttribute('aria-label', self.form.text('remove', 'Remove') + ' ' + o.text);
             remove.addEventListener('click', function () {
                 o.selected = false;
@@ -613,12 +626,13 @@
         this.matches = matches.slice(0, 200);
         var html = '';
         var listId = this.list.id;
+        var optionClass = escapeHtml(('sm-ac-option ' + this.form.classes('comboOption')).trim());
         this.matches.forEach(function (o, i) {
-            html += '<li class="list-group-item list-group-item-action sm-ac-option' + (o.selected ? ' active' : '') + '" role="option" id="' + listId + '-' + i + '"'
+            html += '<li class="' + optionClass + '" role="option" id="' + listId + '-' + i + '"'
                 + ' aria-selected="' + (o.selected ? 'true' : 'false') + '" data-value="' + escapeHtml(o.value) + '">' + escapeHtml(o.text) + '</li>';
         });
         if (!this.matches.length) {
-            html = '<li class="list-group-item text-muted" role="option" aria-disabled="true">' + escapeHtml(this.form.text('noResults', 'No matches')) + '</li>';
+            html = '<li class="' + escapeHtml(this.form.classes('comboEmpty')) + '" role="option" aria-disabled="true">' + escapeHtml(this.form.text('noResults', 'No matches')) + '</li>';
         }
         this.list.innerHTML = html;
         this.active = -1;
@@ -651,7 +665,7 @@
                 return;
             }
             this.active = e.key === 'ArrowDown' ? Math.min(this.active + 1, items.length - 1) : Math.max(this.active - 1, 0);
-            Array.prototype.forEach.call(items, function (li, i) { li.classList.toggle('sm-ac-focus', i === this.active); }, this);
+            Array.prototype.forEach.call(items, function (li, i) { li.toggleAttribute('data-sm-focus', i === this.active); }, this);
             this.input.setAttribute('aria-activedescendant', items[this.active].id);
             items[this.active].scrollIntoView({ block: 'nearest' });
         } else if (e.key === 'Enter') {
@@ -723,7 +737,7 @@
         // Sections with an error start open
         Array.prototype.forEach.call(form.querySelectorAll('.sm-trigger'), function (h) {
             var container = h.parentNode.querySelector('.sm-toggle-container');
-            if (container && container.querySelector('.frm_blank_field, .is-invalid')) {
+            if (container && container.querySelector('.frm_blank_field, [aria-invalid="true"]')) {
                 toggleSection(h, true);
             }
         });
@@ -791,7 +805,6 @@
             form.setAttribute('data-sm-sending', '1');
             Array.prototype.forEach.call(form.querySelectorAll('button[type=submit], input[type=submit]'), function (b) {
                 b.setAttribute('aria-disabled', 'true');
-                b.classList.add('disabled');
             });
         });
         // Coming back to the page from the browser history re-enables the form
@@ -799,7 +812,6 @@
             form.removeAttribute('data-sm-sending');
             Array.prototype.forEach.call(form.querySelectorAll('button[type=submit], input[type=submit]'), function (b) {
                 b.removeAttribute('aria-disabled');
-                b.classList.remove('disabled');
             });
         });
     };

@@ -14,19 +14,19 @@ class DashboardPage extends BasePage {
 	}
 
 	async tapTab(tabId) {
-		await this.page.locator(`.ma-tablist label[for="tab-${tabId}"]`).click();
+		await this.page.locator(`[data-ma="tablist"] label[for="tab-${tabId}"]`).click();
 		await this.settle();
 	}
 
 	/** The tab labels as printed, in order (Admin 2 is printed but kept hidden). */
 	async tabLabels() {
-		return (await this.page.locator('.ma-tablist label').allTextContents()).map((t) => t.trim());
+		return (await this.page.locator('[data-ma="tablist"] label').allTextContents()).map((t) => t.trim());
 	}
 
 	/** The id of the pane that is showing, for example "pane-myHome". */
 	async openPane() {
 		return this.page.evaluate(() => {
-			const pane = [...document.querySelectorAll('.ma-pane')].find((p) => getComputedStyle(p).display !== 'none');
+			const pane = [...document.querySelectorAll('[data-ma="pane"]')].find((p) => getComputedStyle(p).display !== 'none');
 			return pane ? pane.id : null;
 		});
 	}
@@ -36,7 +36,7 @@ class DashboardPage extends BasePage {
 	}
 
 	async isLoginPrompt() {
-		return (await this.page.locator('.ma-tabs').count()) === 0
+		return (await this.page.locator('[data-ma="tabs"]').count()) === 0
 			&& (await this.page.getByText('Please log in to see this page.').count()) > 0;
 	}
 }

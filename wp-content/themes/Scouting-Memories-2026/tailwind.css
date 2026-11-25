@@ -15,13 +15,6 @@
  */
 @import "./tailwind/custom/file-header.css";
 
-/**
- * Cascade-layer order. daisyUI puts its components in the `daisyui` layer; the
- * Preflight reset is imported into `base` below. Declaring base BEFORE daisyui
- * makes daisyUI's component styles win over the reset, while everything this
- * theme writes itself stays unlayered and wins over both.
- */
-@layer properties, theme, base, daisyui;
 
 /**
  * Add Tailwind’s default theme and your custom theme.
@@ -49,57 +42,22 @@
 	}
 }
 
-/**
- * Add your custom base styles.
- */
-@import "./tailwind/custom/base.css";
 
 /**
- * daisyUI 5. One light theme only, matching the live site (the old site has no
- * dark mode); the Scouting Memories green drives primary, with the darker hover
- * green from the old navbar as secondary. Same pattern as the control panel.
+ * This theme is styled with Tailwind utility classes only: every style is a class on the
+ * element, in the templates. There are no component stylesheets and no rules of our own.
  *
- * The @plugin lines sit HERE - after Preflight - on purpose: daisyUI's component
- * selectors are zero-specificity (:where), so Preflight's universal margin/padding
- * reset would cancel them if it came later in the sheet.
+ * Tailwind only builds the classes it can read, so it is pointed at the two plugins that
+ * print markup for this theme (their class strings are Tailwind classes too). Scouting Forms
+ * lives on the forms branch, so it is read from that branch's folder on this PC (the stylesheet
+ * is built here and committed) and, where the plugin sits beside the theme, from there as well.
  */
-@plugin "daisyui" {
-	themes: light --default;
-}
-@plugin "daisyui/theme" {
-	name: "light";
-	default: true;
-	--color-primary: #025600;
-	--color-primary-content: oklch(98% 0 0);
-	--color-secondary: #155507;
-	--color-secondary-content: oklch(98% 0 0);
-	/* The line colour of cards, tabs, tables and dividers. daisyUI's own is too pale to see on
-	   white; this is the grey the old Bootstrap theme drew its boxes with. */
-	--color-base-300: #ced4da;
-}
-
-/**
- * Add your custom component styles.
- *
- * As used below, `@import-glob` imports all CSS files from the
- * `./tailwind/components` directory. This makes it easier to style things like
- * WordPress plugins or JavaScript components via separate files for each
- * plugin or library.
- *
- * Please note that because these files are added alphabetically, you must
- * ensure that CSS precedence isn’t affected by the order in which the files are
- * included. The intended use case is for, e.g., a `woocommerce.css` file to
- * add styles for WooCommerce using WooCommerce-specific class names, ensuring
- * that files for other WordPress plugins or JavaScript components could be
- * included in any order because they also use library-specific class names.
- */
-/**
- * daisyUI component classes that appear only in markup printed by the Scouting Forms plugin
- * (which Tailwind does not scan), so they are listed here to make sure they are built.
- */
-@source inline("btn btn-sm btn-lg btn-primary btn-secondary btn-success btn-link btn-ghost badge alert alert-success alert-info alert-warning alert-error table card card-body card-title");
-
-@import-glob "./tailwind/custom/components/**/*.css";
+@source "../../plugins/scouting-memories-core";
+@source "../../plugins/scouting-forms";
+@source "../../../../sm-forms/wp-content/plugins/scouting-forms/src";
+@source "../../../../sm-forms/wp-content/plugins/scouting-forms/views";
+@source "../../../../sm-forms/wp-content/plugins/scouting-forms/compat";
+@source "./javascript";
 
 /**
  * Add Tailwind Typography.
@@ -111,7 +69,6 @@
  * plugins, then add custom utility classes.
  */
 @import "tailwindcss/utilities";
-@import "./tailwind/custom/utilities.css";
 
 /**
  * Add styles exclusively for the WordPress editor.

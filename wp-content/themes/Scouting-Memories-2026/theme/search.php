@@ -10,19 +10,19 @@
 get_header();
 ?>
 
-	<div id="primary" class="content-area sm-container sm-edge mt-12">
-		<main id="main" class="site-main">
+	<div id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12 h-full' ) ); ?>">
+		<main id="main" class="m-0 w-full p-0">
 
 		<?php if ( have_posts() ) : ?>
 
-			<header class="page-header">
-				<h1 class="page-title">
+			<header>
+				<h1 class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::H1, 'break-words' ) ); ?>">
 					<?php
 					/* translators: %s: search query. */
 					printf( esc_html__( 'Search Results for: %s', 'scouting-memories-2026' ), '<span>' . get_search_query() . '</span>' );
 					?>
 				</h1>
-			</header><!-- .page-header -->
+			</header>
 
 			<?php
 			/* Start the Loop */

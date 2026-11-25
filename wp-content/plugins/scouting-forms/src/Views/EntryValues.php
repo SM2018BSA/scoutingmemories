@@ -6,6 +6,7 @@ use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Models\PostFields;
 use ScoutingMemories\Forms\Support\FormidableSettings;
 use ScoutingMemories\Forms\Support\ShortcodeTrust;
+use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
  * EntryValues
@@ -241,7 +242,7 @@ class EntryValues {
                     $image = wp_get_attachment_image_url($attachmentId, $atts['size'] ?? 'thumbnail');
                     $url = wp_get_attachment_url($attachmentId);
                     if ($image) {
-                        $parts[] = '<img src="' . esc_url($image) . '" class="sm-thumb rounded shadow-sm" alt="" />';
+                        $parts[] = '<img src="' . esc_url($image) . '" class="sm-thumb ' . esc_attr(ThemeClasses::THUMB) . '" alt="" />';
                     } elseif ($url) {
                         $parts[] = '<a href="' . esc_url($url) . '">' . esc_html(basename($url)) . '</a>';
                     }

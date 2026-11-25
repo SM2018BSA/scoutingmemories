@@ -2,8 +2,10 @@
 
 namespace ScoutingMemories\Forms\Accounts;
 
+use ScoutingMemories\Forms\Forms\Rendering\FormidableClasses;
 use ScoutingMemories\Forms\Ui\ButtonStyle;
 use ScoutingMemories\Forms\Ui\ThemeClasses;
+use ScoutingMemories\Forms\Views\LegacyClassMap;
 
 /**
  * AccountPages
@@ -70,37 +72,36 @@ class AccountPages {
             'label_log_in' => __('Login', 'scouting-forms'),
             'label_log_out' => __('Logout', 'scouting-forms'),
         ], is_array($atts) ? $atts : [], 'sm_login');
-        wp_enqueue_style('sm-forms-front');
 
         if (is_user_logged_in()) {
             $back = $atts['logout_redirect'] !== '' ? $atts['logout_redirect'] : (string) get_permalink();
-            return '<a href="' . esc_url(wp_logout_url($back)) . '" class="frm_logout_link">' . esc_html($atts['label_log_out']) . '</a>';
+            return '<a href="' . esc_url(wp_logout_url($back)) . '" class="frm_logout_link ' . esc_attr(ThemeClasses::LINK) . '">' . esc_html($atts['label_log_out']) . '</a>';
         }
 
         static $count = 0;
         $n = $count++;
         $redirect = $atts['redirect'] !== '' ? $atts['redirect'] : (isset($_GET['redirect_to']) ? wp_unslash((string) $_GET['redirect_to']) : home_url('/'));
-        $html = '<div id="loginform-' . $n . '" class="' . esc_attr(trim(ThemeClasses::SCOPE . ' frm_forms frm_login_form ' . $atts['class'])) . '">';
+        $html = '<div id="loginform-' . $n . '" class="' . esc_attr(trim(ThemeClasses::SCOPE . ' frm_forms frm_login_form ' . LegacyClassMap::names((string) $atts['class']))) . '">';
         $html .= self::messages();
-        $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php', 'login_post')) . '"><div class="frm_form_fields"><fieldset><div class="frm_fields_container">';
+        $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php', 'login_post')) . '"><div class="frm_form_fields"><fieldset class="min-w-0"><div class="frm_fields_container">';
         $html .= sprintf(
             '<div class="frm_form_field form-field login-username frm_top_container"><label for="user_login%1$d" class="frm_primary_label">%2$s</label><input id="user_login%1$d" name="log" value="" type="text" class="%3$s" autocomplete="username" required /></div>',
             $n,
             esc_html($atts['label_username']),
-            esc_attr(ThemeClasses::input())
+            esc_attr(ThemeClasses::FIELD)
         );
         $html .= sprintf(
             '<div class="frm_form_field form-field login-password frm_top_container"><label for="user_pass%1$d" class="frm_primary_label">%2$s</label><input id="user_pass%1$d" name="pwd" value="" type="password" class="%3$s" autocomplete="current-password" required /></div>',
             $n,
             esc_html($atts['label_password']),
-            esc_attr(ThemeClasses::input())
+            esc_attr(ThemeClasses::FIELD)
         );
         $html .= '<input type="hidden" name="redirect_to" value="' . esc_url($redirect) . '" />';
         $html .= '<input type="hidden" name="sm_login_page" value="' . (int) get_the_ID() . '" />';
         $html .= '<div class="frm_submit"><button type="submit" name="wp-submit" id="wp-submit' . $n . '" ' . ButtonStyle::attributes() . '>' . esc_html($atts['label_log_in']) . '</button></div>';
         if ($atts['show_remember'] !== '0') {
             $html .= sprintf(
-                '<div class="frm_form_field form-field frm_none_container login-remember"><div class="form-check"><input name="rememberme" id="rememberme%1$d" value="forever" type="checkbox" class="form-check-input" /><label class="form-check-label" for="rememberme%1$d">%2$s</label></div></div>',
+                '<div class="frm_form_field form-field frm_none_container login-remember"><div class="' . esc_attr(ThemeClasses::CHOICE) . '"><input name="rememberme" id="rememberme%1$d" value="forever" type="checkbox" class="' . esc_attr(ThemeClasses::CHECK) . '" /><label for="rememberme%1$d">%2$s</label></div></div>',
                 $n,
                 esc_html($atts['label_remember'])
             );
@@ -108,9 +109,10 @@ class AccountPages {
         if ($atts['show_lost_password'] !== '0') {
             $reset = self::page('resetpass');
             $url = $reset ? get_permalink($reset) : wp_lostpassword_url();
-            $html .= '<div class="frm_form_field frm_html_container form-field login_lost_pw"><a class="forgot-password" href="' . esc_url($url) . '">' . esc_html__('Forgot your password?', 'scouting-forms') . '</a></div>';
+            $html .= '<div class="frm_form_field frm_html_container form-field login_lost_pw"><a class="forgot-password ' . esc_attr(ThemeClasses::LINK) . '" href="' . esc_url($url) . '">' . esc_html__('Forgot your password?', 'scouting-forms') . '</a></div>';
         }
-        return $html . '</div></fieldset></div></form></div>';
+        // Formidable's names above are bare hooks; their Tailwind classes are added here
+        return FormidableClasses::html($html . '</div></fieldset></div></form></div>');
     }
 
     /**
@@ -120,15 +122,14 @@ class AccountPages {
      */
     public static function resetForm($atts = []): string {
         $atts = shortcode_atts(['class' => ''], is_array($atts) ? $atts : [], 'sm_reset_password');
-        wp_enqueue_style('sm-forms-front');
         $messages = get_option('frm_reg_global_messages');
         $messages = is_object($messages) ? (array) $messages : (is_array($messages) ? $messages : []);
-        $html = '<div class="' . esc_attr(trim(ThemeClasses::SCOPE . ' frm_forms ' . $atts['class'])) . '">' . self::messages();
+        $html = '<div class="' . esc_attr(trim(ThemeClasses::SCOPE . ' frm_forms ' . LegacyClassMap::names((string) $atts['class']))) . '">' . self::messages();
 
         $key = isset($_GET['key']) ? sanitize_text_field(wp_unslash($_GET['key'])) : '';
         $login = isset($_GET['login']) ? sanitize_user(wp_unslash($_GET['login'])) : '';
         if ($key !== '' && $login !== '') {
-            $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php?action=resetpass', 'login_post')) . '" class="frm-show-form"><div class="frm_form_fields"><fieldset>';
+            $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php?action=resetpass', 'login_post')) . '" class="frm-show-form"><div class="frm_form_fields"><fieldset class="min-w-0">';
             $html .= '<div class="frm_description"><p>' . esc_html($messages['reset_password'] ?? __('Enter your new password below.', 'scouting-forms')) . '</p></div>';
             $html .= '<input type="hidden" name="rp_login" value="' . esc_attr($login) . '" autocomplete="off" />';
             $html .= '<input type="hidden" name="rp_key" value="' . esc_attr($key) . '" />';
@@ -137,18 +138,18 @@ class AccountPages {
                     '<div class="frm_form_field form-field frm_top_container"><label for="sm_%1$s" class="frm_primary_label">%2$s <span class="frm_required">*</span></label><input type="password" id="sm_%1$s" name="%1$s" class="%3$s" autocomplete="new-password" required /></div>',
                     $name,
                     esc_html($label),
-                    esc_attr(ThemeClasses::input())
+                    esc_attr(ThemeClasses::FIELD)
                 );
             }
             $html .= '<div class="frm_submit"><button type="submit" ' . ButtonStyle::attributes() . '>' . esc_html__('Reset Password', 'scouting-forms') . '</button></div>';
-            return $html . '</fieldset></div></form></div>';
+            return FormidableClasses::formHead($html . '</fieldset></div></form></div>');
         }
 
-        $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php?action=lostpassword', 'login_post')) . '" class="frm-show-form"><div class="frm_form_fields"><fieldset>';
+        $html .= '<form method="post" action="' . esc_url(site_url('wp-login.php?action=lostpassword', 'login_post')) . '" class="frm-show-form"><div class="frm_form_fields"><fieldset class="min-w-0">';
         $html .= '<div class="frm_description"><p>' . esc_html($messages['lost_password'] ?? __('Please enter your username or email address. You will receive a link to create a new password via email.', 'scouting-forms')) . '</p></div>';
-        $html .= '<div class="frm_form_field form-field frm_top_container"><label for="sm_user_login" class="frm_primary_label">' . esc_html__('Username or Email Address', 'scouting-forms') . ' <span class="frm_required">*</span></label><input type="text" id="sm_user_login" name="user_login" class="' . esc_attr(ThemeClasses::input()) . '" autocomplete="username" required /></div>';
+        $html .= '<div class="frm_form_field form-field frm_top_container"><label for="sm_user_login" class="frm_primary_label">' . esc_html__('Username or Email Address', 'scouting-forms') . ' <span class="frm_required">*</span></label><input type="text" id="sm_user_login" name="user_login" class="' . esc_attr(ThemeClasses::FIELD) . '" autocomplete="username" required /></div>';
         $html .= '<div class="frm_submit"><button type="submit" ' . ButtonStyle::attributes() . '>' . esc_html__('Get New Password', 'scouting-forms') . '</button></div>';
-        return $html . '</fieldset></div></form></div>';
+        return FormidableClasses::formHead($html . '</fieldset></div></form></div>');
     }
 
     /**

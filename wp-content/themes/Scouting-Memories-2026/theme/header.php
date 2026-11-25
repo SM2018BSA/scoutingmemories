@@ -19,7 +19,7 @@
 	<?php wp_head(); ?>
 </head>
 
-<body <?php body_class( 'flex min-h-screen flex-col' ); ?>>
+<body <?php body_class( 'flex min-h-screen flex-col bg-white font-sans text-ink' ); ?>>
 
 <?php wp_body_open(); ?>
 
@@ -28,4 +28,4 @@
 
 	<?php get_template_part( 'template-parts/layout/header', 'content' ); ?>
 
-	<div id="content" class="w-full grow px-3" tabindex="-1">
+	<div id="content" class="w-full grow px-3 has-[>[data-centered]]:flex has-[>[data-centered]]:flex-col" tabindex="-1">

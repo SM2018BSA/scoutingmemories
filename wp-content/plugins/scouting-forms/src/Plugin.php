@@ -84,14 +84,8 @@ class Plugin {
      * Accessible by theme, pdf-embedder, forms, and builder
      */
     public static function registerUnifiedStyles(): void {
-        // Front end: small add-on sheet for the site's Bootstrap (enqueued by forms/views as they render)
-        $front_css = SM_FORMS_PLUGIN_DIR . 'assets/css/forms-front.css';
-        wp_register_style(
-            'sm-forms-front',
-            SM_FORMS_PLUGIN_URL . 'assets/css/forms-front.css',
-            [],
-            file_exists($front_css) ? (string) filemtime($front_css) : SM_FORMS_VERSION
-        );
+        // The public site gets no stylesheet from this plugin: everything it prints there carries
+        // Tailwind utility classes (Ui\ThemeClasses), built by the site theme
 
         // Front end: field logic, dependent Dynamic fields, sections, repeaters, pages
         $front_js = SM_FORMS_PLUGIN_DIR . 'assets/js/forms-front.js';

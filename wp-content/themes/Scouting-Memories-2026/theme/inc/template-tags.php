@@ -2,184 +2,36 @@
 /**
  * Custom template tags for this theme
  *
- * Eventually, some functionality here could be replaced by core features.
+ * Every piece printed here carries Tailwind utility classes only (see docs/TAILWIND-ONLY.md);
+ * the sizes and spacing are the old Bootstrap site's.
  *
  * @package Scouting_Memories_2026
  */
 
-if ( ! function_exists( 'scouting_memories_2026_posted_on' ) ) :
+if ( ! function_exists( 'scouting_memories_2026_text_button_classes' ) ) :
 	/**
-	 * Prints HTML with meta information for the current post-date/time.
+	 * The classes of a plain text button (Bootstrap's bare .btn: no background, no line), used
+	 * for "Posted on", "Posted in" and the State / Council / Lodge / Camps pieces. Links inside
+	 * it are blue and underlined.
+	 *
+	 * @param bool $small The small size (inside a result card) instead of the normal one.
 	 */
-	function scouting_memories_2026_posted_on() {
-		$time_string = '<time class="published updated" datetime="%1$s">%2$s</time>';
-		if ( get_the_time( 'U' ) !== get_the_modified_time( 'U' ) ) {
-			$time_string = '<time class="published" datetime="%1$s">%2$s</time><time class="updated" datetime="%3$s">%4$s</time>';
-		}
-
-		$time_string = sprintf(
-			$time_string,
-			esc_attr( get_the_date( DATE_W3C ) ),
-			esc_html( get_the_date() ),
-			esc_attr( get_the_modified_date( DATE_W3C ) ),
-			esc_html( get_the_modified_date() )
-		);
-
-		printf(
-			'<a href="%1$s" rel="bookmark">%2$s</a>',
-			esc_url( get_permalink() ),
-			$time_string // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	function scouting_memories_2026_text_button_classes( $small = false ) {
+		return Scouting_Memories_2026_UI::classes(
+			$small ? Scouting_Memories_2026_UI::BTN_SM : Scouting_Memories_2026_UI::BTN,
+			Scouting_Memories_2026_UI::BTN_PLAIN,
+			'max-w-full break-words [&_a]:text-blue [&_a]:underline [&_a:hover]:text-blue-link-hover'
 		);
 	}
 endif;
 
-if ( ! function_exists( 'scouting_memories_2026_posted_by' ) ) :
+if ( ! function_exists( 'scouting_memories_2026_prose_classes' ) ) :
 	/**
-	 * Prints HTML with meta information about theme author.
+	 * The classes of a post's body (text an editor typed): Tailwind Typography, set to the old
+	 * site's Bootstrap text look (spaced paragraphs, blue underlined links, Roboto Slab headings).
 	 */
-	function scouting_memories_2026_posted_by() {
-		printf(
-		/* translators: 1: posted by label, only visible to screen readers. 2: author link. 3: post author. */
-			'<span class="sr-only">%1$s</span><span class="author vcard"><a class="url fn n" href="%2$s">%3$s</a></span>',
-			esc_html__( 'Posted by', 'scouting-memories-2026' ),
-			esc_url( get_author_posts_url( get_the_author_meta( 'ID' ) ) ),
-			esc_html( get_the_author() )
-		);
-	}
-endif;
-
-if ( ! function_exists( 'scouting_memories_2026_comment_count' ) ) :
-	/**
-	 * Prints HTML with the comment count for the current post.
-	 */
-	function scouting_memories_2026_comment_count() {
-		if ( ! post_password_required() && ( comments_open() || get_comments_number() ) ) {
-			/* translators: %s: Name of current post. Only visible to screen readers. */
-			comments_popup_link( sprintf( __( 'Leave a comment<span class="sr-only"> on %s</span>', 'scouting-memories-2026' ), get_the_title() ) );
-		}
-	}
-endif;
-
-if ( ! function_exists( 'scouting_memories_2026_entry_meta' ) ) :
-	/**
-	 * Prints HTML with meta information for the categories, tags and comments.
-	 * This template tag is used in the entry header.
-	 */
-	function scouting_memories_2026_entry_meta() {
-
-		// Hide author, post date, category and tag text for pages.
-		if ( 'post' === get_post_type() ) {
-
-			// Posted by.
-			scouting_memories_2026_posted_by();
-
-			// Posted on.
-			scouting_memories_2026_posted_on();
-
-			/* translators: used between list items, there is a space after the comma. */
-			$categories_list = get_the_category_list( __( ', ', 'scouting-memories-2026' ) );
-			if ( $categories_list ) {
-				printf(
-				/* translators: 1: posted in label, only visible to screen readers. 2: list of categories. */
-					'<span><span class="sr-only">%1$s</span>%2$s</span>',
-					esc_html__( 'Posted in', 'scouting-memories-2026' ),
-					$categories_list // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-				);
-			}
-
-			/* translators: used between list items, there is a space after the comma. */
-			$tags_list = get_the_tag_list( '', __( ', ', 'scouting-memories-2026' ) );
-			if ( $tags_list ) {
-				printf(
-				/* translators: 1: tags label, only visible to screen readers. 2: list of tags. */
-					'<span><span class="sr-only">%1$s</span>%2$s</span>',
-					esc_html__( 'Tags:', 'scouting-memories-2026' ),
-					$tags_list // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-				);
-			}
-		}
-
-		// Comment count.
-		if ( ! is_singular() ) {
-			scouting_memories_2026_comment_count();
-		}
-
-		// Edit post link.
-		edit_post_link(
-			sprintf(
-				wp_kses(
-				/* translators: %s: Name of current post. Only visible to screen readers. */
-					__( 'Edit <span class="sr-only">%s</span>', 'scouting-memories-2026' ),
-					array(
-						'span' => array(
-							'class' => array(),
-						),
-					)
-				),
-				get_the_title()
-			)
-		);
-	}
-endif;
-
-if ( ! function_exists( 'scouting_memories_2026_entry_footer' ) ) :
-	/**
-	 * Prints HTML with meta information for the categories, tags and comments.
-	 */
-	function scouting_memories_2026_entry_footer() {
-
-		// Hide author, post date, category and tag text for pages.
-		if ( 'post' === get_post_type() ) {
-
-			// Posted by.
-			scouting_memories_2026_posted_by();
-
-			// Posted on.
-			scouting_memories_2026_posted_on();
-
-			/* translators: used between list items, there is a space after the comma. */
-			$categories_list = get_the_category_list( __( ', ', 'scouting-memories-2026' ) );
-			if ( $categories_list ) {
-				printf(
-				/* translators: 1: posted in label, only visible to screen readers. 2: list of categories. */
-					'<span><span class="sr-only">%1$s</span>%2$s</span>',
-					esc_html__( 'Posted in', 'scouting-memories-2026' ),
-					$categories_list // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-				);
-			}
-
-			/* translators: used between list items, there is a space after the comma. */
-			$tags_list = get_the_tag_list( '', __( ', ', 'scouting-memories-2026' ) );
-			if ( $tags_list ) {
-				printf(
-				/* translators: 1: tags label, only visible to screen readers. 2: list of tags. */
-					'<span><span class="sr-only">%1$s</span>%2$s</span>',
-					esc_html__( 'Tags:', 'scouting-memories-2026' ),
-					$tags_list // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-				);
-			}
-		}
-
-		// Comment count.
-		if ( ! is_singular() ) {
-			scouting_memories_2026_comment_count();
-		}
-
-		// Edit post link.
-		edit_post_link(
-			sprintf(
-				wp_kses(
-				/* translators: %s: Name of current post. Only visible to screen readers. */
-					__( 'Edit <span class="sr-only">%s</span>', 'scouting-memories-2026' ),
-					array(
-						'span' => array(
-							'class' => array(),
-						),
-					)
-				),
-				get_the_title()
-			)
-		);
+	function scouting_memories_2026_prose_classes() {
+		return 'prose max-w-none prose-headings:mt-0 prose-headings:mb-2 prose-headings:font-slab prose-headings:leading-tight prose-headings:font-medium prose-p:mt-0 prose-p:mb-4 prose-p:leading-normal prose-a:font-normal prose-a:text-blue prose-a:underline prose-a:hover:text-blue-link-hover prose-ul:mt-0 prose-ul:mb-4 prose-ul:pl-8 prose-ol:mt-0 prose-ol:mb-4 prose-ol:pl-8 prose-li:my-0 prose-li:leading-normal prose-figure:mt-0 prose-figure:mb-4 prose-img:my-0';
 	}
 endif;
 
@@ -196,15 +48,15 @@ if ( ! function_exists( 'scouting_memories_2026_post_thumbnail' ) ) :
 		if ( is_singular() ) :
 			?>
 
-			<div class="post-thumbnail">
+			<div>
 				<?php the_post_thumbnail(); ?>
-			</div><!-- .post-thumbnail -->
+			</div>
 
 			<?php
 		else :
 			?>
 
-			<a class="post-thumbnail" href="<?php the_permalink(); ?>" aria-hidden="true" tabindex="-1">
+			<a href="<?php the_permalink(); ?>" aria-hidden="true" tabindex="-1">
 				<?php
 				the_post_thumbnail(
 					'post-thumbnail',
@@ -221,59 +73,6 @@ if ( ! function_exists( 'scouting_memories_2026_post_thumbnail' ) ) :
 
 			<?php
 		endif; // End is_singular().
-	}
-endif;
-
-if ( ! function_exists( 'scouting_memories_2026_comment_avatar' ) ) :
-	/**
-	 * Returns the HTML markup to generate a user avatar.
-	 *
-	 * @param mixed $id_or_email The Gravatar to retrieve. Accepts a user_id, gravatar md5 hash,
-	 *                           user email, WP_User object, WP_Post object, or WP_Comment object.
-	 */
-	function scouting_memories_2026_get_user_avatar_markup( $id_or_email = null ) {
-
-		if ( ! isset( $id_or_email ) ) {
-			$id_or_email = get_current_user_id();
-		}
-
-		return sprintf( '<div class="vcard">%s</div>', get_avatar( $id_or_email, scouting_memories_2026_get_avatar_size() ) );
-	}
-endif;
-
-if ( ! function_exists( 'scouting_memories_2026_discussion_avatars_list' ) ) :
-	/**
-	 * Displays a list of avatars involved in a discussion for a given post.
-	 *
-	 * @param array $comment_authors Comment authors to list as avatars.
-	 */
-	function scouting_memories_2026_discussion_avatars_list( $comment_authors ) {
-		if ( empty( $comment_authors ) ) {
-			return;
-		}
-		echo '<ol>', "\n";
-		foreach ( $comment_authors as $id_or_email ) {
-			printf(
-				"<li>%s</li>\n",
-				scouting_memories_2026_get_user_avatar_markup( $id_or_email ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-			);
-		}
-		echo '</ol>', "\n";
-	}
-endif;
-
-if ( ! function_exists( 'scouting_memories_2026_the_posts_navigation' ) ) :
-	/**
-	 * Wraps `the_posts_pagination` for use throughout the theme.
-	 */
-	function scouting_memories_2026_the_posts_navigation() {
-		the_posts_pagination(
-			array(
-				'mid_size'  => 2,
-				'prev_text' => __( 'Newer posts', 'scouting-memories-2026' ),
-				'next_text' => __( 'Older posts', 'scouting-memories-2026' ),
-			)
-		);
 	}
 endif;
 
@@ -318,16 +117,19 @@ if ( ! function_exists( 'scouting_memories_2026_sm_posted_on' ) ) :
 	/**
 	 * "Posted on <date>" as the old theme printed it: a plain text button with
 	 * the published date only, linked to the post.
+	 *
+	 * @param bool $small The small size (inside a result card).
 	 */
-	function scouting_memories_2026_sm_posted_on() {
+	function scouting_memories_2026_sm_posted_on( $small = false ) {
 		$time_string = sprintf(
-			'<time class="entry-date published updated" datetime="%1$s">%2$s</time>',
+			'<time datetime="%1$s">%2$s</time>',
 			esc_attr( get_the_date( DATE_W3C ) ),
 			esc_html( get_the_date() )
 		);
 
 		printf(
-			'<div class="posted-on sm-text-btn">%s</div> ',
+			'<div class="%1$s">%2$s</div> ',
+			esc_attr( scouting_memories_2026_text_button_classes( $small ) ),
 			sprintf(
 				/* translators: %s: post date. */
 				esc_html_x( 'Posted on %s', 'post date', 'scouting-memories-2026' ),
@@ -335,7 +137,6 @@ if ( ! function_exists( 'scouting_memories_2026_sm_posted_on' ) ) :
 					$time_string,
 					array(
 						'time' => array(
-							'class'    => true,
 							'datetime' => true,
 						),
 					)
@@ -352,9 +153,9 @@ if ( ! function_exists( 'scouting_memories_2026_post_box' ) ) :
 	 * the empty box, as before.
 	 */
 	function scouting_memories_2026_post_box() {
-		echo '<div class="sm-post-box">';
+		echo '<footer class="mb-4 border border-line p-4 break-words">';
 		if ( 'post' === get_post_type() ) {
-			echo '<div class="sm-post-box-meta">';
+			echo '<div>';
 			scouting_memories_2026_sm_posted_on();
 
 			/* translators: used between list items, there is a space after the comma. */
@@ -362,13 +163,13 @@ if ( ! function_exists( 'scouting_memories_2026_post_box' ) ) :
 			if ( $categories_list ) {
 				printf(
 					/* translators: %s: list of categories. */
-					'<div class="cat-links sm-text-btn">' . esc_html__( 'Posted in %s', 'scouting-memories-2026' ) . '</div>',
+					'<div class="' . esc_attr( scouting_memories_2026_text_button_classes() ) . '">' . esc_html__( 'Posted in %s', 'scouting-memories-2026' ) . '</div>',
 					$categories_list // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				);
 			}
-			echo '</div><!-- .sm-post-box-meta -->';
+			echo '</div>';
 		}
-		echo '</div><!-- .sm-post-box -->';
+		echo '</footer>';
 	}
 endif;
 
@@ -379,6 +180,8 @@ if ( ! function_exists( 'scouting_memories_2026_entry_terms' ) ) :
 	 * did: plain small text buttons, no background and no line.
 	 */
 	function scouting_memories_2026_entry_terms() {
+		$piece = esc_attr( scouting_memories_2026_text_button_classes( true ) );
+
 		if ( 'post' === get_post_type() && class_exists( 'Post' ) ) {
 			$the_post = new Post( get_the_ID() );
 
@@ -391,18 +194,18 @@ if ( ! function_exists( 'scouting_memories_2026_entry_terms' ) ) :
 
 			foreach ( $chips as $label => $chip ) {
 				if ( is_countable( $chip[0] ) ) {
-					echo '<div class="cat-links sm-text-btn">' . esc_html( $label ) . ': ' . $chip[1] . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo '<div class="' . $piece . '">' . esc_html( $label ) . ': ' . $chip[1] . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				}
 			}
 		}
 
 		if ( ! is_single() && ! post_password_required() && ( comments_open() || get_comments_number() ) ) {
-			echo '<div class="comments-link sm-text-btn">';
+			echo '<div class="' . $piece . '">'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			comments_popup_link( __( 'Leave a Comment', 'scouting-memories-2026' ) );
 			echo '</div>';
 		}
 
-		edit_post_link( __( 'Edit', 'scouting-memories-2026' ), '<div class="edit-link sm-text-btn">', '</div>' );
+		edit_post_link( __( 'Edit', 'scouting-memories-2026' ), '<div class="' . $piece . '">', '</div>' );
 	}
 endif;
 
@@ -418,7 +221,7 @@ if ( ! function_exists( 'scouting_memories_2026_comment_nav' ) ) :
 			return;
 		}
 		?>
-		<nav id="<?php echo esc_attr( $id ); ?>" class="site-navigation comment-navigation sm-comment-nav" aria-label="<?php esc_attr_e( 'Comments', 'scouting-memories-2026' ); ?>">
+		<nav id="<?php echo esc_attr( $id ); ?>" class="mb-2 text-center [&_a]:text-blue [&_a]:underline [&_a:hover]:text-blue-link-hover" aria-label="<?php esc_attr_e( 'Comments', 'scouting-memories-2026' ); ?>">
 			<?php previous_comments_link( esc_html__( 'Older Comments', 'scouting-memories-2026' ) ); ?>
 			<?php next_comments_link( esc_html__( 'Newer Comments', 'scouting-memories-2026' ) ); ?>
 		</nav>

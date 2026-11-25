@@ -15,10 +15,12 @@ const labels = (role) => role.tabs.map((t) => t.label);
 async function pick(page, name) {
 	const select = page.locator('#sm-dev-role-pick');
 	const option = select.locator('option').filter({ hasText: name }).first();
+	const value = await option.getAttribute('value');
 	await Promise.all([
-		page.waitForURL((url) => !url.search.includes('sm_dev_role')),
-		select.selectOption(await option.getAttribute('value')),
+		page.waitForURL((url) => !url.search.includes('sm_dev_role'), { waitUntil: 'load' }),
+		select.selectOption(value),
 	]);
+	await page.locator('#sm-dev-role').waitFor();
 }
 
 test.describe('a real administrator', () => {
@@ -29,12 +31,12 @@ test.describe('a real administrator', () => {
 		await view.open('/my-account/');
 		const box = page.locator('#sm-dev-role');
 		await expect(box).toBeVisible();
-		await expect(box.locator('.sm-dev-head b')).toHaveText('Test role: Administrator');
+		await expect(box.locator('[data-sm-dev="head"] b')).toHaveText('Test role: Administrator');
 		expect(await view.tabLabels()).toEqual(labels(admin));
 
 		await pick(page, 'Subscriber');
 		await view.settle();
-		await expect(box.locator('.sm-dev-head b')).toHaveText('Test role: Subscriber');
+		await expect(box.locator('[data-sm-dev="head"] b')).toHaveText('Test role: Subscriber');
 		expect(await view.tabLabels(), 'the page is drawn as a subscriber sees it').toEqual(labels(subscriber));
 		expect(await view.hasPane('myAdmin')).toBe(false);
 		expect(page.url(), 'the address is clean again after a switch').not.toContain('sm_dev_role');
@@ -43,9 +45,9 @@ test.describe('a real administrator', () => {
 		await view.settle();
 		expect(await view.tabLabels()).toEqual(labels(indexer));
 
-		await pick(page, /^My real roles/);
+		await pick(page, /My real roles/);
 		await view.settle();
-		await expect(box.locator('.sm-dev-head b')).toHaveText('Test role: Administrator');
+		await expect(box.locator('[data-sm-dev="head"] b')).toHaveText('Test role: Administrator');
 		expect(await view.tabLabels(), 'back to the real administrator').toEqual(labels(admin));
 	});
 
@@ -53,14 +55,14 @@ test.describe('a real administrator', () => {
 		const view = new DashboardPage(page);
 		await view.open('/');
 		const box = page.locator('#sm-dev-role');
-		const body = box.locator('.sm-dev-body');
+		const body = box.locator('[data-sm-dev="body"]');
 		await expect(body).toBeVisible();
-		await box.locator('.sm-dev-min').click();
+		await box.locator('[data-sm-dev="min"]').click();
 		await expect(body).toBeHidden();
-		await expect(box.locator('.sm-dev-head')).toBeVisible();
+		await expect(box.locator('[data-sm-dev="head"]')).toBeVisible();
 		await page.reload();
 		await expect(body, 'it stays small on the next page').toBeHidden();
-		await box.locator('.sm-dev-min').click();
+		await box.locator('[data-sm-dev="min"]').click();
 		await expect(body).toBeVisible();
 		await expect(box.locator('button')).toHaveCount(1);
 		await expect(box.locator('select'), 'the kinds of user are one drop-down').toHaveCount(1);

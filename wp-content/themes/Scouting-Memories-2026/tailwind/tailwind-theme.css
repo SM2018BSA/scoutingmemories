@@ -10,6 +10,13 @@
  * variables.
  */
 @theme {
+	/* Screen-size steps: the old site's (Bootstrap's), so sm: md: lg: xl: 2xl: switch where it did. */
+	--breakpoint-sm: 36rem;
+	--breakpoint-md: 48rem;
+	--breakpoint-lg: 62rem;
+	--breakpoint-xl: 75rem;
+	--breakpoint-2xl: 87.5rem;
+
 	/**
 	 * These theme variables use CSS variables set by WordPress using values
 	 * from your `theme.json` file.
@@ -50,4 +57,33 @@
 
 	/* The site's heading font (Roboto Slab, served from the theme's fonts folder; see custom/fonts.css). */
 	--font-slab: "Roboto Slab", serif;
+
+	/* The site's colours, named once. Templates say bg-brand, text-blue, border-line and so on;
+	   no colour code is written anywhere else. The blues, greys, green, red and cyan are the ones
+	   the old Bootstrap site drew its buttons, links and lines with. */
+	--color-brand: #025600;
+	--color-brand-dark: #155507;
+	--color-blue: #0d6efd;
+	--color-blue-dark: #0b5ed7;
+	--color-blue-link-hover: #0a58ca;
+	--color-grey: #6c757d;
+	--color-grey-dark: #5c636a;
+	--color-green: #198754;
+	--color-green-dark: #157347;
+	--color-red: #dc3545;
+	--color-red-dark: #bb2d3b;
+	--color-cyan: #0dcaf0;
+	--color-cyan-dark: #31d2f2;
+	--color-ink: #212529;
+	--color-line: #dee2e6;
+	--color-field-line: #ced4da;
+	--color-menu-text: #dfdfdf;
+	--color-light: #f8f9fa;
+
+	/* The page container's widths at each screen-size step (max-w-page-sm ... max-w-page-2xl). */
+	--container-page-sm: 540px;
+	--container-page-md: 720px;
+	--container-page-lg: 960px;
+	--container-page-xl: 1140px;
+	--container-page-2xl: 1320px;
 }

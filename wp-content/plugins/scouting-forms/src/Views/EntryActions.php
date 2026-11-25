@@ -5,6 +5,7 @@ namespace ScoutingMemories\Forms\Views;
 use ScoutingMemories\Forms\Models\EntryRepository;
 use ScoutingMemories\Forms\Models\FormRepository;
 use ScoutingMemories\Forms\Support\Permissions;
+use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
  * EntryActions
@@ -30,11 +31,13 @@ class EntryActions {
     public static function button(string $action, int $entryId, array $fields, string $label, string $class): string {
         $confirm = $fields['sm_confirm'] ?? '';
         unset($fields['sm_confirm']);
-        if ($class === '' || !preg_match('/\bbtn\b/', $class)) {
-            $class = trim($class . ' btn btn-link p-0 align-baseline');
-        }
+        // The classes typed into the stored shortcode are Bootstrap's: swapped for Tailwind's.
+        // Without a button among them it reads as a link in the row.
+        $class = LegacyClassMap::isButton($class)
+            ? LegacyClassMap::names($class)
+            : ThemeClasses::classes(LegacyClassMap::names($class), ThemeClasses::LINK_BUTTON);
 
-        $html = '<form method="post" class="sm-entry-action d-inline"'
+        $html = '<form method="post" class="sm-entry-action ' . esc_attr(ThemeClasses::INLINE) . '"'
             . ($confirm !== '' ? ' data-sm-confirm="' . esc_attr($confirm) . '" onsubmit="return confirm(this.dataset.smConfirm);"' : '')
             . '>';
         $html .= '<input type="hidden" name="sm_entry_action" value="' . esc_attr($action) . '" />';
@@ -125,8 +128,7 @@ class EntryActions {
             return '';
         }
         [$variant, $text] = $messages[$done];
-        return '<div class="alert alert-' . $variant . ' alert-dismissible fade show" role="status">' . esc_html($text)
-            . '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="' . esc_attr__('Close', 'scouting-forms') . '"></button></div>';
+        return ThemeClasses::closableAlert($variant, esc_html($text));
     }
 
     /**

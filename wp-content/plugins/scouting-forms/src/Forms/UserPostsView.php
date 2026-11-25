@@ -2,6 +2,8 @@
 
 namespace ScoutingMemories\Forms\Forms;
 
+use ScoutingMemories\Forms\Ui\ThemeClasses;
+
 /**
  * UserPostsView
  *
@@ -17,7 +19,7 @@ class UserPostsView extends FormHandler {
     public static function render(): string {
         $userId = get_current_user_id();
         if (!$userId) {
-            return '<div class="alert alert-warning">' . __('Please log in to view your submitted posts.', 'scouting-forms') . '</div>';
+            return '<div class="' . esc_attr(ThemeClasses::alert('warning')) . '">' . __('Please log in to view your submitted posts.', 'scouting-forms') . '</div>';
         }
 
         $paged = max(1, get_query_var('paged', 1), isset($_GET['sm_paged']) ? (int) $_GET['sm_paged'] : 1);

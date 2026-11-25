@@ -15,10 +15,10 @@ use ScoutingMemories\Core\Forms\GatewayFactory;
 get_header();
 ?>
 
-	<div id="primary" class="content-area sm-container mt-12">
-		<main id="main" class="site-main">
+	<div id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12' ) ); ?>">
+		<main id="main">
 			<?php if ( Access::can_add_camp() ) : ?>
-				<h1><?php the_title(); ?></h1>
+				<h1 class="<?php echo esc_attr( Scouting_Memories_2026_UI::H1 ); ?>"><?php the_title(); ?></h1>
 				<?php echo GatewayFactory::current()->form( FormsGateway::FORM_ADD_CAMP ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php else : ?>
 				<?php esc_html_e( 'You do not have permissions to add a council.', 'scouting-memories-2026' ); ?>

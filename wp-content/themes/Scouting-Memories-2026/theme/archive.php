@@ -10,16 +10,16 @@
 get_header();
 ?>
 
-	<main id="primary" class="site-main sm-edge-scope">
+	<main id="primary">
 
 		<?php if ( have_posts() ) : ?>
 
-			<header class="page-header">
+			<header>
 				<?php
-				the_archive_title( '<h1 class="page-title">', '</h1>' );
-				the_archive_description( '<div class="archive-description">', '</div>' );
+				the_archive_title( '<h1 class="' . esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::H1, 'break-words' ) ) . '">', '</h1>' );
+				the_archive_description( '<div class="[&_a]:text-blue [&_a]:underline [&_p]:mb-4">', '</div>' );
 				?>
-			</header><!-- .page-header -->
+			</header>
 
 			<?php
 			/* Start the Loop */

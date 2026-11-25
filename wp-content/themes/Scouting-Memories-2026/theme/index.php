@@ -15,8 +15,8 @@
 get_header();
 ?>
 
-	<div id="primary" class="content-area sm-container sm-edge mt-12">
-		<main id="main" class="site-main">
+	<div id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12 h-full' ) ); ?>">
+		<main id="main" class="m-0 w-full p-0">
 
 		<?php
 		if ( have_posts() ) :
@@ -24,7 +24,7 @@ get_header();
 			if ( is_home() && ! is_front_page() ) :
 				?>
 				<header>
-					<h1 class="page-title sr-only"><?php single_post_title(); ?></h1>
+					<h1 class="sr-only"><?php single_post_title(); ?></h1>
 				</header>
 				<?php
 			endif;

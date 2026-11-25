@@ -10,15 +10,15 @@
 get_header();
 ?>
 
-	<div id="primary" class="content-area sm-container mt-12">
-		<main id="main" class="site-main">
+	<div id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12' ) ); ?>">
+		<main id="main">
 
-			<section class="error-404 not-found">
-				<header class="page-header">
-					<h1 class="page-title"><?php esc_html_e( 'Oops! That page can&rsquo;t be found.', 'scouting-memories-2026' ); ?></h1>
-				</header><!-- .page-header -->
+			<section>
+				<header>
+					<h1 class="<?php echo esc_attr( Scouting_Memories_2026_UI::H1 ); ?>"><?php esc_html_e( 'Oops! That page can&rsquo;t be found.', 'scouting-memories-2026' ); ?></h1>
+				</header>
 
-				<div <?php scouting_memories_2026_content_class( 'page-content' ); ?>>
+				<div <?php scouting_memories_2026_content_class(); ?>>
 					<p><?php esc_html_e( 'It looks like nothing was found at this location. Maybe try one of the links below or a search?', 'scouting-memories-2026' ); ?></p>
 					<?php
 					get_search_form();
@@ -27,8 +27,8 @@ get_header();
 					the_widget( 'WP_Widget_Recent_Posts' );
 					?>
 
-					<div class="widget widget_categories">
-						<h2 class="widget-title"><?php esc_html_e( 'Most Used Categories', 'scouting-memories-2026' ); ?></h2>
+					<div>
+						<h2><?php esc_html_e( 'Most Used Categories', 'scouting-memories-2026' ); ?></h2>
 						<ul>
 							<?php
 							wp_list_categories(
@@ -42,9 +42,9 @@ get_header();
 							);
 							?>
 						</ul>
-					</div><!-- .widget -->
-				</div><!-- .page-content -->
-			</section><!-- .error-404 -->
+					</div>
+				</div>
+			</section>
 
 		</main><!-- #main -->
 	</div><!-- #primary -->

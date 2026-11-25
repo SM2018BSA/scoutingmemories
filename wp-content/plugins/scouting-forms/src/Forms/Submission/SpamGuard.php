@@ -4,6 +4,7 @@ namespace ScoutingMemories\Forms\Forms\Submission;
 
 use ScoutingMemories\Forms\Support\Environment;
 use ScoutingMemories\Forms\Support\FormidableSettings;
+use ScoutingMemories\Forms\Ui\ThemeClasses;
 
 /**
  * SpamGuard
@@ -31,12 +32,13 @@ class SpamGuard {
     public static function fields(int $formId): string {
         $time = time();
         return sprintf(
-            '<div class="sm-hp" aria-hidden="true"><label for="sm_hp_%1$d">%2$s</label><input type="text" id="sm_hp_%1$d" name="sm_hp" value="" tabindex="-1" autocomplete="off" /></div>'
+            '<div class="sm-hp %5$s" aria-hidden="true"><label for="sm_hp_%1$d">%2$s</label><input type="text" id="sm_hp_%1$d" name="sm_hp" value="" tabindex="-1" autocomplete="off" /></div>'
             . '<input type="hidden" name="sm_ts" value="%3$d" /><input type="hidden" name="sm_ts_sig" value="%4$s" />',
             $formId,
             esc_html__('If you are human, leave this field blank.', 'scouting-forms'),
             $time,
-            esc_attr(self::sign($formId, $time))
+            esc_attr(self::sign($formId, $time)),
+            esc_attr(ThemeClasses::HONEYPOT)
         );
     }
 

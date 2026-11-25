@@ -25,28 +25,31 @@ function scouting_memories_2026_info_link( $path, $cat_id ) {
 	return add_query_arg( $args, home_url( $path ) );
 }
 
+// The six buttons: the old site's blue Bootstrap button.
+$smem_button = Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::BTN, Scouting_Memories_2026_UI::BTN_PRIMARY );
+
 get_header();
 ?>
 
-	<main id="main" class="site-main content-area sm-container">
+	<main id="main" class="<?php echo esc_attr( Scouting_Memories_2026_UI::CONTAINER ); ?>">
 		<div class="px-3">
 
-			<div class="grid grid-cols-2 items-center gap-x-6 min-[576px]:grid-cols-1 md:grid-cols-3">
+			<div class="grid grid-cols-2 items-center gap-x-6 sm:grid-cols-1 md:grid-cols-3">
 
 				<div class="frm_submit frm_style_divi with_frm_style flex flex-col items-center justify-center gap-12 py-8 md:py-2">
-					<a class="btn btn-primary sm-btn-bs" href="<?php echo esc_url( scouting_memories_2026_info_link( '/history/', 3 ) ); ?>"><?php esc_html_e( 'History', 'scouting-memories-2026' ); ?></a>
-					<a class="btn btn-primary sm-btn-bs" href="<?php echo esc_url( scouting_memories_2026_info_link( '/photographs/', 5 ) ); ?>"><?php esc_html_e( 'Photographs', 'scouting-memories-2026' ); ?></a>
-					<a class="btn btn-primary sm-btn-bs" href="<?php echo esc_url( scouting_memories_2026_info_link( '/movies/', 8 ) ); ?>"><?php esc_html_e( 'Movies', 'scouting-memories-2026' ); ?></a>
+					<a class="<?php echo esc_attr( $smem_button ); ?>" href="<?php echo esc_url( scouting_memories_2026_info_link( '/history/', 3 ) ); ?>"><?php esc_html_e( 'History', 'scouting-memories-2026' ); ?></a>
+					<a class="<?php echo esc_attr( $smem_button ); ?>" href="<?php echo esc_url( scouting_memories_2026_info_link( '/photographs/', 5 ) ); ?>"><?php esc_html_e( 'Photographs', 'scouting-memories-2026' ); ?></a>
+					<a class="<?php echo esc_attr( $smem_button ); ?>" href="<?php echo esc_url( scouting_memories_2026_info_link( '/movies/', 8 ) ); ?>"><?php esc_html_e( 'Movies', 'scouting-memories-2026' ); ?></a>
 				</div>
 
 				<div class="hidden md:block">
-					<img class="inline h-auto max-w-full align-baseline" src="https://storage.scoutingmemories.org/2019/02/904438c9-1911-boy-scount-original-cove-2r.jpg" alt="">
+					<img class="inline h-auto max-w-full align-middle" src="https://storage.scoutingmemories.org/2019/02/904438c9-1911-boy-scount-original-cove-2r.jpg" alt="">
 				</div>
 
 				<div class="frm_submit frm_style_divi with_frm_style flex flex-col items-center justify-center gap-12 pt-2 pb-8 md:pb-2">
-					<a class="btn btn-primary sm-btn-bs" href="<?php echo esc_url( scouting_memories_2026_info_link( '/oral-history/', 6 ) ); ?>"><?php esc_html_e( 'Oral History', 'scouting-memories-2026' ); ?></a>
-					<a class="btn btn-primary sm-btn-bs" href="<?php echo esc_url( scouting_memories_2026_info_link( '/memorabilia/', 4 ) ); ?>"><?php esc_html_e( 'Memorabilia', 'scouting-memories-2026' ); ?></a>
-					<a class="btn btn-primary sm-btn-bs" href="<?php echo esc_url( scouting_memories_2026_info_link( '/museums/', 7 ) ); ?>"><?php esc_html_e( 'Museums', 'scouting-memories-2026' ); ?></a>
+					<a class="<?php echo esc_attr( $smem_button ); ?>" href="<?php echo esc_url( scouting_memories_2026_info_link( '/oral-history/', 6 ) ); ?>"><?php esc_html_e( 'Oral History', 'scouting-memories-2026' ); ?></a>
+					<a class="<?php echo esc_attr( $smem_button ); ?>" href="<?php echo esc_url( scouting_memories_2026_info_link( '/memorabilia/', 4 ) ); ?>"><?php esc_html_e( 'Memorabilia', 'scouting-memories-2026' ); ?></a>
+					<a class="<?php echo esc_attr( $smem_button ); ?>" href="<?php echo esc_url( scouting_memories_2026_info_link( '/museums/', 7 ) ); ?>"><?php esc_html_e( 'Museums', 'scouting-memories-2026' ); ?></a>
 				</div>
 
 			</div>

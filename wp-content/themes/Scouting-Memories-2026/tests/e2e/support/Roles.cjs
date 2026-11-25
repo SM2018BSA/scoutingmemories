@@ -15,10 +15,11 @@ const ADMIN_TABS = [{ id: 'myAdmin', label: 'Admin' }, { id: 'myAdmin2', label: 
 const INDEXING_SUBTABS = ['idx-myCouncils', 'idx-myCamps', 'idx-myLodges', 'idx-myTools'];
 const ADMIN_SUBTABS = ['adm-users', 'adm-posts', 'adm-states', 'adm-councils', 'adm-camps', 'adm-lodges', 'adm-tools'];
 
+// The refusal is the same sentence on all three pages, as on the old site.
 const ADD_PAGES = [
 	{ name: 'add-a-council', path: '/add-a-council/', refusal: 'You do not have permissions to add a council.' },
-	{ name: 'add-a-camp', path: '/add-a-camp/', refusal: 'You do not have permissions to add a camp.' },
-	{ name: 'add-a-lodge', path: '/add-a-lodge/', refusal: 'You do not have permissions to add a lodge.' },
+	{ name: 'add-a-camp', path: '/add-a-camp/', refusal: 'You do not have permissions to add a council.' },
+	{ name: 'add-a-lodge', path: '/add-a-lodge/', refusal: 'You do not have permissions to add a council.' },
 ];
 
 class Role {

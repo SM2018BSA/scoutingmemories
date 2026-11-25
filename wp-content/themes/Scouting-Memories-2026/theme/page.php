@@ -14,8 +14,8 @@
 get_header();
 ?>
 
-	<div id="primary" class="content-area sm-container mt-12">
-		<main id="main" class="site-main">
+	<div id="primary" class="<?php echo esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::CONTAINER, 'mt-12' ) ); ?>">
+		<main id="main">
 
 			<?php
 			/* Start the Loop */

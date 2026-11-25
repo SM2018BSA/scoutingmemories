@@ -54,17 +54,17 @@ Tailwind CSS, (C) Tailwind Labs, Inc.
 License: MIT
 Source: https://tailwindcss.com/
 
-daisyUI, (C) Pouya Saadeghi
-License: MIT
-Source: https://daisyui.com/
-
 Tailwind Typography (_tw fork), (C) Tailwind Labs, Inc. and Greg Sullivan
 License: MIT
 Source: https://github.com/gregsullivan/_tw-typography
 
-Select2, (C) Kevin Brown, Igor Vaynberg and Select2 contributors
+Alpine.js, (C) Caleb Porzio and contributors
 License: MIT
-Source: https://select2.org/
+Source: https://alpinejs.dev/
+
+Tom Select, (C) the Tom Select authors
+License: Apache License 2.0
+Source: https://tom-select.js.org/
 
 Roboto Slab, (C) The Roboto Slab Project Authors
 License: Apache License 2.0

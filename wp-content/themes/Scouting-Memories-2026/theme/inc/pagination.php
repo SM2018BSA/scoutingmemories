@@ -1,8 +1,9 @@
 <?php
 /**
  * Numbered pagination in the old site's Bootstrap look (joined white boxes,
- * blue numbers, the current page solid blue; styles in public-pages.css),
- * ported from the old theme's Theme::bootstrap_pagination(). Keeps the search filters (state, council,
+ * blue numbers, the current page solid blue; the class lists are
+ * Scouting_Memories_2026_UI::PAGING, PAGE_LINK and PAGE_LINK_HERE), ported from
+ * the old theme's Theme::bootstrap_pagination(). Keeps the search filters (state, council,
  * lodge, camp, start_date, end_date) on every page link, exactly as before.
  *
  * @package Scouting_Memories_2026
@@ -56,10 +57,17 @@ if ( ! function_exists( 'scouting_memories_2026_pagination' ) ) :
 			return null;
 		}
 
-		$pagination = '<nav class="pt-12" aria-label="' . esc_attr__( 'Page navigation', 'scouting-memories-2026' ) . '"><ul class="sm-pagination">';
+		// Each box is a list item holding one link (or, for the current page and the dots, a span).
+		// The items overlap by their 1px line; the row's two ends are rounded.
+		$item_class = '-ml-px first:ml-0 first:[&>*]:rounded-l-md last:[&>*]:rounded-r-md';
+
+		$pagination = '<nav class="pt-12" aria-label="' . esc_attr__( 'Page navigation', 'scouting-memories-2026' ) . '"><ul class="' . esc_attr( Scouting_Memories_2026_UI::classes( Scouting_Memories_2026_UI::PAGING, 'mt-0 mb-4' ) ) . '">';
 		foreach ( $pages as $page ) {
-			$item_class  = false !== strpos( $page, 'current' ) ? 'sm-page-item active' : 'sm-page-item';
-			$pagination .= '<li class="' . esc_attr( $item_class ) . '">' . str_replace( 'page-numbers', 'sm-page-link', $page ) . '</li>';
+			// WordPress prints its own class names on each link (page-numbers, current, dots,
+			// prev, next): they are replaced by the theme's class list.
+			$link_class  = false !== strpos( $page, 'current' ) ? Scouting_Memories_2026_UI::PAGE_LINK_HERE : Scouting_Memories_2026_UI::PAGE_LINK;
+			$page        = preg_replace( '/\sclass=(["\'])[^"\']*\1/', ' class="' . esc_attr( $link_class ) . '"', $page, 1 );
+			$pagination .= '<li class="' . esc_attr( $item_class ) . '">' . $page . '</li>';
 		}
 		$pagination .= '</ul></nav>';
 
