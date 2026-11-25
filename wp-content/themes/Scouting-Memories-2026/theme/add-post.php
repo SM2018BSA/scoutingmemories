@@ -15,13 +15,20 @@ use ScoutingMemories\Core\Access;
 get_header();
 ?>
 
-	<div id="primary" class="content-area max-w-4xl mx-auto mt-8">
+	<div id="primary" class="content-area sm-container mt-12">
 		<main id="main" class="site-main">
 			<?php if ( Access::can_add_post() ) : ?>
 				<?php
 				while ( have_posts() ) :
 					the_post();
 					get_template_part( 'template-parts/content/content', 'page' );
+
+					// If comments are open, or we have at least one comment, load
+					// the comment template.
+					if ( comments_open() || get_comments_number() ) {
+						comments_template();
+					}
+
 				endwhile;
 				?>
 			<?php else : ?>

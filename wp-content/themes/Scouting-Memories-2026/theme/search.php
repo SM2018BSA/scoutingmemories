@@ -10,43 +10,40 @@
 get_header();
 ?>
 
-	<section id="primary">
-		<main id="main">
+	<div id="primary" class="content-area sm-container sm-edge mt-12">
+		<main id="main" class="site-main">
 
 		<?php if ( have_posts() ) : ?>
 
 			<header class="page-header">
-				<?php
-				printf(
-					/* translators: 1: search result title. 2: search term. */
-					'<h1 class="page-title">%1$s <span>%2$s</span></h1>',
-					esc_html__( 'Search results for:', 'scouting-memories-2026' ),
-					get_search_query()
-				);
-				?>
+				<h1 class="page-title">
+					<?php
+					/* translators: %s: search query. */
+					printf( esc_html__( 'Search Results for: %s', 'scouting-memories-2026' ), '<span>' . get_search_query() . '</span>' );
+					?>
+				</h1>
 			</header><!-- .page-header -->
 
 			<?php
-			// Start the Loop.
+			/* Start the Loop */
 			while ( have_posts() ) :
 				the_post();
-				get_template_part( 'template-parts/content/content', 'excerpt' );
 
-				// End the loop.
+				get_template_part( 'template-parts/content/content', 'search' );
+
 			endwhile;
 
-			// Previous/next page navigation.
-			scouting_memories_2026_the_posts_navigation();
+			the_posts_navigation();
 
 		else :
 
-			// If no content is found, get the `content-none` template part.
 			get_template_part( 'template-parts/content/content', 'none' );
 
 		endif;
 		?>
+
 		</main><!-- #main -->
-	</section><!-- #primary -->
+	</div><!-- #primary -->
 
 <?php
 get_footer();

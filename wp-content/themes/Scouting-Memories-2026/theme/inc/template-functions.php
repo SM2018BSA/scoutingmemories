@@ -33,43 +33,6 @@ function scouting_memories_2026_comment_form_defaults( $defaults ) {
 add_filter( 'comment_form_defaults', 'scouting_memories_2026_comment_form_defaults' );
 
 /**
- * Filters the default archive titles.
- */
-function scouting_memories_2026_get_the_archive_title() {
-	if ( is_category() ) {
-		$title = __( 'Category Archives: ', 'scouting-memories-2026' ) . '<span>' . single_term_title( '', false ) . '</span>';
-	} elseif ( is_tag() ) {
-		$title = __( 'Tag Archives: ', 'scouting-memories-2026' ) . '<span>' . single_term_title( '', false ) . '</span>';
-	} elseif ( is_author() ) {
-		$title = __( 'Author Archives: ', 'scouting-memories-2026' ) . '<span>' . get_the_author_meta( 'display_name' ) . '</span>';
-	} elseif ( is_year() ) {
-		$title = __( 'Yearly Archives: ', 'scouting-memories-2026' ) . '<span>' . get_the_date( _x( 'Y', 'yearly archives date format', 'scouting-memories-2026' ) ) . '</span>';
-	} elseif ( is_month() ) {
-		$title = __( 'Monthly Archives: ', 'scouting-memories-2026' ) . '<span>' . get_the_date( _x( 'F Y', 'monthly archives date format', 'scouting-memories-2026' ) ) . '</span>';
-	} elseif ( is_day() ) {
-		$title = __( 'Daily Archives: ', 'scouting-memories-2026' ) . '<span>' . get_the_date() . '</span>';
-	} elseif ( is_post_type_archive() ) {
-		$cpt   = get_post_type_object( get_queried_object()->name );
-		$title = sprintf(
-			/* translators: %s: Post type singular name */
-			esc_html__( '%s Archives', 'scouting-memories-2026' ),
-			$cpt->labels->singular_name
-		);
-	} elseif ( is_tax() ) {
-		$tax   = get_taxonomy( get_queried_object()->taxonomy );
-		$title = sprintf(
-			/* translators: %s: Taxonomy singular name */
-			esc_html__( '%s Archives', 'scouting-memories-2026' ),
-			$tax->labels->singular_name
-		);
-	} else {
-		$title = __( 'Archives:', 'scouting-memories-2026' );
-	}
-	return $title;
-}
-add_filter( 'get_the_archive_title', 'scouting_memories_2026_get_the_archive_title' );
-
-/**
  * Determines whether the post thumbnail can be displayed.
  */
 function scouting_memories_2026_can_show_post_thumbnail() {
@@ -110,97 +73,63 @@ add_filter( 'excerpt_more', 'scouting_memories_2026_continue_reading_link' );
 add_filter( 'the_content_more_link', 'scouting_memories_2026_continue_reading_link' );
 
 /**
- * Outputs a comment in the HTML5 format.
+ * Prints one comment the way the old theme did (its shape_comment()): the
+ * avatar, the author's name as a heading (members link to their profile), the
+ * date, "(Edit)" and the text.
  *
- * This function overrides the default WordPress comment output in HTML5
- * format, adding the required class for Tailwind Typography. Based on the
- * `html5_comment()` function from WordPress core.
+ * Used with wp_list_comments( 'style' => 'div' ): the outer div is left open
+ * here and WordPress closes it after the comment's replies.
  *
  * @param WP_Comment $comment Comment to display.
  * @param array      $args    An array of arguments.
  * @param int        $depth   Depth of the current comment.
  */
-function scouting_memories_2026_html5_comment( $comment, $args, $depth ) {
-	$tag = ( 'div' === $args['style'] ) ? 'div' : 'li';
-
-	$commenter          = wp_get_current_commenter();
-	$show_pending_links = ! empty( $commenter['comment_author'] );
-
-	if ( $commenter['comment_author_email'] ) {
-		$moderation_note = __( 'Your comment is awaiting moderation.', 'scouting-memories-2026' );
-	} else {
-		$moderation_note = __( 'Your comment is awaiting moderation. This is a preview; your comment will be visible after it has been approved.', 'scouting-memories-2026' );
+function scouting_memories_2026_comment( $comment, $args, $depth ) {
+	if ( 'trackback' === $comment->comment_type ) {
+		?>
+		<div id="comment-<?php comment_ID(); ?>" class="post pingback">
+			<p><?php esc_html_e( 'Pingback:', 'scouting-memories-2026' ); ?> <?php comment_author_link( $comment ); ?><?php edit_comment_link( __( '(Edit)', 'scouting-memories-2026' ), ' ' ); ?></p>
+		<?php
+		return;
 	}
+
+	$is_member = (int) $comment->user_id > 0;
 	?>
-	<<?php echo esc_attr( $tag ); ?> id="comment-<?php comment_ID(); ?>" <?php comment_class( $comment->has_children ? 'parent' : '', $comment ); ?>>
-		<article id="div-comment-<?php comment_ID(); ?>" class="comment-body">
-			<footer class="comment-meta">
-				<div class="comment-author vcard">
-					<?php
-					if ( 0 !== $args['avatar_size'] ) {
-						echo get_avatar( $comment, $args['avatar_size'] );
-					}
-					?>
-					<?php
-					$comment_author = get_comment_author_link( $comment );
+	<div id="comment-<?php comment_ID(); ?>" <?php comment_class( 'sm-comment-item', $comment ); ?>>
+		<?php if ( $depth > 1 ) : ?>
+			<div class="sm-comment-nest">
+		<?php endif; ?>
 
-					if ( '0' === $comment->comment_approved && ! $show_pending_links ) {
-						$comment_author = get_comment_author( $comment );
-					}
-
-					printf(
-						/* translators: %s: Comment author link. */
-						wp_kses_post( __( '%s <span class="says">says:</span>', 'scouting-memories-2026' ) ),
-						sprintf( '<b class="fn">%s</b>', wp_kses_post( $comment_author ) )
-					);
-					?>
-				</div><!-- .comment-author -->
-
-				<div class="comment-metadata">
-					<?php
-					printf(
-						'<a href="%s"><time datetime="%s">%s</time></a>',
-						esc_url( get_comment_link( $comment, $args ) ),
-						esc_attr( get_comment_time( 'c' ) ),
-						esc_html(
-							sprintf(
-							/* translators: 1: Comment date, 2: Comment time. */
-								__( '%1$s at %2$s', 'scouting-memories-2026' ),
-								get_comment_date( '', $comment ),
-								get_comment_time()
-							)
-						)
-					);
-
-					edit_comment_link( __( 'Edit', 'scouting-memories-2026' ), ' <span class="edit-link">', '</span>' );
-					?>
-				</div><!-- .comment-metadata -->
-
-				<?php if ( '0' === $comment->comment_approved ) : ?>
-				<em class="comment-awaiting-moderation"><?php echo esc_html( $moderation_note ); ?></em>
-				<?php endif; ?>
-			</footer><!-- .comment-meta -->
-
-			<div <?php scouting_memories_2026_content_class( 'comment-content' ); ?>>
-				<?php comment_text(); ?>
-			</div><!-- .comment-content -->
-
+		<div class="sm-comment">
 			<?php
-			if ( '1' === $comment->comment_approved || $show_pending_links ) {
-				comment_reply_link(
-					array_merge(
-						$args,
-						array(
-							'add_below' => 'div-comment',
-							'depth'     => $depth,
-							'max_depth' => $args['max_depth'],
-							'before'    => '<div class="reply">',
-							'after'     => '</div>',
-						)
-					)
-				);
+			if ( $is_member ) {
+				echo get_avatar( $comment, 96, '', '', array( 'class' => array( 'sm-comment-avatar-member' ) ) );
+			} else {
+				echo '<span>' . get_avatar( $comment, 100 ) . '</span>';
 			}
 			?>
-		</article><!-- .comment-body -->
+			<div class="sm-comment-body">
+				<h5>
+					<?php if ( $is_member ) : ?>
+						<a href="<?php echo esc_url( home_url( '/profile/?id=' . (int) $comment->user_id ) ); ?>" class="user"><cite title="<?php esc_attr_e( 'View profile', 'scouting-memories-2026' ); ?>" class="fn"><?php echo esc_html( get_comment_author( $comment ) ); ?></cite></a>
+					<?php else : ?>
+						<span class="user"><cite class="fn"><?php echo wp_kses_post( get_comment_author_link( $comment ) ); ?></cite></span>
+					<?php endif; ?>
+				</h5>
+				<span class="sm-comment-date">
+					<a href="<?php echo esc_url( get_comment_link( $comment ) ); ?>"><time datetime="<?php echo esc_attr( get_comment_time( 'c' ) ); ?>"><?php echo esc_html( get_comment_date( '', $comment ) ); ?></time></a>
+					<?php edit_comment_link( __( '(Edit)', 'scouting-memories-2026' ), ' ' ); ?>
+				</span>
+				<?php if ( '0' === $comment->comment_approved ) : ?>
+					<em><?php esc_html_e( 'Your comment is awaiting moderation.', 'scouting-memories-2026' ); ?></em>
+					<br />
+				<?php endif; ?>
+				<p><?php echo wp_kses_post( get_comment_text( $comment ) ); ?></p>
+			</div>
+		</div>
+
+		<?php if ( $depth > 1 ) : ?>
+			</div>
+		<?php endif; ?>
 	<?php
 }

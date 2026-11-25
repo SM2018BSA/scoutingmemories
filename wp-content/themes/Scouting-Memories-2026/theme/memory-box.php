@@ -16,8 +16,8 @@ $smem_interview_form = new Form( '39' );
 get_header();
 ?>
 
-	<div id="primary" class="content-area w-full mt-8">
-		<main id="main" class="site-main p-4 lg:p-12">
+	<div id="primary" class="content-area w-full mt-12">
+		<main id="main" class="site-main min-[576px]:m-12 min-[992px]:p-12">
 			<div class="flex justify-center">
 				<div class="w-full md:w-1/2">
 					<?php echo $smem_interview_form->show_form(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>

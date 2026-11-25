@@ -10,41 +10,25 @@
 get_header();
 ?>
 
-	<section id="primary">
-		<main id="main">
+	<div id="primary" class="content-area sm-container sm-edge mt-12">
+		<main id="main" class="site-main">
 
 			<?php
-			/* Start the Loop */
 			while ( have_posts() ) :
 				the_post();
-				get_template_part( 'template-parts/content/content', 'single' );
 
-				if ( is_singular( 'post' ) ) {
-					// Previous/next post navigation.
-					the_post_navigation(
-						array(
-							'next_text' => '<span aria-hidden="true">' . __( 'Next Post', 'scouting-memories-2026' ) . '</span> ' .
-								'<span class="sr-only">' . __( 'Next post:', 'scouting-memories-2026' ) . '</span> <br/>' .
-								'<span>%title</span>',
-							'prev_text' => '<span aria-hidden="true">' . __( 'Previous Post', 'scouting-memories-2026' ) . '</span> ' .
-								'<span class="sr-only">' . __( 'Previous post:', 'scouting-memories-2026' ) . '</span> <br/>' .
-								'<span>%title</span>',
-						)
-					);
-				}
+				get_template_part( 'template-parts/content/content', get_post_type() );
 
-				// If comments are open, or we have at least one comment, load
-				// the comment template.
-				if ( comments_open() || get_comments_number() ) {
+				// If comments are open or we have at least one comment, load up the comment template.
+				if ( comments_open() || get_comments_number() ) :
 					comments_template();
-				}
+				endif;
 
-				// End the loop.
-			endwhile;
+			endwhile; // End of the loop.
 			?>
 
 		</main><!-- #main -->
-	</section><!-- #primary -->
+	</div><!-- #primary -->
 
 <?php
 get_footer();

@@ -14,8 +14,8 @@
 get_header();
 ?>
 
-	<section id="primary">
-		<main id="main">
+	<div id="primary" class="content-area sm-container mt-12">
+		<main id="main" class="site-main">
 
 			<?php
 			/* Start the Loop */
@@ -34,7 +34,7 @@ get_header();
 			?>
 
 		</main><!-- #main -->
-	</section><!-- #primary -->
+	</div><!-- #primary -->
 
 <?php
 get_footer();

@@ -1,7 +1,8 @@
 <?php
 /**
- * Numbered pagination as a daisyUI join, ported from the old theme's
- * Theme::bootstrap_pagination(). Keeps the search filters (state, council,
+ * Numbered pagination in the old site's Bootstrap look (joined white boxes,
+ * blue numbers, the current page solid blue; styles in public-pages.css),
+ * ported from the old theme's Theme::bootstrap_pagination(). Keeps the search filters (state, council,
  * lodge, camp, start_date, end_date) on every page link, exactly as before.
  *
  * @package Scouting_Memories_2026
@@ -55,18 +56,12 @@ if ( ! function_exists( 'scouting_memories_2026_pagination' ) ) :
 			return null;
 		}
 
-		$pagination = '<nav class="pt-8" aria-label="' . esc_attr__( 'Page navigation', 'scouting-memories-2026' ) . '"><div class="join flex-wrap">';
+		$pagination = '<nav class="pt-12" aria-label="' . esc_attr__( 'Page navigation', 'scouting-memories-2026' ) . '"><ul class="sm-pagination">';
 		foreach ( $pages as $page ) {
-			$classes = 'join-item btn btn-sm';
-			if ( false !== strpos( $page, 'current' ) ) {
-				$classes .= ' btn-active';
-			}
-			if ( false !== strpos( $page, 'dots' ) ) {
-				$classes .= ' btn-disabled';
-			}
-			$pagination .= str_replace( 'page-numbers', esc_attr( $classes ), $page );
+			$item_class  = false !== strpos( $page, 'current' ) ? 'sm-page-item active' : 'sm-page-item';
+			$pagination .= '<li class="' . esc_attr( $item_class ) . '">' . str_replace( 'page-numbers', 'sm-page-link', $page ) . '</li>';
 		}
-		$pagination .= '</div></nav>';
+		$pagination .= '</ul></nav>';
 
 		if ( $display ) {
 			echo $pagination; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

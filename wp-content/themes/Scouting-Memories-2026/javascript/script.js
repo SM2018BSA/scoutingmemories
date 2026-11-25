@@ -63,6 +63,43 @@ class MobileMenu {
 }
 
 /**
+ * The dropdowns of the primary menu (details/summary folds) close the way the
+ * old site's dropdowns did: on a click anywhere else and on Escape (focus goes
+ * back to the dropdown's own link).
+ */
+class MenuDropdowns {
+	constructor(selector) {
+		this.selector = selector;
+	}
+
+	get open() {
+		return document.querySelectorAll(this.selector + '[open]');
+	}
+
+	listen() {
+		document.addEventListener('click', (event) => {
+			for (const fold of this.open) {
+				if (!fold.contains(event.target)) {
+					fold.open = false;
+				}
+			}
+		});
+		document.addEventListener('keydown', (event) => {
+			if (event.key !== 'Escape') {
+				return;
+			}
+			for (const fold of this.open) {
+				const hadFocus = fold.contains(document.activeElement);
+				fold.open = false;
+				if (hadFocus) {
+					fold.querySelector('summary').focus();
+				}
+			}
+		});
+	}
+}
+
+/**
  * The front page's banner carousel: turns to the next banner every few seconds.
  * It does not turn for someone who asked their device for less motion, and it
  * waits while the pointer or the keyboard is on it.
@@ -160,7 +197,11 @@ class Select2Names {
 const menuToggle = document.getElementById('mobile-menu-toggle');
 const menuPanel = document.getElementById('mobile-navigation');
 if (menuToggle && menuPanel) {
-	new MobileMenu(menuToggle, menuPanel, '(min-width: 1024px)').listen();
+	new MobileMenu(menuToggle, menuPanel, '(min-width: 992px)').listen();
+}
+
+if (document.querySelector('.sm-nav details')) {
+	new MenuDropdowns('.sm-nav details').listen();
 }
 
 const bannerCarousel = document.getElementById('carouselFrontpage');

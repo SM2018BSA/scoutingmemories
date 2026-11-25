@@ -91,6 +91,10 @@ add_action(
 
 if ( ! defined( 'SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES' ) ) {
 	/*
+	 * The old site had no Tailwind Typography ("prose") look: page text was plain
+	 * Bootstrap. So the only class set here is `sm-content`, whose Bootstrap-like
+	 * text rules live in `tailwind/custom/components/scouting-memories.css`.
+	 *
 	 * Set Tailwind Typography classes for the front end, block editor and
 	 * classic editor using the constant below.
 	 *
@@ -109,7 +113,7 @@ if ( ! defined( 'SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES' ) ) {
 	 */
 	define(
 		'SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES',
-		'prose prose-neutral max-w-none prose-a:text-primary'
+		'sm-content'
 	);
 }
 
@@ -148,12 +152,11 @@ if ( ! function_exists( 'scouting_memories_2026_setup' ) ) :
 		 */
 		add_theme_support( 'post-thumbnails' );
 
-		// This theme uses wp_nav_menu() in two locations.
+		// This theme uses wp_nav_menu() in one location.
 		register_nav_menus(
 			array(
 				// Same location slug as the old theme, so the existing menu carries over.
-				'primary' => __( 'Primary', 'scouting-memories-2026' ),
-				'menu-2'  => __( 'Footer Menu', 'scouting-memories-2026' ),
+				'primary' => __( 'Primary Menu', 'scouting-memories-2026' ),
 			)
 		);
 
@@ -214,9 +217,9 @@ add_action( 'after_setup_theme', 'scouting_memories_2026_setup' );
 function scouting_memories_2026_widgets_init() {
 	register_sidebar(
 		array(
-			'name'          => __( 'Footer', 'scouting-memories-2026' ),
+			'name'          => __( 'Sidebar', 'scouting-memories-2026' ),
 			'id'            => 'sidebar-1',
-			'description'   => __( 'Add widgets here to appear in your footer.', 'scouting-memories-2026' ),
+			'description'   => __( 'Add widgets here.', 'scouting-memories-2026' ),
 			'before_widget' => '<section id="%1$s" class="widget %2$s">',
 			'after_widget'  => '</section>',
 			'before_title'  => '<h2 class="widget-title">',

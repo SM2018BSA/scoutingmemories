@@ -1,10 +1,8 @@
 /**
  * Scouting Memories styles carried over from the old theme's css/styles.css.
  *
- * Ported as-is where the rule still means something in this theme; the rules tied to
- * Bootstrap markup (dropdown-item colours, .text-light links, the .hidden/.sr-only
- * overrides) are NOT ported - their jobs move into the daisyUI components and Tailwind
- * utilities as each template is rebuilt.
+ * Each page is meant to look as it did on the old (Bootstrap 5.3) site: the masthead, the
+ * menu colours, the footer, the page container and the text sizes are written out here.
  */
 
 /* Brand colours (templates use these exactly like the old theme did). */
@@ -32,75 +30,441 @@ h6 {
 	cursor: pointer;
 }
 
-/* The masthead. The round badge logo hangs below the green bar, as on the old site.
-   Its size and the bar's height are set here once per screen size; --sm-logo-hang is how
-   far the badge reaches below the bar, and the page content starts below that, so the
-   badge can never sit on top of a page. */
-:root {
-	--sm-bar: 5rem;
-	--sm-logo: 5.5rem;
-	--sm-logo-hang: calc(var(--sm-logo) + 0.25rem - var(--sm-bar));
+/* Page text as on the old (Bootstrap 5.3) site. */
+body {
+	color: #212529;
 }
-@media (min-width: 640px) {
-	:root {
-		--sm-logo: 6.5rem;
+
+/* The page container of the old site (Bootstrap's .container): centred, 0.75rem at the sides,
+   and a fixed widest size for each screen size. */
+.sm-container {
+	width: 100%;
+	margin-right: auto;
+	margin-left: auto;
+	padding-right: 0.75rem;
+	padding-left: 0.75rem;
+}
+@media (min-width: 576px) {
+	.sm-container {
+		max-width: 540px;
 	}
 }
-@media (min-width: 1024px) {
-	:root {
-		--sm-bar: 6rem;
-		--sm-logo: 8.5rem;
+@media (min-width: 768px) {
+	.sm-container {
+		max-width: 720px;
 	}
 }
-.sm-masthead-bar {
-	min-height: var(--sm-bar);
-	grid-template-columns: var(--sm-logo) minmax(0, 1fr) auto;
-}
-@media (min-width: 1280px) {
-	.sm-masthead-bar {
-		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+@media (min-width: 992px) {
+	.sm-container {
+		max-width: 960px;
 	}
 }
-.sm-masthead-logo {
-	min-width: var(--sm-logo);
+@media (min-width: 1200px) {
+	.sm-container {
+		max-width: 1140px;
+	}
 }
+@media (min-width: 1400px) {
+	.sm-container {
+		max-width: 1320px;
+	}
+}
+
+/* Headings at the old site's (Bootstrap's) sizes: 2.5rem, 2rem, 1.75rem, 1.5rem, 1.25rem and
+   1rem, shrinking with the screen below 1200px exactly as Bootstrap's did. No specificity, so
+   a size class on a heading still wins. */
+:where(h1, h2, h3, h4, h5, h6) {
+	margin-top: 0;
+	margin-bottom: 0.5rem;
+	font-weight: 500;
+	line-height: 1.2;
+}
+:where(h1) {
+	font-size: calc(1.375rem + 1.5vw);
+}
+:where(h2) {
+	font-size: calc(1.325rem + 0.9vw);
+}
+:where(h3) {
+	font-size: calc(1.3rem + 0.6vw);
+}
+:where(h4) {
+	font-size: calc(1.275rem + 0.3vw);
+}
+:where(h5) {
+	font-size: 1.25rem;
+}
+:where(h6) {
+	font-size: 1rem;
+}
+@media (min-width: 1200px) {
+	:where(h1) {
+		font-size: 2.5rem;
+	}
+	:where(h2) {
+		font-size: 2rem;
+	}
+	:where(h3) {
+		font-size: 1.75rem;
+	}
+	:where(h4) {
+		font-size: 1.5rem;
+	}
+}
+
+/* Text inside a page or post body, as Bootstrap drew it: spaced paragraphs, blue underlined
+   links, bulleted and numbered lists. No specificity, so any class on an element still wins;
+   buttons, tabs and badges are left alone. */
+:where(.entry-content, .page-content, .sm-content) :where(p, address, blockquote, figure, pre, dl, table) {
+	margin-top: 0;
+	margin-bottom: 1rem;
+}
+:where(.entry-content, .page-content, .sm-content) :where(ul:not([class]), ol:not([class])) {
+	margin-top: 0;
+	margin-bottom: 1rem;
+	padding-left: 2rem;
+}
+:where(.entry-content, .page-content, .sm-content) :where(ul:not([class])) {
+	list-style: disc;
+}
+:where(.entry-content, .page-content, .sm-content) :where(ol:not([class])) {
+	list-style: decimal;
+}
+:where(.entry-content, .page-content, .sm-content) :where(ul:not([class]) ul:not([class])) {
+	list-style: circle;
+}
+:where(.entry-content, .page-content, .sm-content) :where(ul ul, ul ol, ol ul, ol ol) {
+	margin-bottom: 0;
+}
+:where(.entry-content, .page-content, .sm-content) :where(dt) {
+	font-weight: 700;
+}
+:where(.entry-content, .page-content, .sm-content) :where(dd) {
+	margin-bottom: 0.5rem;
+	margin-left: 0;
+}
+:where(.entry-content, .page-content, .sm-content) :where(hr) {
+	margin: 1rem 0;
+	border: 0;
+	border-top: 1px solid;
+	opacity: 0.25;
+}
+:where(.entry-content, .page-content, .sm-content) :where(small) {
+	font-size: 0.875em;
+}
+:where(.entry-content, .page-content, .entry-footer, .sm-content) :where(a:not(.btn, .tab, .badge)) {
+	color: #0d6efd;
+	text-decoration: underline;
+}
+:where(.entry-content, .page-content, .entry-footer, .sm-content) :where(a:not(.btn, .tab, .badge):hover) {
+	color: #0a58ca;
+}
+
+/* The masthead, laid out as on the old site: three equal columns (badge, alumni banner, menu),
+   so the banner sits in the middle of the page. The round badge hangs out of the green bar and
+   over the top of the page, at the old sizes for each screen width. */
 #sm_logo {
 	position: absolute;
-	top: 0.25rem;
-	left: 0;
-	display: block;
-	width: var(--sm-logo);
-	height: var(--sm-logo);
+	top: -2em;
 }
 #sm_logo img {
 	display: block;
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
+	width: 40%;
+	min-width: 120px;
+	max-width: 100%;
+	height: auto;
+	min-height: 120px;
 }
-.sm-masthead-banner {
-	max-height: calc(var(--sm-bar) - 1rem);
+@media (min-width: 576px) {
+	#sm_logo img {
+		width: 45%;
+	}
 }
-#content {
-	padding-top: calc(var(--sm-logo-hang) + 0.5rem);
+@media (min-width: 768px) {
+	#sm_logo img {
+		width: 50%;
+	}
+}
+@media (min-width: 992px) {
+	#sm_logo img {
+		width: 75%;
+	}
+}
+@media (min-width: 1200px) {
+	#sm_logo img {
+		width: 85%;
+	}
+}
+@media (min-width: 1600px) {
+	#sm_logo img {
+		width: 100%;
+	}
+}
+.sm-masthead-menu {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	min-width: 0;
+	padding-right: 0.75rem;
+}
+@media (min-width: 992px) {
+	.sm-masthead-menu {
+		padding-right: 1.5rem;
+		padding-left: 1.5rem;
+	}
 }
 
-/* The small-screen menu: a panel under the bar, over the page, scrolling when long. */
+/* The menu button of small screens: Bootstrap's navbar-dark toggler (a faint box with three
+   lines). It shows below 992px, where the menu in the bar hides, as on the old site. */
+.sm-navbar-toggler {
+	padding: 0.25rem 0.75rem;
+	font-size: 1.25rem;
+	line-height: 1;
+	color: rgba(255, 255, 255, 0.55);
+	background-color: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 0.375rem;
+	cursor: pointer;
+}
+.sm-navbar-toggler-icon {
+	display: inline-block;
+	width: 1.5em;
+	height: 1.5em;
+	vertical-align: middle;
+	background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.55%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 100%;
+}
+.sm-desktop-navigation {
+	display: none;
+	min-width: 0;
+}
+@media (min-width: 992px) {
+	.sm-desktop-navigation {
+		display: block;
+	}
+	.sm-navbar-toggler {
+		display: none;
+	}
+	.sm-mobile-navigation {
+		display: none !important;
+	}
+}
+
+/* The primary menu in the old site's colours (Bootstrap's navbar-dark with the site's green
+   dropdown): faded white links that brighten under the pointer, and a green dropdown panel
+   with pale grey items. */
+.sm-nav {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	margin: 0;
+	padding: 0.5rem 0;
+	list-style: none;
+}
+.sm-nav li {
+	position: relative;
+}
+.sm-nav > li > a,
+.sm-nav > li > details > summary {
+	display: block;
+	padding: 0.5rem;
+	font-size: 1rem;
+	color: rgba(255, 255, 255, 0.55);
+	text-decoration: none;
+	cursor: pointer;
+}
+.sm-nav summary {
+	list-style: none;
+}
+.sm-nav summary::-webkit-details-marker {
+	display: none;
+}
+.sm-nav summary::after {
+	display: inline-block;
+	margin-left: 0.255em;
+	vertical-align: 0.255em;
+	content: "";
+	border-top: 0.3em solid;
+	border-right: 0.3em solid transparent;
+	border-bottom: 0;
+	border-left: 0.3em solid transparent;
+}
+.sm-nav > li > a:hover,
+.sm-nav > li > a:focus,
+.sm-nav > li > details > summary:hover,
+.sm-nav > li > details > summary:focus {
+	color: rgba(255, 255, 255, 0.75);
+}
+/* The page you are on (and an open dropdown) is full white. */
+.sm-nav > li.sm-nav-current > a,
+.sm-nav > li.sm-nav-current > details > summary,
+.sm-nav > li > details[open] > summary {
+	color: #ffffff;
+}
+.sm-nav details > ul {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	z-index: 1000;
+	min-width: 10rem;
+	max-width: calc(100vw - 1.5rem);
+	max-height: 400px;
+	margin: 0.125rem 0 0;
+	padding: 0.5rem 0;
+	overflow-y: auto;
+	font-size: 1rem;
+	text-align: left;
+	list-style: none;
+	background-color: #025600;
+	border: 1px solid rgba(0, 0, 0, 0.175);
+	border-radius: 0.375rem;
+}
+/* The last dropdown opens leftwards so it cannot hang off the right edge of the screen. */
+.sm-nav > li:last-child > details > ul {
+	right: 0;
+	left: auto;
+}
+.sm-nav details > ul a {
+	display: block;
+	width: 100%;
+	padding: 0.25rem 1rem;
+	font-weight: 400;
+	color: #dfdfdf;
+	white-space: nowrap;
+	text-decoration: none;
+}
+.sm-nav details > ul a:hover,
+.sm-nav details > ul a:focus {
+	color: #ffffff;
+	background-color: rgba(0, 0, 0, 0.1);
+}
+.sm-nav details > ul .sm-nav-current > a,
+.sm-nav details > ul a:active {
+	color: #ffffff;
+	background-color: #155507;
+}
+
+/* The small-screen menu: a panel under the bar, over the page, scrolling when long. The same
+   menu, stacked; its dropdowns open in place. */
 .sm-mobile-navigation {
 	position: absolute;
 	top: 100%;
 	left: 0;
 	right: 0;
-	max-height: calc(100vh - var(--sm-bar));
+	max-height: calc(100vh - 5rem);
 	overflow-y: auto;
 	box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 0.25);
 }
 .sm-mobile-navigation[hidden] {
 	display: none;
 }
-.sm-mobile-navigation .menu :where(a, summary) {
-	min-height: 2.75rem;
-	align-items: center;
+.sm-mobile-navigation .sm-nav {
+	flex-direction: column;
+	flex-wrap: nowrap;
+	align-items: stretch;
+	justify-content: flex-start;
+	padding: 0.5rem 1.25rem;
+}
+.sm-mobile-navigation .sm-nav > li > a,
+.sm-mobile-navigation .sm-nav > li > details > summary {
+	padding: 0.625rem 0;
+}
+.sm-mobile-navigation .sm-nav details > ul,
+.sm-mobile-navigation .sm-nav > li:last-child > details > ul {
+	position: static;
+	max-width: none;
+}
+.sm-mobile-navigation .sm-nav details > ul a {
+	padding-top: 0.625rem;
+	padding-bottom: 0.625rem;
+	white-space: normal;
+}
+
+/* The footer of the old site: Bootstrap's dark grey with white words, and plain links with
+   no lines between them and no underline. */
+.sm-footer {
+	background-color: #212529;
+	color: #ffffff;
+}
+.sm-footer-link {
+	display: block;
+	padding: 0.5rem 1rem;
+	font-size: 1rem;
+	color: #f8f9fa;
+	text-decoration: none;
+}
+a.sm-footer-link:hover,
+a.sm-footer-link:focus {
+	color: #f8f9fa;
+	text-decoration: none;
+}
+.sm-footer-link-white,
+a.sm-footer-link-white:hover,
+a.sm-footer-link-white:focus {
+	color: #ffffff;
+}
+
+/* The "Short Centered Content" pages (Login, Reset Password, Contact Us): the block sits in the
+   middle of the space between the green bar and the footer, at the old column widths. */
+#content:has(> .sm-short-centered) {
+	display: flex;
+	flex-direction: column;
+}
+body.page-template-short-centered-page #content {
+	display: flex;
+	flex-direction: column;
+}
+.sm-short-centered {
+	display: flex;
+	flex: 1 1 auto;
+}
+.sm-short-centered-row {
+	display: flex;
+	align-self: center;
+	justify-content: center;
+	width: 100%;
+}
+.sm-short-centered-col {
+	flex: 0 0 auto;
+	width: 100%;
+	min-width: 0;
+	padding-right: 0.75rem;
+	padding-left: 0.75rem;
+}
+@media (min-width: 768px) {
+	.sm-short-centered-col {
+		width: 75%;
+	}
+}
+@media (min-width: 992px) {
+	.sm-short-centered-col {
+		width: 58.33333333%;
+	}
+}
+@media (min-width: 1200px) {
+	.sm-short-centered-col {
+		width: 50%;
+	}
+}
+@media (min-width: 1400px) {
+	.sm-short-centered-col {
+		width: 41.66666667%;
+	}
+}
+
+/* A button at Bootstrap's size (the Info Page's six buttons); its colour comes from btn-primary. */
+.btn.sm-btn-bs {
+	height: auto;
+	min-height: 0;
+	padding: 0.375rem 0.75rem;
+	font-size: 1rem;
+	font-weight: 400;
+	line-height: 1.5;
+	border-radius: 0.375rem;
+	box-shadow: none;
 }
 
 /* Keyboard focus is always visible, on the green bar too. */

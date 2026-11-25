@@ -196,19 +196,28 @@ if ( ! function_exists( 'scouting_memories_2026_post_thumbnail' ) ) :
 		if ( is_singular() ) :
 			?>
 
-			<figure>
+			<div class="post-thumbnail">
 				<?php the_post_thumbnail(); ?>
-			</figure><!-- .post-thumbnail -->
+			</div><!-- .post-thumbnail -->
 
 			<?php
 		else :
 			?>
 
-			<figure>
-				<a href="<?php the_permalink(); ?>" aria-hidden="true" tabindex="-1">
-					<?php the_post_thumbnail(); ?>
-				</a>
-			</figure>
+			<a class="post-thumbnail" href="<?php the_permalink(); ?>" aria-hidden="true" tabindex="-1">
+				<?php
+				the_post_thumbnail(
+					'post-thumbnail',
+					array(
+						'alt' => the_title_attribute(
+							array(
+								'echo' => false,
+							)
+						),
+					)
+				);
+				?>
+			</a>
 
 			<?php
 		endif; // End is_singular().
@@ -307,7 +316,8 @@ endif;
 
 if ( ! function_exists( 'scouting_memories_2026_sm_posted_on' ) ) :
 	/**
-	 * The "Posted on <date>" chip the old theme showed on result cards.
+	 * "Posted on <date>" as the old theme printed it: a plain text button with
+	 * the published date only, linked to the post.
 	 */
 	function scouting_memories_2026_sm_posted_on() {
 		$time_string = sprintf(
@@ -317,7 +327,7 @@ if ( ! function_exists( 'scouting_memories_2026_sm_posted_on' ) ) :
 		);
 
 		printf(
-			'<div class="posted-on">%s</div>',
+			'<div class="posted-on sm-text-btn">%s</div> ',
 			sprintf(
 				/* translators: %s: post date. */
 				esc_html_x( 'Posted on %s', 'post date', 'scouting-memories-2026' ),
@@ -335,10 +345,38 @@ if ( ! function_exists( 'scouting_memories_2026_sm_posted_on' ) ) :
 	}
 endif;
 
+if ( ! function_exists( 'scouting_memories_2026_post_box' ) ) :
+	/**
+	 * The bordered box the old theme showed under a post's title: "Posted on
+	 * <date>" and "Posted in <categories>", nothing else. Other post types get
+	 * the empty box, as before.
+	 */
+	function scouting_memories_2026_post_box() {
+		echo '<div class="sm-post-box">';
+		if ( 'post' === get_post_type() ) {
+			echo '<div class="sm-post-box-meta">';
+			scouting_memories_2026_sm_posted_on();
+
+			/* translators: used between list items, there is a space after the comma. */
+			$categories_list = get_the_category_list( esc_html__( ', ', 'scouting-memories-2026' ) );
+			if ( $categories_list ) {
+				printf(
+					/* translators: %s: list of categories. */
+					'<div class="cat-links sm-text-btn">' . esc_html__( 'Posted in %s', 'scouting-memories-2026' ) . '</div>',
+					$categories_list // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				);
+			}
+			echo '</div><!-- .sm-post-box-meta -->';
+		}
+		echo '</div><!-- .sm-post-box -->';
+	}
+endif;
+
 if ( ! function_exists( 'scouting_memories_2026_entry_terms' ) ) :
 	/**
-	 * The state / council / lodge / camp chips on result cards, read through the
-	 * core plugin's Post class exactly like the old theme's entry footer did.
+	 * The State / Council / Lodge / Camps pieces on result cards, read through
+	 * the core plugin's Post class exactly like the old theme's entry footer
+	 * did: plain small text buttons, no background and no line.
 	 */
 	function scouting_memories_2026_entry_terms() {
 		if ( 'post' === get_post_type() && class_exists( 'Post' ) ) {
@@ -351,21 +389,39 @@ if ( ! function_exists( 'scouting_memories_2026_entry_terms' ) ) :
 				'Camps'   => array( $the_post->camp, $the_post->say_camps() ),
 			);
 
-			echo '<div class="flex flex-wrap gap-2">';
 			foreach ( $chips as $label => $chip ) {
 				if ( is_countable( $chip[0] ) ) {
-					echo '<div class="cat-links badge badge-ghost h-auto max-w-full py-1 text-start whitespace-normal">' . esc_html( $label ) . ': ' . $chip[1] . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo '<div class="cat-links sm-text-btn">' . esc_html( $label ) . ': ' . $chip[1] . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				}
 			}
-			echo '</div>';
 		}
 
 		if ( ! is_single() && ! post_password_required() && ( comments_open() || get_comments_number() ) ) {
-			echo '<div class="comments-link mt-2 text-sm">';
+			echo '<div class="comments-link sm-text-btn">';
 			comments_popup_link( __( 'Leave a Comment', 'scouting-memories-2026' ) );
 			echo '</div>';
 		}
 
-		edit_post_link( __( 'Edit', 'scouting-memories-2026' ), '<div class="edit-link mt-2 text-sm">', '</div>' );
+		edit_post_link( __( 'Edit', 'scouting-memories-2026' ), '<div class="edit-link sm-text-btn">', '</div>' );
+	}
+endif;
+
+if ( ! function_exists( 'scouting_memories_2026_comment_nav' ) ) :
+	/**
+	 * "Older Comments" / "Newer Comments", shown above and below the comment
+	 * list when the comments run over several pages.
+	 *
+	 * @param string $id The nav element's id.
+	 */
+	function scouting_memories_2026_comment_nav( $id ) {
+		if ( get_comment_pages_count() <= 1 || ! get_option( 'page_comments' ) ) {
+			return;
+		}
+		?>
+		<nav id="<?php echo esc_attr( $id ); ?>" class="site-navigation comment-navigation sm-comment-nav" aria-label="<?php esc_attr_e( 'Comments', 'scouting-memories-2026' ); ?>">
+			<?php previous_comments_link( esc_html__( 'Older Comments', 'scouting-memories-2026' ) ); ?>
+			<?php next_comments_link( esc_html__( 'Newer Comments', 'scouting-memories-2026' ) ); ?>
+		</nav>
+		<?php
 	}
 endif;

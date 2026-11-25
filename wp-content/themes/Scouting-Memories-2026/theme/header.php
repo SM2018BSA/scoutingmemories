@@ -28,4 +28,4 @@
 
 	<?php get_template_part( 'template-parts/layout/header', 'content' ); ?>
 
-	<div id="content" class="w-full grow px-3 sm:px-4" tabindex="-1">
+	<div id="content" class="w-full grow px-3" tabindex="-1">

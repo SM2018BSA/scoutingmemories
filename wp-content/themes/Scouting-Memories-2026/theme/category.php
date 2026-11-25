@@ -22,12 +22,12 @@ $smem_the_query = $smem_indexing ? new WP_Query( $smem_indexing->query ) : $GLOB
 get_header();
 ?>
 
-	<main id="primary" class="site-main max-w-5xl mx-auto mt-8 mb-8">
+	<main id="primary" class="site-main sm-container sm-edge mt-12 mb-12">
 
-		<div class="page-header mb-8 border-b border-base-300 pb-4">
-			<details class="collapse collapse-arrow card-border bg-base-100">
+		<div class="page-header sm-page-header">
+			<details class="collapse collapse-plus sm-fold sm-fold-plain">
 				<summary class="collapse-title">
-					<h1 class="text-2xl">Category: <?php echo esc_html( $smem_category_name ); ?></h1>
+					<h1 class="sm-fold-h1">Category: <?php echo esc_html( $smem_category_name ); ?></h1>
 				</summary>
 				<div class="collapse-content">
 					<?php

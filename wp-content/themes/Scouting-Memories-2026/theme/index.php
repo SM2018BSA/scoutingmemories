@@ -15,39 +15,40 @@
 get_header();
 ?>
 
-	<section id="primary">
-		<main id="main">
+	<div id="primary" class="content-area sm-container sm-edge mt-12">
+		<main id="main" class="site-main">
 
 		<?php
-		if ( have_posts() ) {
+		if ( have_posts() ) :
 
 			if ( is_home() && ! is_front_page() ) :
 				?>
-				<header class="entry-header">
-					<h1 class="entry-title"><?php single_post_title(); ?></h1>
-				</header><!-- .entry-header -->
+				<header>
+					<h1 class="page-title sr-only"><?php single_post_title(); ?></h1>
+				</header>
 				<?php
 			endif;
 
-			// Load posts loop.
-			while ( have_posts() ) {
+			/* Start the Loop */
+			while ( have_posts() ) :
 				the_post();
-				get_template_part( 'template-parts/content/content' );
-			}
 
-			// Previous/next page navigation.
-			scouting_memories_2026_the_posts_navigation();
+				get_template_part( 'template-parts/content/content', get_post_type() );
 
-		} else {
+			endwhile;
 
-			// If no content, include the "No posts found" template.
+			the_posts_navigation();
+
+		else :
+
 			get_template_part( 'template-parts/content/content', 'none' );
 
-		}
+		endif;
 		?>
 
 		</main><!-- #main -->
-	</section><!-- #primary -->
+	</div><!-- #primary -->
 
 <?php
+get_sidebar();
 get_footer();

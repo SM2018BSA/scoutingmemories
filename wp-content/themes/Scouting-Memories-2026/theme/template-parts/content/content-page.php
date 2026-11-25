@@ -12,16 +12,14 @@
 <article id="post-<?php the_ID(); ?>" <?php post_class(); ?>>
 
 	<header class="entry-header">
-		<?php
-		if ( ! is_front_page() ) {
-			the_title( '<h1 class="entry-title">', '</h1>' );
-		} else {
-			the_title( '<h2 class="entry-title">', '</h2>' );
-		}
-		?>
+		<?php the_title( '<h1 class="entry-title">', '</h1>' ); ?>
 	</header><!-- .entry-header -->
 
-	<?php scouting_memories_2026_post_thumbnail(); ?>
+	<?php if ( scouting_memories_2026_can_show_post_thumbnail() ) : ?>
+		<div class="post-thumbnail">
+			<?php the_post_thumbnail(); ?>
+		</div><!-- .post-thumbnail -->
+	<?php endif; ?>
 
 	<div <?php scouting_memories_2026_content_class( 'entry-content' ); ?>>
 		<?php
@@ -29,7 +27,7 @@
 
 		wp_link_pages(
 			array(
-				'before' => '<div>' . __( 'Pages:', 'scouting-memories-2026' ),
+				'before' => '<div class="page-links">' . esc_html__( 'Pages:', 'scouting-memories-2026' ),
 				'after'  => '</div>',
 			)
 		);
@@ -43,15 +41,17 @@
 				sprintf(
 					wp_kses(
 						/* translators: %s: Name of current post. Only visible to screen readers. */
-						__( 'Edit <span class="sr-only">%s</span>', 'scouting-memories-2026' ),
+						__( 'Edit <span class="screen-reader-text sr-only">%s</span>', 'scouting-memories-2026' ),
 						array(
 							'span' => array(
 								'class' => array(),
 							),
 						)
 					),
-					get_the_title()
-				)
+					wp_kses_post( get_the_title() )
+				),
+				'<span class="edit-link">',
+				'</span>'
 			);
 			?>
 		</footer><!-- .entry-footer -->

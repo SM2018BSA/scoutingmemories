@@ -10,16 +10,16 @@
 get_header();
 ?>
 
-	<section id="primary">
-		<main id="main">
+	<div id="primary" class="content-area sm-container mt-12">
+		<main id="main" class="site-main">
 
-			<div>
+			<section class="error-404 not-found">
 				<header class="page-header">
-					<h1 class="page-title"><?php esc_html_e( 'Page Not Found', 'scouting-memories-2026' ); ?></h1>
+					<h1 class="page-title"><?php esc_html_e( 'Oops! That page can&rsquo;t be found.', 'scouting-memories-2026' ); ?></h1>
 				</header><!-- .page-header -->
 
 				<div <?php scouting_memories_2026_content_class( 'page-content' ); ?>>
-					<p><?php esc_html_e( 'This page could not be found. It might have been removed or renamed, or it may never have existed.', 'scouting-memories-2026' ); ?></p>
+					<p><?php esc_html_e( 'It looks like nothing was found at this location. Maybe try one of the links below or a search?', 'scouting-memories-2026' ); ?></p>
 					<?php
 					get_search_form();
 
@@ -27,8 +27,8 @@ get_header();
 					the_widget( 'WP_Widget_Recent_Posts' );
 					?>
 
-					<div class="widget widget_categories mt-6">
-						<h2 class="widget-title text-lg"><?php esc_html_e( 'Most Used Categories', 'scouting-memories-2026' ); ?></h2>
+					<div class="widget widget_categories">
+						<h2 class="widget-title"><?php esc_html_e( 'Most Used Categories', 'scouting-memories-2026' ); ?></h2>
 						<ul>
 							<?php
 							wp_list_categories(
@@ -44,10 +44,10 @@ get_header();
 						</ul>
 					</div><!-- .widget -->
 				</div><!-- .page-content -->
-			</div>
+			</section><!-- .error-404 -->
 
 		</main><!-- #main -->
-	</section><!-- #primary -->
+	</div><!-- #primary -->
 
 <?php
 get_footer();

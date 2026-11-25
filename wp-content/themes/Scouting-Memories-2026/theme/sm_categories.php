@@ -4,7 +4,7 @@
  * Memorabilia, Museums). Each page carries ?cat= and the search filters in its
  * address; the core plugin's Indexing class turns them into the query.
  * Ported from the old theme; the fold-out search form is a native <details>
- * daisy collapse, whose arrow replaces the old plus/dash icon script.
+ * daisy collapse, whose plus (a dash when open) replaces the old icon script.
  *
  * Template Name: SM Categories
  *
@@ -24,13 +24,13 @@ $smem_the_query = $smem_indexing ? new WP_Query( $smem_indexing->query, array( '
 get_header();
 ?>
 
-	<main id="primary" class="site-main max-w-5xl mx-auto mt-8 mb-8">
+	<main id="primary" class="site-main sm-container sm-edge mt-12 mb-12">
 
-		<div class="page-header mb-8 border-b border-base-300 pb-4">
+		<div class="page-header sm-page-header">
 
-			<details class="collapse collapse-arrow card-border bg-base-100">
+			<details class="collapse collapse-plus sm-fold">
 				<summary class="collapse-title">
-					<h1 class="text-2xl">Category: <strong><?php echo esc_html( $smem_category_name ); ?></strong></h1>
+					<h1>Category: <strong><?php echo esc_html( $smem_category_name ); ?></strong></h1>
 				</summary>
 				<div class="collapse-content">
 					<?php
@@ -42,10 +42,12 @@ get_header();
 			</details>
 
 			<?php if ( 'Museums' === $smem_category_name ) : ?>
-				<div class="flex flex-wrap items-center gap-4 p-4">
-					<h5 class="text-lg">National List of Scout Museums:</h5>
-					<a class="btn btn-neutral" href="https://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf" target="_blank" rel="noopener"><?php esc_html_e( 'Searchable PDF', 'scouting-memories-2026' ); ?></a>
-					<a class="btn btn-neutral" href="<?php echo esc_url( home_url( '/scouting-memories-museum-list' ) ); ?>"><?php esc_html_e( 'View Online', 'scouting-memories-2026' ); ?></a>
+				<div class="sm-container sm-museums">
+					<div class="sm-museums-row">
+						<div><h5>National List of Scout Museums: </h5></div>
+						<div><a class="btn btn-secondary" href="https://storage.scoutingmemories.org/2022/01/aa48b284-smp-museum-list-2022.pdf" target="_blank" rel="noopener"><?php esc_html_e( 'Searchable PDF', 'scouting-memories-2026' ); ?></a></div>
+						<div><a class="btn btn-secondary" href="<?php echo esc_url( home_url( '/scouting-memories-museum-list' ) ); ?>"><?php esc_html_e( 'View Online', 'scouting-memories-2026' ); ?></a></div>
+					</div>
 				</div>
 			<?php endif; ?>
 

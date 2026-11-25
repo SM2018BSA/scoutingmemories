@@ -15,13 +15,13 @@ use ScoutingMemories\Core\Forms\GatewayFactory;
 get_header();
 ?>
 
-	<div id="primary" class="content-area mx-auto mt-4 mb-8 max-w-4xl">
+	<div id="primary" class="content-area sm-container mt-12">
 		<main id="main" class="site-main">
 			<?php if ( Access::can_add_council() ) : ?>
-				<h1 class="mb-4 text-3xl"><?php the_title(); ?></h1>
+				<h1><?php the_title(); ?></h1>
 				<?php echo GatewayFactory::current()->form( FormsGateway::FORM_ADD_COUNCIL ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 			<?php else : ?>
-				<p><?php esc_html_e( 'You do not have permissions to add a council.', 'scouting-memories-2026' ); ?></p>
+				<?php esc_html_e( 'You do not have permissions to add a council.', 'scouting-memories-2026' ); ?>
 			<?php endif; ?>
 		</main><!-- #main -->
 	</div>

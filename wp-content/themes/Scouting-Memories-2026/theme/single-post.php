@@ -15,41 +15,43 @@ $smem_the_post = class_exists( 'Post' ) ? new Post( get_the_ID() ) : null;
 get_header();
 ?>
 
-	<div id="primary" class="content-area max-w-5xl mx-auto mt-8">
-		<main id="main" class="site-main">
+	<div id="primary" class="content-area sm-container sm-edge mt-12">
+		<main id="main" class="site-main px-3">
 			<?php
 			while ( have_posts() ) :
 				the_post();
 				?>
 
-				<div class="post-content"><?php get_template_part( 'template-parts/content/content', 'single' ); ?></div>
+				<div class="post-content sm-container"><?php get_template_part( 'template-parts/content/content', 'single' ); ?></div>
 
 				<?php if ( $smem_the_post ) : ?>
-					<div class="post-meta mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="post-meta sm-container">
+						<div class="sm-meta-row">
 
-						<ul class="card card-border bg-base-100 divide-y divide-base-300">
-							<li class="bg-base-200/50 font-bold uppercase p-4 rounded-t-[inherit]"><?php esc_html_e( 'Timeline', 'scouting-memories-2026' ); ?></li>
-							<li class="p-3"><strong>State:</strong> <?php echo $smem_the_post->say_states(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Council:</strong> <?php echo $smem_the_post->say_councils(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Camp:</strong> <?php echo $smem_the_post->say_camps(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Lodge:</strong> <?php echo $smem_the_post->say_lodges(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
-							<li class="p-3"><strong>Start Date:</strong> <span class="text-sm"><?php echo esc_html( (string) $smem_the_post->start_date ); ?></span></li>
-							<li class="p-3"><strong>End Date:</strong> <span class="text-sm"><?php echo esc_html( (string) $smem_the_post->end_date ); ?></span></li>
-						</ul>
-
-						<?php if ( function_exists( 'the_field' ) ) : ?>
-							<ul class="card card-border bg-base-100 divide-y divide-base-300">
-								<li class="bg-base-200/50 font-bold uppercase p-4 rounded-t-[inherit]"><?php esc_html_e( 'Meta', 'scouting-memories-2026' ); ?></li>
-								<li class="p-3"><strong>Publisher of Digital:</strong> <?php the_field( 'publisher_of_digital' ); ?></li>
-								<li class="p-3"><strong>Date of Original:</strong> <?php the_field( 'date_of_original' ); ?></li>
-								<li class="p-3"><strong>Date of Digital:</strong> <?php the_field( 'date_of_digital' ); ?></li>
-								<li class="p-3"><strong>Identifier:</strong> <?php the_field( 'identifier' ); ?></li>
-								<li class="p-3"><strong>Subject:</strong> <?php the_field( 'meta_subject' ); ?></li>
-								<li class="p-3"><strong>Location:</strong> <?php the_field( 'meta_location' ); ?></li>
-								<li class="p-3"><strong>Physical Description:</strong> <?php the_field( 'meta_physical_description' ); ?></li>
+							<ul class="sm-meta-list">
+								<li class="sm-meta-head"><?php esc_html_e( 'Timeline', 'scouting-memories-2026' ); ?></li>
+								<li class="sm-meta-item"><strong>State:</strong> <?php echo $smem_the_post->say_states(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+								<li class="sm-meta-item"><strong>Council:</strong> <?php echo $smem_the_post->say_councils(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+								<li class="sm-meta-item"><strong>Camp:</strong> <?php echo $smem_the_post->say_camps(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+								<li class="sm-meta-item"><strong>Lodge:</strong> <?php echo $smem_the_post->say_lodges(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></li>
+								<li class="sm-meta-item"><strong>Start Date:</strong> <span class="small"><?php echo esc_html( (string) $smem_the_post->start_date ); ?></span></li>
+								<li class="sm-meta-item"><strong>End Date:</strong> <span class="small"><?php echo esc_html( (string) $smem_the_post->end_date ); ?></span></li>
 							</ul>
-						<?php endif; ?>
 
+							<?php if ( function_exists( 'the_field' ) ) : ?>
+								<ul class="sm-meta-list">
+									<li class="sm-meta-head"><?php esc_html_e( 'Meta', 'scouting-memories-2026' ); ?></li>
+									<li class="sm-meta-item"><strong>Publisher of Digital:</strong> <?php the_field( 'publisher_of_digital' ); ?></li>
+									<li class="sm-meta-item"><strong>Date of Original:</strong> <?php the_field( 'date_of_original' ); ?></li>
+									<li class="sm-meta-item"><strong>Date of Digital:</strong> <?php the_field( 'date_of_digital' ); ?></li>
+									<li class="sm-meta-item"><strong>Identifier:</strong> <?php the_field( 'identifier' ); ?></li>
+									<li class="sm-meta-item"><strong>Subject:</strong> <?php the_field( 'meta_subject' ); ?></li>
+									<li class="sm-meta-item"><strong>Location:</strong> <?php the_field( 'meta_location' ); ?></li>
+									<li class="sm-meta-item"><strong>Physical Description:</strong> <?php the_field( 'meta_physical_description' ); ?></li>
+								</ul>
+							<?php endif; ?>
+
+						</div>
 					</div>
 				<?php endif; ?>
 

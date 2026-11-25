@@ -11,6 +11,16 @@ const subscriber = ROLES.find((r) => r.key === 'subscriber');
 const indexer = ROLES.find((r) => r.key === 'indexer');
 const labels = (role) => role.tabs.map((t) => t.label);
 
+/** Picks one kind of user in the box's drop-down and waits for the page it loads. */
+async function pick(page, name) {
+	const select = page.locator('#sm-dev-role-pick');
+	const option = select.locator('option').filter({ hasText: name }).first();
+	await Promise.all([
+		page.waitForURL((url) => !url.search.includes('sm_dev_role')),
+		select.selectOption(await option.getAttribute('value')),
+	]);
+}
+
 test.describe('a real administrator', () => {
 	test.use({ storageState: admin.authFile });
 
@@ -22,18 +32,18 @@ test.describe('a real administrator', () => {
 		await expect(box.locator('.sm-dev-head b')).toHaveText('Test role: Administrator');
 		expect(await view.tabLabels()).toEqual(labels(admin));
 
-		await box.getByRole('link', { name: 'Subscriber', exact: true }).click();
+		await pick(page, 'Subscriber');
 		await view.settle();
 		await expect(box.locator('.sm-dev-head b')).toHaveText('Test role: Subscriber');
 		expect(await view.tabLabels(), 'the page is drawn as a subscriber sees it').toEqual(labels(subscriber));
 		expect(await view.hasPane('myAdmin')).toBe(false);
 		expect(page.url(), 'the address is clean again after a switch').not.toContain('sm_dev_role');
 
-		await box.getByRole('link', { name: 'Index Contributor', exact: true }).click();
+		await pick(page, 'Index Contributor');
 		await view.settle();
 		expect(await view.tabLabels()).toEqual(labels(indexer));
 
-		await box.getByRole('link', { name: /^My real roles/ }).click();
+		await pick(page, /^My real roles/);
 		await view.settle();
 		await expect(box.locator('.sm-dev-head b')).toHaveText('Test role: Administrator');
 		expect(await view.tabLabels(), 'back to the real administrator').toEqual(labels(admin));
@@ -53,6 +63,7 @@ test.describe('a real administrator', () => {
 		await box.locator('.sm-dev-min').click();
 		await expect(body).toBeVisible();
 		await expect(box.locator('button')).toHaveCount(1);
+		await expect(box.locator('select'), 'the kinds of user are one drop-down').toHaveCount(1);
 	});
 });
 

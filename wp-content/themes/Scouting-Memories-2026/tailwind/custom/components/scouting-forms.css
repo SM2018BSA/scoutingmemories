@@ -131,33 +131,48 @@
 		min-height: var(--size, 2.75rem);
 		white-space: normal;
 	}
-	& .btn-success,
-	& .btn-scout,
-	& .sm-btn-formidable {
+	/* The site-green button: only printed when an administrator switches it on under
+	   Scouting Forms > Settings. */
+	& .btn-scout {
 		--btn-color: var(--color-primary);
 		--btn-fg: var(--color-primary-content);
 	}
-	& .btn-danger {
-		--btn-color: var(--color-error);
-		--btn-fg: var(--color-error-content);
+	/* Submit, Update, Next, Login: Bootstrap's blue with white words, as on the old site.
+	   (btn-success keeps Bootstrap's green and btn-danger its red from scouting-memories.css.) */
+	& .sm-btn-formidable {
+		--btn-color: #0d6efd;
+		--btn-fg: #ffffff;
 	}
-	& .btn-outline-primary,
-	& .btn-outline-secondary {
-		--btn-color: var(--color-primary);
+	& .btn-danger {
+		--btn-color: #dc3545;
+		--btn-fg: #ffffff;
+	}
+	/* Outline buttons in Bootstrap's colours: blue, and grey for the secondary one. */
+	& .btn-outline-primary {
+		--btn-color: #0d6efd;
 		--btn-bg: transparent;
-		--btn-fg: var(--color-primary);
-		--btn-border: var(--color-primary);
+		--btn-fg: #0d6efd;
+		--btn-border: #0d6efd;
 		--btn-shadow: none;
 		--btn-noise: none;
 	}
 	& .btn-outline-secondary {
-		--btn-fg: var(--color-base-content);
-		--btn-border: var(--sm-field-border);
+		--btn-color: #6c757d;
+		--btn-bg: transparent;
+		--btn-fg: #6c757d;
+		--btn-border: #6c757d;
+		--btn-shadow: none;
+		--btn-noise: none;
 	}
-	& :is(.btn-outline-primary, .btn-outline-secondary):hover {
-		--btn-bg: var(--color-primary);
-		--btn-fg: var(--color-primary-content);
-		--btn-border: var(--color-primary);
+	& .btn-outline-primary:hover {
+		--btn-bg: #0d6efd;
+		--btn-fg: #ffffff;
+		--btn-border: #0d6efd;
+	}
+	& .btn-outline-secondary:hover {
+		--btn-bg: #6c757d;
+		--btn-fg: #ffffff;
+		--btn-border: #6c757d;
 	}
 	& .btn-close {
 		display: inline-flex;
@@ -245,31 +260,53 @@
 			color: var(--color-primary-content);
 		}
 	}
+	/* Paging as Bootstrap drew it: boxes joined in one strip, blue numbers, and the page
+	   you are on a solid blue box. */
 	& .pagination {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.25rem;
+		gap: 0;
 		padding: 0;
 		list-style: none;
 	}
-	& .page-link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 2.75rem;
-		min-height: 2.75rem;
-		padding: 0.25rem 0.75rem;
-		border: var(--border) solid var(--color-base-300);
-		border-radius: var(--radius-field);
+	& .pagination .page-link {
+		position: relative;
+		display: block;
+		margin-left: -1px;
+		padding: 0.375rem 0.75rem;
+		font-size: 1rem;
+		color: #0d6efd;
+		background-color: #ffffff;
+		border: 1px solid #dee2e6;
+		border-radius: 0;
 		text-decoration: none;
 	}
-	& .page-item.active .page-link,
-	& .page-link:hover {
-		background-color: var(--color-primary);
-		color: var(--color-primary-content);
+	& .pagination .page-item:first-child .page-link {
+		margin-left: 0;
+		border-top-left-radius: 0.375rem;
+		border-bottom-left-radius: 0.375rem;
 	}
-	& .page-item.disabled .page-link {
-		opacity: 0.5;
+	& .pagination .page-item:last-child .page-link {
+		border-top-right-radius: 0.375rem;
+		border-bottom-right-radius: 0.375rem;
+	}
+	& .pagination a.page-link:hover {
+		z-index: 2;
+		color: #0a58ca;
+		background-color: #f8f9fa;
+		border-color: #dee2e6;
+	}
+	& .pagination .page-item.active .page-link,
+	& .pagination .page-item.active a.page-link:hover {
+		z-index: 3;
+		color: #ffffff;
+		background-color: #0d6efd;
+		border-color: #0d6efd;
+	}
+	& .pagination .page-item.disabled .page-link {
+		color: rgba(33, 37, 41, 0.75);
+		background-color: #e9ecef;
+		border-color: #dee2e6;
 		pointer-events: none;
 	}
 	& .list-group {

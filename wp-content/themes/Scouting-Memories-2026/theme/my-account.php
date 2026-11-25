@@ -43,7 +43,7 @@ $smem_part_args = array(
 ?>
 
 	<section id="primary" class="content-area w-full">
-		<main id="main" class="site-main mx-auto mt-4 mb-8 max-w-6xl">
+		<main id="main" class="site-main sm-container mt-12 pt-12">
 
 			<h1 class="sr-only"><?php the_title(); ?></h1>
 
