@@ -144,16 +144,6 @@ class Scouting_PDF_Suggestions_Screen {
             'failed'   => array('error', 'The tag could not be added. Your account may not be allowed to set this kind of tag.'),
             'gone'     => array('warning', 'Someone has already decided that suggestion.'),
         );
-        $query = new WP_Query(array(
-            'post_type'           => array_values(array_diff(get_post_types(array('public' => true)), array('attachment'))),
-            'post_status'         => array('publish', 'pending'),
-            'posts_per_page'      => self::POSTS_PER_SCREEN,
-            'paged'               => $paged,
-            'orderby'             => 'ID',
-            'order'               => 'ASC',
-            'ignore_sticky_posts' => true,
-            'meta_query'          => array(array('key' => Scouting_PDF_Tag_Suggestions::WAITING_KEY, 'value' => 0, 'compare' => '>', 'type' => 'NUMERIC')),
-        ));
         ?>
         <div class="wrap">
             <h1>Tag suggestions</h1>
@@ -165,6 +155,20 @@ class Scouting_PDF_Suggestions_Screen {
             <?php if (current_user_can('manage_options')) : ?>
                 <?php Scouting_PDF_Batch_Button::render(self::FIND_ACTION, 'Find tag suggestions for all documents'); ?>
             <?php endif; ?>
+            <?php
+            /** Other plugins bring in suggestions of their own here (the AI tagger), before the list is read */
+            do_action('scouting_pdf_tag_suggestions_screen_top');
+            $query = new WP_Query(array(
+                'post_type'           => array_values(array_diff(get_post_types(array('public' => true)), array('attachment'))),
+                'post_status'         => array('publish', 'pending'),
+                'posts_per_page'      => self::POSTS_PER_SCREEN,
+                'paged'               => $paged,
+                'orderby'             => 'ID',
+                'order'               => 'ASC',
+                'ignore_sticky_posts' => true,
+                'meta_query'          => array(array('key' => Scouting_PDF_Tag_Suggestions::WAITING_KEY, 'value' => 0, 'compare' => '>', 'type' => 'NUMERIC')),
+            ));
+            ?>
             <table class="widefat striped">
                 <thead><tr><th>Post</th><th>Field</th><th>Suggestion</th><th>Page</th><th>Found in this line</th><th></th></tr></thead>
                 <tbody>
