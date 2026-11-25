@@ -72,6 +72,8 @@ cp -r "$HERE/node_modules/bootstrap/dist" "$WP/test-assets/bootstrap"
 cp -r "$HERE/node_modules/bootstrap-icons/font" "$WP/test-assets/bootstrap-icons"
 cp "$HERE/router.php" "$WP/router.php"
 cp "$HERE/stale-cache.html" "$WP/test-assets/stale-cache.html"
+# A classic theme for the search tests (the stock themes are block themes; the live theme is classic)
+link "$HERE/classic-theme" "$WP/wp-content/themes/sm-test-classic"
 
 # Test documents
 mkdir -p "$WP/wp-content/uploads/fixtures"

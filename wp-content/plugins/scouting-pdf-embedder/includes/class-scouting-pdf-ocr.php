@@ -372,6 +372,47 @@ class Scouting_PDF_OCR {
             ), array('id' => $row_id), array('%s', '%s', '%s'), array('%d'));
         }
         // queued and working: nothing to save yet
+        if ($job['status'] === 'done') {
+            $doc_key = $wpdb->get_var($wpdb->prepare('SELECT doc_key FROM ' . self::table() . ' WHERE id = %d', $row_id));
+            if ($doc_key) {
+                /** A page of this document was read: whoever keeps a copy of its text refreshes it */
+                do_action('scouting_pdf_document_text_changed', $doc_key);
+            }
+        }
+    }
+
+    /**
+     * The finished pages of one document for the rest of the site: page number => text,
+     * in page order. A page read but found empty is ''. Pages not read yet are left out.
+     */
+    public static function document_pages($doc_key) {
+        global $wpdb;
+        if ((int) get_option(self::DB_OPTION) !== self::TABLE_VERSION) {
+            return array();
+        }
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT page, status, text FROM ' . self::table() . " WHERE doc_key = %s AND status IN ('done', 'empty') ORDER BY page",
+            $doc_key
+        ));
+        $pages = array();
+        foreach ((array) $rows as $row) {
+            $pages[(int) $row->page] = $row->status === 'done' ? (string) $row->text : '';
+        }
+        return $pages;
+    }
+
+    /**
+     * Where one document is known to live: its link and, when the queue recorded one, its post
+     */
+    public static function document_source($doc_key) {
+        global $wpdb;
+        if ((int) get_option(self::DB_OPTION) !== self::TABLE_VERSION) {
+            return array('url' => '', 'post_id' => 0);
+        }
+        return array(
+            'url'     => (string) $wpdb->get_var($wpdb->prepare('SELECT pdf_url FROM ' . self::table() . ' WHERE doc_key = %s LIMIT 1', $doc_key)),
+            'post_id' => (int) $wpdb->get_var($wpdb->prepare('SELECT post_id FROM ' . self::docs_table() . ' WHERE doc_key = %s', $doc_key)),
+        );
     }
 
     /**

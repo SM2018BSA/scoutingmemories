@@ -544,7 +544,7 @@ class Scouting_PDF_OCR_Admin {
     public function rest_approve($request) {
         global $wpdb;
         $pages = Scouting_PDF_OCR::table();
-        $row = $wpdb->get_row($wpdb->prepare("SELECT id, status, text FROM $pages WHERE id = %d", (int) $request['id']));
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, doc_key, status, text FROM $pages WHERE id = %d", (int) $request['id']));
         if (!$row || $row->status !== 'done') {
             return new WP_Error('no_such_page', 'There is no read page to approve here.', array('status' => 404));
         }
@@ -559,6 +559,8 @@ class Scouting_PDF_OCR_Admin {
                     "UPDATE $pages SET text_original = COALESCE(text_original, text), text = %s WHERE id = %d",
                     $text, $row->id
                 ));
+                /** A reviewer corrected this page: whoever keeps a copy of the text refreshes it */
+                do_action('scouting_pdf_document_text_changed', $row->doc_key);
             }
         }
         $wpdb->update($pages, array(
@@ -618,7 +620,7 @@ class Scouting_PDF_OCR_Admin {
     /**
      * The post's readable documents: doc_key => canonical link, each document once
      */
-    private static function post_documents($post) {
+    public static function post_documents($post) {
         $docs = array();
         foreach (Scouting_PDF_Embedder::all_pdfs_in_content((string) $post->post_content) as $url) {
             $canonical = Scouting_PDF_OCR::canonical_url($url);
@@ -738,6 +740,10 @@ class Scouting_PDF_OCR_Admin {
                     <?php endif; ?>
                 </p>
                 <p id="sm-ocr-action-result"></p>
+                <?php
+                /** Other parts of the plugin add their own tools to the Overview tab here */
+                do_action('scouting_pdf_text_overview_tools');
+                ?>
             </div>
             <?php else : ?>
             <div id="sm-ocr-queue">

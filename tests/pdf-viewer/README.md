@@ -83,3 +83,19 @@ the machine text, and the dashboard and PDF text box in the browser.
 
 Nothing here runs on the live site: the PHP files exit unless run from the command line (or,
 for `router.php`, PHP's built-in server).
+
+## Document text on the site (the text section, search, tag suggestions)
+
+`text.spec.mjs` covers what the site does with the text once pages are read: the "Text of this
+document" section under the viewer, the site search finding words inside documents (with the
+page and the line), the head tags for search engines, the "Make document text available to the
+site" button, and the Tag suggestions screen (Find, Add tag, Not right, and who may use them).
+`text-state.php` saves read pages for the test document straight into the OCR table and tells
+the plugin, as the OCR does; its `checks` command runs the server-side checks of the text
+classes, including that the new classes contain no `$wpdb` and no SQL.
+
+The stock test themes are block themes, and the live theme is a classic one whose search
+results print no excerpt. So the search tests switch to `classic-theme/` (a one-file classic
+theme that prints results the way the live theme does) and switch back afterwards.
+`wp-test-env.php` registers the live site's archive taxonomies (state, council, camp, lodge,
+start_date, end_date) so there is something to suggest.

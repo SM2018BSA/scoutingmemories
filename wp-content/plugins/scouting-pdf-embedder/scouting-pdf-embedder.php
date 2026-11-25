@@ -3,7 +3,7 @@
  * Plugin Name: Scouting PDF Embedder
  * Plugin URI: https://scoutingmemories.org/
  * Description: PDF viewer for Scouting Memories, built for research: printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, page rotation, two-page view and sharing part of a page as a picture. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
- * Version: 2.3.4
+ * Version: 2.4.0
  * Author: Roger Ellis / Scouting Memories
  * License: GPL-2.0+
  * Text Domain: scouting-pdf-embedder
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.3.4');
+define('SCOUTING_PDF_VERSION', '2.4.0');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -949,3 +949,35 @@ Scouting_PDF_OCR_Queue::get_instance();
 // The PDF Text admin page, the PDF text box on the post edit screen, and their endpoints
 require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-ocr-admin.php';
 Scouting_PDF_OCR_Admin::get_instance();
+
+// The text of each document kept with its post (post meta), for the rest of the site to use
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-document-text.php';
+Scouting_PDF_Document_Text::get_instance();
+
+// Buttons that go through the whole site a batch at a time (used by the two classes below it)
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-batch-button.php';
+
+// The one-time copy of text that was read before the site kept it with the posts
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-text-sync.php';
+Scouting_PDF_Text_Sync::get_instance();
+
+// "Text of this document" under each post's viewer
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-transcript.php';
+Scouting_PDF_Transcript::get_instance();
+
+// The site's search box also finds words inside the documents
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-search.php';
+Scouting_PDF_Search::get_instance();
+
+// The site's term names (Camp_Wabaningo_16145) as words a person reads
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-term-names.php';
+
+// What search engines read in the head of a post that shows a document
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-seo.php';
+Scouting_PDF_Seo::get_instance();
+
+// Tag suggestions from the documents' text, and the screen where a person decides on them
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-tag-suggestions.php';
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-name-matcher.php';
+require_once SCOUTING_PDF_PLUGIN_DIR . 'includes/class-scouting-pdf-suggestions-screen.php';
+Scouting_PDF_Suggestions_Screen::get_instance();

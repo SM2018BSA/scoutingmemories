@@ -37,3 +37,10 @@ add_action('wp_enqueue_scripts', function() {
     wp_enqueue_style('test-bootstrap-icons', home_url('/test-assets/bootstrap-icons/bootstrap-icons.min.css'), array(), null);
     wp_enqueue_script('test-bootstrap', home_url('/test-assets/bootstrap/js/bootstrap.bundle.min.js'), array(), null, true);
 }, 1);
+
+// The live site's archive taxonomies, so tag suggestions have something to suggest
+add_action('init', function() {
+    foreach (array('state', 'council', 'camp', 'lodge', 'start_date', 'end_date') as $taxonomy) {
+        register_taxonomy($taxonomy, 'post', array('public' => true, 'hierarchical' => false, 'show_ui' => true));
+    }
+});
