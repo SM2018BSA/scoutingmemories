@@ -94,6 +94,7 @@ switch ($argv[2] ?? '') {
     case 'clear':
         sm_text_forget($doc_key);
         delete_post_meta_by_key($meta_key);
+        delete_post_meta_by_key(Scouting_PDF_Document_Text::WORDS_KEY);
         sm_text_forget_suggestions();
         break;
     case 'suggestions':
@@ -110,6 +111,7 @@ switch ($argv[2] ?? '') {
         break;
     case 'drop-copies':
         delete_post_meta_by_key($meta_key);
+        delete_post_meta_by_key(Scouting_PDF_Document_Text::WORDS_KEY);
         break;
     case 'documents':
         $post_id = url_to_postid(home_url((string) ($argv[3] ?? '')));
@@ -159,6 +161,7 @@ switch ($argv[2] ?? '') {
         // ---- A post's copy follows what has been read ----
         sm_text_forget($doc_key);
         delete_post_meta_by_key($meta_key);
+        delete_post_meta_by_key(Scouting_PDF_Document_Text::WORDS_KEY);
         $post_id = url_to_postid(home_url('/ocr-document/'));
         $check('the test post exists', $post_id > 0, true);
         $check('nothing read: no copy', $T::refresh_post($post_id), 0);
@@ -177,11 +180,13 @@ switch ($argv[2] ?? '') {
         $check('refreshing twice keeps one value', count(get_post_meta($post_id, $meta_key, false)), 1);
         $check('backslashes survive', $T::documents($post_id)[$doc_key][4], "It\\'s a backslash \\ test");
         $check('other posts get nothing', $T::documents(url_to_postid(home_url('/leaders-guide/'))), array());
+        $check('the word list for the search: each word once, lower case', (string) get_post_meta($post_id, $T::WORDS_KEY, true), ' troop 12 hiked to zephyrcrest lookout in 1938 the quillfeather patrol carried flag map it backslash test ');
 
         // ---- The document leaves the post: the copy goes with it ----
         $content = get_post_field('post_content', $post_id);
         wp_update_post(array('ID' => $post_id, 'post_content' => '<p>No document any more.</p>'));
         $check('document removed from the post: copy removed', get_post_meta($post_id, $meta_key, false), array());
+        $check('and its word list with it', get_post_meta($post_id, $T::WORDS_KEY, true), '');
         wp_update_post(array('ID' => $post_id, 'post_content' => wp_slash($content)));
         $check('document back in the post: copy back', array_keys($T::documents($post_id)), array($doc_key));
 
@@ -189,6 +194,7 @@ switch ($argv[2] ?? '') {
         $S = 'Scouting_PDF_Search';
         $check('words: lower case, each once', $S::words('Camp  CAMP Tahosa'), array('camp', 'tahosa'));
         $check('words: quotes dropped, one-letter and excluded words left out', $S::words('"Camp Tahosa" a -lodge'), array('camp', 'tahosa'));
+        $check('words: punctuation and hyphens cut words apart, as in the documents', $S::words('Ma-Ka-Ja-Wan, Tahosa!'), array('ma', 'ka', 'ja', 'wan', 'tahosa'));
         $check('words: at most six', count($S::words('a1 b2 c3 d4 e5 f6 g7 h8')), 6);
         $check('words: markup is not a word', $S::words('<script>alert(1)</script> <b>camp</b>'), array('camp'));
 
@@ -260,6 +266,7 @@ switch ($argv[2] ?? '') {
 
         sm_text_forget($doc_key);
         delete_post_meta_by_key($meta_key);
+        delete_post_meta_by_key(Scouting_PDF_Document_Text::WORDS_KEY);
         if ($failures) {
             echo "$failures TEXT CHECK(S) FAILED\n";
             exit(1);

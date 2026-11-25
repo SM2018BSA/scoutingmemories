@@ -21,6 +21,12 @@ if (!defined('ABSPATH')) {
 class Scouting_PDF_Document_Text {
 
     const META_KEY = '_scouting_pdf_text';
+    /**
+     * Every different word of the post's documents, once, in lower case, with a space on
+     * each side. The site search looks here: it is a fraction of the size of the text, so
+     * looking through every post's words stays quick.
+     */
+    const WORDS_KEY = '_scouting_pdf_words';
     const PAGE_BREAK = "\f";
     const NOT_READ = "\x1A";
 
@@ -46,6 +52,13 @@ class Scouting_PDF_Document_Text {
             'single'        => false,
             'show_in_rest'  => false,
             'auth_callback' => '__return_false', // written by the plugin only, never from an edit screen
+        ));
+        register_post_meta('', self::WORDS_KEY, array(
+            'type'          => 'string',
+            'description'   => 'Every different word of the PDFs in this post, for the site search.',
+            'single'        => true,
+            'show_in_rest'  => false,
+            'auth_callback' => '__return_false',
         ));
     }
 
@@ -132,7 +145,36 @@ class Scouting_PDF_Document_Text {
                 update_post_meta($post->ID, self::META_KEY, wp_slash($value), $stored[$doc_key]);
             }
         }
+        self::save_words($post->ID, $wanted);
         return count($wanted);
+    }
+
+    /**
+     * The words of a piece of text: lower case, letters and digits only, each once.
+     * The search box's words are cut the same way, so both sides always agree.
+     */
+    public static function words_of($text) {
+        $words = preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower((string) $text), -1, PREG_SPLIT_NO_EMPTY);
+        return array_values(array_unique(array_filter((array) $words, function ($word) {
+            return mb_strlen($word) >= 2;
+        })));
+    }
+
+    /**
+     * Keep the post's word list in step with its documents' text ($values: doc_key => meta value)
+     */
+    private static function save_words($post_id, $values) {
+        $text = '';
+        foreach ($values as $value) {
+            list(, $pages) = self::decode($value);
+            $text .= ' ' . implode(' ', $pages);
+        }
+        $words = self::words_of($text);
+        if (!$words) {
+            delete_post_meta($post_id, self::WORDS_KEY);
+            return;
+        }
+        update_post_meta($post_id, self::WORDS_KEY, ' ' . implode(' ', $words) . ' ');
     }
 
     /**

@@ -18,6 +18,8 @@ class Scouting_PDF_Search {
     const PAGES_SHOWN = 3;
     const SNIPPET_LENGTH = 160;
     const CACHE_GROUP = 'scouting_pdf_search';
+    /** With several words, the posts holding the longest one are looked through for the others */
+    const CANDIDATES = 300;
 
     private static $instance = null;
 
@@ -46,16 +48,50 @@ class Scouting_PDF_Search {
     }
 
     /**
-     * The search words: lower case, quotes dropped, each once
+     * The search words, cut the same way the documents' words are: lower case, each once
      */
     public static function words($search) {
-        $search = mb_strtolower(wp_strip_all_tags((string) $search));
-        $words = preg_split('/[\s"“”]+/u', $search, -1, PREG_SPLIT_NO_EMPTY);
-        $words = array_filter((array) $words, function ($word) {
-            // A leading hyphen means "without this word" in WordPress's search
-            return $word[0] !== '-' && mb_strlen($word) >= 2;
+        // A leading hyphen means "without this word" in WordPress's search
+        $search = preg_replace('/(^|\s)-\S+/u', ' ', wp_strip_all_tags((string) $search));
+        return array_slice(Scouting_PDF_Document_Text::words_of($search), 0, self::MAX_WORDS);
+    }
+
+    /**
+     * Published posts without a password whose documents hold every word, newest first.
+     * The database looks for one word only (the longest, so the fewest posts), in each
+     * post's word list; the other words are checked here, in those posts' word lists.
+     */
+    private static function posts_with_words($words, $type) {
+        usort($words, function ($a, $b) {
+            return mb_strlen($b) - mb_strlen($a);
         });
-        return array_slice(array_values(array_unique($words)), 0, self::MAX_WORDS);
+        $several = count($words) > 1;
+        $ids = get_posts(array(
+            'post_type'              => $type,
+            'post_status'            => 'publish',
+            'has_password'           => false,
+            'fields'                 => 'ids',
+            'posts_per_page'         => $several ? self::CANDIDATES : -1,
+            'orderby'                => 'date',
+            'order'                  => 'DESC',
+            'ignore_sticky_posts'    => true,
+            'update_post_meta_cache' => false,
+            'update_post_term_cache' => false,
+            'meta_query'             => array(array('key' => Scouting_PDF_Document_Text::WORDS_KEY, 'value' => $words[0], 'compare' => 'LIKE')),
+        ));
+        if (!$several) {
+            return $ids;
+        }
+        $others = array_slice($words, 1);
+        return array_values(array_filter($ids, function ($post_id) use ($others) {
+            $list = (string) get_post_meta($post_id, Scouting_PDF_Document_Text::WORDS_KEY, true);
+            foreach ($others as $word) {
+                if (mb_strpos($list, $word) === false) {
+                    return false;
+                }
+            }
+            return true;
+        }));
     }
 
     public function widen_search($query) {
@@ -83,15 +119,10 @@ class Scouting_PDF_Search {
                 'update_post_meta_cache' => false,
                 'update_post_term_cache' => false,
             );
-            $meta_query = array('relation' => 'AND');
-            foreach ($words as $word) {
-                $meta_query[] = array('key' => Scouting_PDF_Document_Text::META_KEY, 'value' => $word, 'compare' => 'LIKE');
-            }
             $found = array(
                 // What WordPress's own search finds, in its own order
                 'core' => get_posts($common + array('s' => $search, 'post_status' => $statuses)),
-                // Published posts without a password whose document text holds every word
-                'pdf'  => get_posts($common + array('post_status' => 'publish', 'has_password' => false, 'meta_query' => $meta_query, 'orderby' => 'date', 'order' => 'DESC')),
+                'pdf'  => self::posts_with_words($words, $type),
             );
             wp_cache_set($cache_key, $found, self::CACHE_GROUP, HOUR_IN_SECONDS);
         }
