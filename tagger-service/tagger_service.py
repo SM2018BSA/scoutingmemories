@@ -145,6 +145,7 @@ PDFINFO_SECONDS = 20
 RENDER_SECONDS = 60
 OCR_SECONDS = 120           # per page
 MAX_TEXT_TOTAL = 150000     # characters of text kept for one document
+WORDPRESS_JOBS = 'wordpress'  # the "session" of jobs WordPress asked for over signed calls
 INSTALLED_UNIT = '/etc/systemd/system/scouting-tagger.service'
 WAKE = threading.Event()    # set when a job is added, so the worker does not wait
 
@@ -1806,7 +1807,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             limit = MAX_UPLOAD_BODY
         elif path == '/v1/admin/files':
             limit = MAX_FILE_BODY
-        elif path in ('/v1/suggest', '/v1/ask', '/v1/admin/settings', '/v1/admin/notes'):
+        elif path in ('/v1/suggest', '/v1/ask', '/v1/wp/suggest', '/v1/admin/settings', '/v1/admin/notes'):
             limit = MAX_TEXT_BODY
         try:
             body = self.read_body(method, limit)
@@ -1961,6 +1962,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
             state = clean_entry_id(self.query_value(query, 'state'))
             council = clean_entry_id(self.query_value(query, 'council'))
             return self.reply(200, {'entities': taxonomy_rows(con, kind, state, council)})
+
+        # -- WordPress asks about a document whose text it already holds (signed calls) --
+        # The text was read on the website, so nothing is read here: the job goes straight to
+        # the AI. WordPress fetches the answer and shows it to a reviewer; nothing is tagged here.
+        if path.startswith('/v1/wp/'):
+            problem = self.signature_problem(method, self.path, body)
+            if problem:
+                return self.reply(401, {'error': problem})
+            if method == 'POST' and path == '/v1/wp/suggest':
+                asked = self.body_json(body)
+                text = asked.get('text')
+                post_id = asked.get('post_id')
+                if not isinstance(text, str) or not text.strip():
+                    return self.reply(400, {'error': 'no_text'})
+                if not isinstance(post_id, int) or isinstance(post_id, bool) or post_id < 1:
+                    return self.reply(400, {'error': 'bad_request'})
+                merged = read_settings(con)
+                if calls_today(con) >= daily_cap(merged):
+                    return self.reply(429, {'error': 'daily_limit'})
+                provider_setup(con, merged)  # refuses now, not after queuing, when no key is saved
+                job = queue_job(con, {'sid': WORDPRESS_JOBS, 'user': 'wordpress'}, 'suggest', '', 0,
+                                {'text': text.strip()[:MAX_TEXT_TOTAL], 'post_id': post_id})
+                row = con.execute('SELECT * FROM jobs WHERE id = ?', (job,)).fetchone()
+                log('WordPress asked about post %d (text already read there, no OCR here)' % post_id)
+                return self.reply(202, job_answer(con, row))
+            found = re.fullmatch(r'/v1/wp/jobs/([0-9a-f]{32})', path)
+            if method == 'GET' and found:
+                row = con.execute('SELECT * FROM jobs WHERE id = ? AND session = ?',
+                                  (found.group(1), WORDPRESS_JOBS)).fetchone()
+                if row is None:
+                    return self.reply(404, {'error': 'not_found'})
+                return self.reply(200, job_answer(con, row))
+            return self.reply(404, {'error': 'not_found'})
 
         # -- WordPress (signed server-to-server calls) --
         if path.startswith('/v1/index/'):

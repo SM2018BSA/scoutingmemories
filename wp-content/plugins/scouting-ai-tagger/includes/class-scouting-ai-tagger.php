@@ -27,6 +27,7 @@ final class Scouting_AI_Tagger {
 	private function __construct() {
 		Scouting_AI_Tagger_Sync::register();
 		Scouting_AI_Tagger_Settings::register();
+		Scouting_AI_Tagger_Post_Suggestions::register();
 	}
 
 	/** @return array{url:string,secret:string} */

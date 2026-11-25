@@ -64,6 +64,8 @@ settings dashboard. Links expire (WordPress sets 120 s) and each nonce works onc
 | `GET /v1/me` | session | who I am, index status, limits |
 | `POST /v1/logout` | session + CSRF | ends the session |
 | `GET /v1/index/status` | WordPress (signed) | when the index was last received, row counts |
+| `POST /v1/wp/suggest` | WordPress (signed) | `{post_id, text}`: asks the AI about a post whose text the website already holds. Nothing is read here (no PDF, no OCR). Answers 202 with the job, or `no_text`, `no_api_key`, `daily_limit`, `queue_full` |
+| `GET /v1/wp/jobs/<id>` | WordPress (signed) | the state and, when done, the result of a job WordPress asked for (never a person's job) |
 
 Errors are always `{"error":"<code>"}`.
 
