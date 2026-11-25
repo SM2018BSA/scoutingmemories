@@ -24,10 +24,7 @@ class ScoutingFormsGateway extends FormidableGateway {
 		self::FORM_ADD_LODGE   => 'sm_add_lodge_form',
 	);
 
-	private const VIEW_SHORTCODES = array(
-		self::VIEW_MY_POSTS => 'sm_user_posts',
-		self::VIEW_INDEXING => 'sm_indexing_browser',
-	);
+	private const VIEW_SHORTCODES = array();
 
 	public function key(): string {
 		return 'scouting-forms';
@@ -35,7 +32,7 @@ class ScoutingFormsGateway extends FormidableGateway {
 
 	public function form( string $which ): string {
 		$tag = self::FORM_SHORTCODES[ $which ] ?? '';
-		return '' !== $tag && shortcode_exists( $tag ) ? (string) do_shortcode( "[{$tag}]" ) : parent::form( $which );
+		return '' !== $tag && shortcode_exists( $tag ) ? (string) do_shortcode( "[{$tag} description=\"0\"]" ) : parent::form( $which ); // as the old pages: no title, no description
 	}
 
 	public function view( string $which ): string {

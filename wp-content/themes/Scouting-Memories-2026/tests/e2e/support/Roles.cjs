@@ -11,8 +11,8 @@ const EVERYONE_TABS = [
 const INDEXING_TAB = { id: 'myIndexing', label: 'Indexing' };
 const ADMIN_TABS = [{ id: 'myAdmin', label: 'Admin' }, { id: 'myAdmin2', label: 'Admin 2' }];
 
-// The Forms websites run Scouting Forms, whose indexing browser has its own pills (address parameter idx_tab).
-const INDEXING_PILLS = ['councils', 'camps', 'lodges', 'tools'];
+// The Indexing tab's own pills (radio sub-tabs, as in the Admin tab).
+const INDEXING_SUBTABS = ['idx-myCouncils', 'idx-myCamps', 'idx-myLodges', 'idx-myTools'];
 const ADMIN_SUBTABS = ['adm-users', 'adm-posts', 'adm-states', 'adm-councils', 'adm-camps', 'adm-lodges', 'adm-tools'];
 
 const ADD_PAGES = [
@@ -47,7 +47,7 @@ class Role {
 	/** Every My Account screen (tab, or tab + sub-tab) this login can open. */
 	get screens() {
 		const list = EVERYONE_TABS.map((t) => ({ name: t.id, tab: t.id }));
-		if (this.indexing) INDEXING_PILLS.forEach((pill) => list.push({ name: `myIndexing-${pill}`, tab: 'myIndexing', query: `&idx_tab=${pill}` }));
+		if (this.indexing) INDEXING_SUBTABS.forEach((sub) => list.push({ name: `myIndexing-${sub}`, tab: 'myIndexing', sub }));
 		if (this.admin) {
 			ADMIN_SUBTABS.forEach((sub) => list.push({ name: `myAdmin-${sub}`, tab: 'myAdmin', sub }));
 			list.push({ name: 'myAdmin2', tab: 'myAdmin2' });
@@ -58,6 +58,11 @@ class Role {
 	/** May this login use the Add a Council / Camp / Lodge pages? Same set as the Indexing tab. */
 	get canAddIndexing() {
 		return this.indexing;
+	}
+
+	/** May this login run the end-dates tool (Indexing, Maintenance Tools)? Administrators only. */
+	get canUpdateEndDates() {
+		return this.admin;
 	}
 }
 

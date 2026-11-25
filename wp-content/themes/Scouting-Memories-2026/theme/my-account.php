@@ -43,7 +43,7 @@ $smem_part_args = array(
 ?>
 
 	<section id="primary" class="content-area w-full">
-		<main id="main" class="site-main mx-auto mt-4 mb-8 max-w-7xl">
+		<main id="main" class="site-main mx-auto mt-4 mb-8 max-w-6xl">
 
 			<h1 class="sr-only"><?php the_title(); ?></h1>
 
@@ -51,21 +51,21 @@ $smem_part_args = array(
 				<div class="alert alert-success alert-soft mb-4" role="status"><?php esc_html_e( 'Active end dates were updated for councils, camps and lodges.', 'scouting-memories-2026' ); ?></div>
 			<?php endif; ?>
 
-			<div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
 
-				<aside class="card card-border bg-base-100 self-start p-4" aria-label="<?php esc_attr_e( 'Your profile', 'scouting-memories-2026' ); ?>">
-					<div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-center lg:flex-col">
+				<aside class="ma-profile p-4" aria-label="<?php esc_attr_e( 'Your profile', 'scouting-memories-2026' ); ?>">
+					<div class="flex flex-wrap justify-center gap-x-6 gap-y-2 sm:flex-col sm:items-center">
 						<div><?php echo $smem_user->show_avatar(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 						<div>
-							<p class="font-semibold"><?php echo $smem_user->show_first_name(); ?> <?php echo $smem_user->show_last_name(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
-							<p class="mt-1 font-bold"><?php esc_html_e( 'User Roles:', 'scouting-memories-2026' ); ?></p>
+							<p><?php echo $smem_user->show_first_name(); ?> <?php echo $smem_user->show_last_name(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
+							<p class="mt-1"><?php esc_html_e( 'User Roles:', 'scouting-memories-2026' ); ?></p>
 							<p><?php echo $smem_user->show_user_roles(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></p>
 						</div>
-						<div><a class="btn btn-secondary" href="<?php echo esc_url( wp_logout_url() ); ?>"><?php esc_html_e( 'Logout', 'scouting-memories-2026' ); ?></a></div>
+						<div><a class="btn btn-sm ma-logout" href="<?php echo esc_url( wp_logout_url() ); ?>"><?php esc_html_e( 'Logout', 'scouting-memories-2026' ); ?></a></div>
 					</div>
 				</aside>
 
-				<div class="ma-tabs min-w-0 lg:col-span-3">
+				<div class="ma-tabs min-w-0 sm:col-span-3">
 
 					<input type="radio" name="ma-tab" id="tab-myHome"<?php checked( 'myHome', $smem_tab ); ?>>
 					<?php if ( Access::can_see_posts_tab() ) : ?>
@@ -82,7 +82,7 @@ $smem_part_args = array(
 						<input type="radio" name="ma-tab" id="tab-myAdmin2" aria-label="<?php esc_attr_e( 'Admin 2: edit a user', 'scouting-memories-2026' ); ?>"<?php checked( 'myAdmin2', $smem_tab ); ?><?php disabled( 'myAdmin2' !== $smem_tab ); ?>>
 					<?php endif; ?>
 
-					<div class="ma-tablist tabs tabs-border" role="group" aria-label="<?php esc_attr_e( 'My Account sections', 'scouting-memories-2026' ); ?>">
+					<div class="ma-tablist tabs" role="group" aria-label="<?php esc_attr_e( 'My Account sections', 'scouting-memories-2026' ); ?>">
 						<label class="tab" for="tab-myHome"><?php esc_html_e( 'Home', 'scouting-memories-2026' ); ?></label>
 						<?php if ( Access::can_see_posts_tab() ) : ?>
 							<label class="tab" for="tab-myPosts"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></label>
@@ -98,7 +98,7 @@ $smem_part_args = array(
 						<?php endif; ?>
 					</div>
 
-					<div class="ma-panes card card-border bg-base-100 mt-2 p-3 sm:p-4">
+					<div class="ma-panes mt-2 p-3 sm:p-4">
 
 						<div class="ma-pane" id="pane-myHome">
 							<?php echo $smem_forms->form( FormsGateway::FORM_ACCOUNT ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -111,7 +111,7 @@ $smem_part_args = array(
 						<?php endif; ?>
 
 						<div class="ma-pane" id="pane-myMedia">
-							<div class="p-2 sm:p-6"><?php echo $smem_forms->media_button(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
+							<div class="p-4 sm:p-12"><?php echo $smem_forms->media_button(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 						</div>
 
 						<div class="ma-pane" id="pane-myDefaults">
@@ -124,12 +124,12 @@ $smem_part_args = array(
 
 						<?php if ( Access::can_see_indexing_tab() ) : ?>
 							<div class="ma-pane" id="pane-myIndexing">
-								<?php get_template_part( 'template-parts/account/indexing', $smem_forms->key(), $smem_part_args ); ?>
+								<?php get_template_part( 'template-parts/account/indexing', null, $smem_part_args ); ?>
 							</div>
 						<?php endif; ?>
 
 						<?php if ( Access::can_see_admin_tabs() ) : ?>
-							<div class="ma-pane" id="pane-myAdmin">
+							<div class="ma-pane pt-12" id="pane-myAdmin">
 
 								<input type="radio" name="ma-adm" id="adm-users" checked>
 								<input type="radio" name="ma-adm" id="adm-posts">
@@ -139,8 +139,8 @@ $smem_part_args = array(
 								<input type="radio" name="ma-adm" id="adm-lodges">
 								<input type="radio" name="ma-adm" id="adm-tools">
 
-								<p class="mb-2 font-semibold"><?php esc_html_e( 'Class Object Tools', 'scouting-memories-2026' ); ?></p>
-								<div class="ma-sublist tabs tabs-box mb-4" role="group" aria-label="<?php esc_attr_e( 'Class Object Tools', 'scouting-memories-2026' ); ?>">
+								<div class="ma-sublist tabs mb-4 items-center" role="group" aria-label="<?php esc_attr_e( 'Class Object Tools', 'scouting-memories-2026' ); ?>">
+									<span class="ma-brand mr-4 text-xl"><?php esc_html_e( 'Class Object Tools', 'scouting-memories-2026' ); ?></span>
 									<label class="tab" for="adm-users"><?php esc_html_e( 'Users', 'scouting-memories-2026' ); ?></label>
 									<label class="tab" for="adm-posts"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></label>
 									<label class="tab" for="adm-states"><?php esc_html_e( 'States', 'scouting-memories-2026' ); ?></label>
@@ -151,21 +151,21 @@ $smem_part_args = array(
 								</div>
 
 								<div class="ma-subpane" id="adm-pane-users">
-									<h2 class="mb-4 text-xl"><?php esc_html_e( 'Users', 'scouting-memories-2026' ); ?></h2>
+									<h2 class="ma-h2"><?php esc_html_e( 'Users', 'scouting-memories-2026' ); ?></h2>
 									<div class="sm-scroll-x"><?php echo $smem_forms->view( FormsGateway::VIEW_USERS ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div>
 								</div>
-								<div class="ma-subpane" id="adm-pane-posts"><h2 class="text-xl"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></h2></div>
-								<div class="ma-subpane" id="adm-pane-states"><h2 class="text-xl"><?php esc_html_e( 'States', 'scouting-memories-2026' ); ?></h2></div>
-								<div class="ma-subpane" id="adm-pane-councils"><h2 class="text-xl"><?php esc_html_e( 'Councils', 'scouting-memories-2026' ); ?></h2></div>
-								<div class="ma-subpane" id="adm-pane-camps"><h2 class="text-xl"><?php esc_html_e( 'Camps', 'scouting-memories-2026' ); ?></h2></div>
-								<div class="ma-subpane" id="adm-pane-lodges"><h2 class="text-xl"><?php esc_html_e( 'Lodges', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-posts"><h2 class="ma-h2"><?php esc_html_e( 'Posts', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-states"><h2 class="ma-h2"><?php esc_html_e( 'States', 'scouting-memories-2026' ); ?></h2></div>
+								<div class="ma-subpane" id="adm-pane-councils"></div><?php // The old page showed nothing here. ?>
+								<div class="ma-subpane" id="adm-pane-camps"><?php esc_html_e( 'Camps', 'scouting-memories-2026' ); ?></div>
+								<div class="ma-subpane" id="adm-pane-lodges"><?php esc_html_e( 'Lodges', 'scouting-memories-2026' ); ?></div>
 								<div class="ma-subpane" id="adm-pane-tools">
 									<?php get_template_part( 'template-parts/account/end-dates-card' ); ?>
 								</div>
 
 							</div>
 
-							<div class="ma-pane" id="pane-myAdmin2">
+							<div class="ma-pane pt-12" id="pane-myAdmin2">
 								<?php echo $smem_forms->form( FormsGateway::FORM_EDIT_USER ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 							</div>
 						<?php endif; ?>

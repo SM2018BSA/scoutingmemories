@@ -73,6 +73,9 @@
 	--color-primary-content: oklch(98% 0 0);
 	--color-secondary: #155507;
 	--color-secondary-content: oklch(98% 0 0);
+	/* The line colour of cards, tabs, tables and dividers. daisyUI's own is too pale to see on
+	   white; this is the grey the old Bootstrap theme drew its boxes with. */
+	--color-base-300: #ced4da;
 }
 
 /**

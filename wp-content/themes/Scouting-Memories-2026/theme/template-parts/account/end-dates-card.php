@@ -12,9 +12,9 @@ use ScoutingMemories\Core\Ajax;
 
 ?>
 
-<div class="card card-border bg-base-100 shadow-sm md:w-1/2">
+<div class="card card-border bg-base-100 md:w-1/2">
 	<div class="card-body">
-		<h5 class="card-title"><?php esc_html_e( 'Update Active End Dates', 'scouting-memories-2026' ); ?></h5>
+		<h5 class="card-title text-xl font-medium"><?php esc_html_e( 'Update Active End Dates', 'scouting-memories-2026' ); ?></h5>
 		<p>Click below to update the End Date values for indexing marked as "Active" with the current year.</p>
 		<p><?php esc_html_e( 'This indexing includes Councils, Lodges and Camps.', 'scouting-memories-2026' ); ?></p>
 		<?php if ( Access::can_run_end_dates() ) : ?>

@@ -22,6 +22,8 @@ final class Plugin {
 	public static function boot(): void {
 		Autoloader::register();
 		add_action( 'after_setup_theme', [ self::class, 'wire' ] );
+		// Test sites only (never the live site): the floating box that shows the pages as another kind of user.
+		Dev\RoleSwitcher::register();
 	}
 
 	public static function wire(): void {

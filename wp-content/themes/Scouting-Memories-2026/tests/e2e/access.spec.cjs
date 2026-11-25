@@ -56,6 +56,25 @@ for (const role of ROLES) {
 			}
 		});
 
+		if (role.indexing) {
+			// Looks only: the button is never pressed, so no end date changes.
+			test('the end-dates button is for administrators only', async ({ page }) => {
+				const view = new DashboardPage(page);
+				await view.openScreen({ tab: 'myIndexing', sub: 'idx-myTools' });
+				const pane = page.locator('#pane-myIndexing');
+				await expect(pane.getByText('Update Active End Dates')).toBeVisible();
+				const button = pane.locator('#idx-pane-tools form button[type="submit"]');
+				const sentence = pane.getByText('Only an administrator can run this tool.');
+				if (role.canUpdateEndDates) {
+					await expect(button, 'an administrator gets the button').toBeVisible();
+					await expect(sentence).toHaveCount(0);
+				} else {
+					await expect(button, 'no button, not even a hidden one').toHaveCount(0);
+					await expect(sentence, 'the card says who can run it').toBeVisible();
+				}
+			});
+		}
+
 		test('Add a Post shows the form or a clear refusal', async ({ page }, testInfo) => {
 			const view = new DashboardPage(page);
 			await view.open('/add-a-post/');

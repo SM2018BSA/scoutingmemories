@@ -67,3 +67,11 @@
 .entry-content > .alignright {
 	@apply float-right ml-8;
 }
+
+/*
+ * Boxes with a line around them (My Account's side panel and panes, and every other bordered
+ * card). daisyUI draws that line in base-200, which is nearly white; use the theme's line grey.
+ */
+.card-border {
+	border-color: var(--color-base-300);
+}

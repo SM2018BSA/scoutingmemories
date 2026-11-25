@@ -1,8 +1,8 @@
 <?php
 /**
- * My Account, Indexing tab, when the lists come from Formidable views:
- * three separate views (councils, camps, lodges) and the Tools card, laid out
- * as radio-driven sub-tabs by the theme.
+ * My Account, Indexing tab: the site's own three lists (councils, camps, lodges) and the
+ * Tools card, as on the old site, whichever forms plugin draws the lists. The theme lays
+ * them out as radio-driven sub-tabs.
  *
  * @package Scouting_Memories_2026
  */
@@ -18,7 +18,7 @@ $smem_sub   = $args['sub'];
 <input type="radio" name="ma-idx" id="idx-myLodges"<?php checked( 'myLodges', $smem_sub ); ?>>
 <input type="radio" name="ma-idx" id="idx-myTools">
 
-<div class="ma-sublist tabs tabs-box mb-4" role="group" aria-label="<?php esc_attr_e( 'Indexing lists', 'scouting-memories-2026' ); ?>">
+<div class="ma-sublist tabs mb-4" role="group" aria-label="<?php esc_attr_e( 'Indexing lists', 'scouting-memories-2026' ); ?>">
 	<label class="tab" for="idx-myCouncils"><?php esc_html_e( 'Councils', 'scouting-memories-2026' ); ?></label>
 	<label class="tab" for="idx-myCamps"><?php esc_html_e( 'Camps', 'scouting-memories-2026' ); ?></label>
 	<label class="tab" for="idx-myLodges"><?php esc_html_e( 'Lodges', 'scouting-memories-2026' ); ?></label>
