@@ -55,8 +55,4 @@ class FormidableGateway implements FormsGateway {
 		}
 		return (string) ( new $class( (int) constant( $constant ) ) )->show_view();
 	}
-
-	public function media_button(): string {
-		return (string) do_shortcode( '[frontend-button]' );
-	}
 }

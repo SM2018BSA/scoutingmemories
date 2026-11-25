@@ -17,7 +17,12 @@
 
 </div><!-- #page -->
 
-<?php wp_footer(); ?>
+<?php
+// The "choose a file" window of the rich-text editor; it prints nothing for someone who cannot upload.
+get_template_part( 'template-parts/media/picker' );
+
+wp_footer();
+?>
 
 </body>
 </html>

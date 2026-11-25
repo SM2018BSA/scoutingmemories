@@ -284,7 +284,9 @@ function scouting_memories_2026_scripts() {
 	$uri = get_template_directory_uri();
 
 	// One stylesheet (Tailwind's build) and one script (Alpine.js and the theme's own parts).
-	// Nothing in this theme loads from a CDN, and the theme itself asks for no jQuery.
+	// Nothing in this theme loads from a CDN. The theme asks for no jQuery, and never for
+	// WordPress's media window or its TinyMCE editor (both need jQuery): the media library
+	// and the rich-text editor are the theme's own (javascript/media.js, javascript/editor.js).
 	wp_enqueue_style( 'scouting-memories-2026-style', get_stylesheet_uri(), array(), scouting_memories_2026_asset_version( 'style.css' ) );
 	wp_enqueue_script(
 		'scouting-memories-2026-script',
@@ -297,11 +299,36 @@ function scouting_memories_2026_scripts() {
 		)
 	);
 
+	// The rich-text editor (Tiptap) is its own file, only registered here: it is asked for
+	// when a form prints a rich-text field (scouting_memories_2026_rich_text_script below).
+	wp_register_script(
+		'scouting-memories-2026-editor',
+		$uri . '/js/editor.min.js',
+		array( 'scouting-memories-2026-script' ),
+		scouting_memories_2026_asset_version( 'js/editor.min.js' ),
+		array(
+			'strategy'  => 'defer',
+			'in_footer' => true,
+		)
+	);
+
+	// WordPress's own reply script for threaded comments (plain JavaScript, no jQuery).
 	if ( is_singular() && comments_open() && get_option( 'thread_comments' ) ) {
 		wp_enqueue_script( 'comment-reply' );
 	}
 }
 add_action( 'wp_enqueue_scripts', 'scouting_memories_2026_scripts' );
+
+/**
+ * Loads the rich-text editor's script on a page that shows a rich-text field.
+ *
+ * The Scouting Forms plugin fires the action `sm_forms_rich_text_field` each time it prints
+ * such a field; the script goes out once, in the footer, after the main script.
+ */
+function scouting_memories_2026_rich_text_script() {
+	wp_enqueue_script( 'scouting-memories-2026-editor' );
+}
+add_action( 'sm_forms_rich_text_field', 'scouting_memories_2026_rich_text_script' );
 
 /**
  * Enqueue the block editor script.
@@ -315,7 +342,7 @@ function scouting_memories_2026_enqueue_block_editor_script() {
 		'widgets' !== $current_screen->id
 	) {
 		wp_enqueue_script(
-			'scouting-memories-2026-editor',
+			'scouting-memories-2026-block-editor',
 			get_template_directory_uri() . '/js/block-editor.min.js',
 			array(
 				'wp-blocks',
@@ -324,13 +351,14 @@ function scouting_memories_2026_enqueue_block_editor_script() {
 			SCOUTING_MEMORIES_2026_VERSION,
 			true
 		);
-		wp_add_inline_script( 'scouting-memories-2026-editor', 'tailwindTypographyClasses = ' . wp_json_encode( explode( ' ', SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES ) ) . ';', 'before' );
+		wp_add_inline_script( 'scouting-memories-2026-block-editor', 'tailwindTypographyClasses = ' . wp_json_encode( explode( ' ', SCOUTING_MEMORIES_2026_TYPOGRAPHY_CLASSES ) ) . ';', 'before' );
 	}
 }
 add_action( 'enqueue_block_assets', 'scouting_memories_2026_enqueue_block_editor_script' );
 
 /**
- * Add the Tailwind Typography classes to TinyMCE.
+ * Add the Tailwind Typography classes to TinyMCE (the classic editor in wp-admin only;
+ * the front end never loads TinyMCE).
  *
  * @param array $settings TinyMCE settings.
  * @return array

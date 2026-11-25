@@ -6,7 +6,8 @@
  * Presentation only. Who sees which tab comes from the core plugin's Access class;
  * which tab is open comes from its Tabs class (worked out on the server, from
  * whitelists); every form and view comes from its forms gateway, so the same page
- * runs on Scouting Forms or on Formidable.
+ * runs on Scouting Forms or on Formidable. The Media tab is the theme's own media
+ * library (template-parts/account/media.php).
  *
  * The tabs are radio buttons, each inside its own label: the label of the checked radio
  * is drawn as the open tab (has-[:checked]:) and only the pane of the checked radio shows
@@ -123,7 +124,7 @@ $smem_main_class = Scouting_Memories_2026_UI::classes(
 						<?php endif; ?>
 
 						<div class="hidden group-has-[#tab-myMedia:checked]:block" data-ma="pane" id="pane-myMedia">
-							<div class="p-12"><div class="mb-4"><?php echo $smem_forms->media_button(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div></div>
+							<div class="p-4"><?php get_template_part( 'template-parts/account/media' ); ?></div>
 						</div>
 
 						<div class="hidden group-has-[#tab-myDefaults:checked]:block" data-ma="pane" id="pane-myDefaults">

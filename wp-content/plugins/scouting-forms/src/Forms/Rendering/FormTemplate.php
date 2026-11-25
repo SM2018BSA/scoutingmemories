@@ -126,7 +126,8 @@ class FormTemplate {
         $html .= '</form>';
 
         if (!empty($opts['after_html'])) {
-            $html .= self::settingsHtml((string) $opts['after_html']);
+            // Without the old site's script and style blocks: the plugin does what they did
+            $html .= self::settingsHtml(StoredScripts::strip((string) $opts['after_html']));
         }
 
         wp_enqueue_script('sm-forms-front');
@@ -432,7 +433,7 @@ class FormTemplate {
      * @param array<string, bool> $display
      */
     private static function before(array $form, array $display): string {
-        $template = FormidableClasses::formHead(LegacyClassMap::html(!empty($form['options']['before_html']) ? (string) $form['options']['before_html'] : self::DEFAULT_BEFORE));
+        $template = FormidableClasses::formHead(LegacyClassMap::html(!empty($form['options']['before_html']) ? StoredScripts::strip((string) $form['options']['before_html']) : self::DEFAULT_BEFORE));
         $showName = !empty($display['title']) && $form['name'] !== '';
         $showDesc = !empty($display['description']) && trim($form['description']) !== '';
 

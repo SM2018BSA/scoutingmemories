@@ -7,12 +7,18 @@
  * Everything here is an Alpine.js part: a small named piece of behaviour that a
  * template switches on with `x-data="name"` on the element it belongs to. This
  * file holds the parts of the page frame (menu, banners, Memory Box); the search
- * form and the My Account page register their own from their own files.
+ * form, the My Account page and the media library register their own from their
+ * own files.
+ *
+ * Alpine is put on `window` and started once the page has been read, not at once:
+ * a script printed after this one (the rich-text editor, `editor.js`, its own
+ * file) registers its part on Alpine's `alpine:init` event before Alpine starts.
  */
 
 import Alpine from 'alpinejs';
 import registerSearch from './search.js';
 import registerAccount from './account.js';
+import registerMedia from './media.js';
 
 /**
  * The small-screen menu: one button, one panel (template-parts/layout/header-content.php).
@@ -202,5 +208,13 @@ Alpine.data('memoryBox', () => ({
 
 registerSearch(Alpine);
 registerAccount(Alpine);
+registerMedia(Alpine);
 
-Alpine.start();
+window.Alpine = Alpine;
+
+// Deferred scripts all run before DOMContentLoaded, so every part is registered by then.
+if (document.readyState === 'complete') {
+	Alpine.start();
+} else {
+	document.addEventListener('DOMContentLoaded', () => Alpine.start(), { once: true });
+}

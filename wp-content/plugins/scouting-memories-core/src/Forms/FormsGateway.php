@@ -40,7 +40,4 @@ interface FormsGateway {
 
 	/** The ready-to-print HTML of one of the VIEW_* views, or '' when this source has none. */
 	public function view( string $which ): string;
-
-	/** The "upload media" button of the My Account page. */
-	public function media_button(): string;
 }

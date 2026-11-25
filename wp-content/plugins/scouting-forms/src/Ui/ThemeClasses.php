@@ -98,6 +98,25 @@ class ThemeClasses {
     public const COMBO_OPTION      = 'cursor-pointer border-b border-line px-3 py-1.5 last:border-b-0 hover:bg-light data-[sm-focus]:bg-light aria-selected:bg-brand aria-selected:text-white';
     public const COMBO_EMPTY       = 'px-3 py-1.5 text-grey';
 
+    // Rich text fields (Forms\Rendering\RichTextField; the theme's "richText" Alpine component
+    // drives them): a grey bar of buttons like the old editor's, the pressed one white with a line
+    public const RICH              = 'block w-full';
+    public const RICH_TOOLBAR      = 'flex flex-wrap items-center gap-1 rounded-t-md border border-b-0 border-field-line bg-light p-1';
+    public const RICH_BUTTON       = 'inline-flex min-h-7 min-w-7 cursor-pointer items-center justify-center gap-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-sm leading-normal font-normal text-ink hover:border-field-line hover:bg-white focus-visible:ring-4 focus-visible:ring-blue/25 focus-visible:outline-0 aria-pressed:border-field-line aria-pressed:bg-white';
+    public const RICH_BUTTON_BOXED = 'inline-flex min-h-7 min-w-7 cursor-pointer items-center justify-center gap-1 rounded border border-field-line bg-white px-2 py-0.5 text-sm leading-normal font-normal text-ink hover:bg-light focus-visible:ring-4 focus-visible:ring-blue/25 focus-visible:outline-0';
+    public const RICH_DIVIDER      = 'mx-1 h-5 w-px bg-field-line';
+    public const RICH_ICON         = 'size-4 fill-none stroke-current stroke-2';
+    public const RICH_BOLD         = 'font-bold';
+    public const RICH_ITALIC       = 'font-serif italic';
+    public const RICH_LINK_ROW     = 'flex flex-wrap items-center gap-2 border border-b-0 border-field-line bg-light p-2';
+    public const RICH_LINK_INPUT   = 'min-w-0 flex-1';
+    /** The box people type in: the theme's script puts these on the editor it builds */
+    public const RICH_EDITOR       = 'prose max-w-none min-h-[300px] rounded-b-md border border-field-line bg-white px-3 py-2 text-ink prose-a:text-blue prose-a:underline focus:border-[#86b7fe] focus:ring-4 focus:ring-blue/25 focus:outline-0';
+    /** The plain box with the HTML in it (the "Code" button, or no scripts), added to FIELD */
+    public const RICH_CODE         = 'min-h-[300px] font-mono';
+    /** That box while the editor is showing: off the page, still sent with the form */
+    public const RICH_CODE_AWAY    = 'sr-only';
+
     // Honeypot: off the page for people, still in it for bots
     public const HONEYPOT = 'absolute -left-[9999px] size-px overflow-hidden';
 

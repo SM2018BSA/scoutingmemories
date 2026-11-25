@@ -6,6 +6,7 @@
  *   (Councils) or shown value (Council slug) from admin-ajax.php?action=sm_forms_dynamic.
  * - Searchable dropdowns for fields with Formidable's "autocomplete" setting.
  * - Collapsible sections, repeating sections (add/remove rows) and multi-page forms.
+ * - The "Active" switch of the Add a Lodge / Council / Camp / Post forms (Forms\Behaviours\ActiveSwitch).
  *
  * No dependencies. Rules come from the JSON in each form's .sm-form-config element.
  *
@@ -709,6 +710,42 @@
         this.select.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
+    // ---------------------------------------------------------------- "Active" switch
+    //
+    // A tick box tied to the field that keeps its answer as "Yes" / "No", and to an end year
+    // (rules: Forms\Behaviours\ActiveSwitch, which prints data-sm-active-switch="STORED FIELD ID"
+    // and data-sm-active-end="END YEAR FIELD ID" on the box).
+
+    SmForm.prototype.activePartner = function (box, attribute) {
+        var id = box.getAttribute(attribute);
+        var container = id ? containerOf(this.form, id) : null;
+        return container ? container.querySelector('select, textarea, input:not([type=checkbox]):not([type=radio])') : null;
+    };
+
+    // When the form opens: a stored "Yes" ticks the box
+    SmForm.prototype.initActiveSwitches = function () {
+        var self = this;
+        Array.prototype.forEach.call(this.form.querySelectorAll('input[type=checkbox][data-sm-active-switch]'), function (box) {
+            var stored = self.activePartner(box, 'data-sm-active-switch');
+            if (stored && stored.value === 'Yes') {
+                box.checked = true;
+            }
+        });
+    };
+
+    // Ticked: the end year becomes this year and the stored answer "Yes"; unticked: "No"
+    SmForm.prototype.activeSwitchChanged = function (box) {
+        var stored = this.activePartner(box, 'data-sm-active-switch');
+        var end = this.activePartner(box, 'data-sm-active-end');
+        if (box.checked && end) {
+            end.value = String(new Date().getFullYear());
+        }
+        if (stored) {
+            stored.value = box.checked ? 'Yes' : 'No';
+            refreshCombo(stored);
+        }
+    };
+
     // ---------------------------------------------------------------- set-up
 
     SmForm.prototype.enhance = function (scope) {
@@ -731,6 +768,7 @@
         var self = this;
         var form = this.form;
         this.enhance(form);
+        this.initActiveSwitches();
         this.applyLogic();
         this.initPages();
 
@@ -743,6 +781,9 @@
         });
 
         form.addEventListener('change', function (e) {
+            if (e.target.matches('input[type=checkbox][data-sm-active-switch]')) {
+                self.activeSwitchChanged(e.target);
+            }
             var container = e.target.closest('[data-sm-field]');
             if (!container) {
                 return;

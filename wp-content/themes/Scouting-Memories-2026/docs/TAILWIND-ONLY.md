@@ -59,9 +59,35 @@ of that. He checks the page source. Anything that is not a Tailwind utility clas
 
 ## Scripts
 
-- `javascript/script.js` is the one entry (bundled by esbuild into `theme/js/script.min.js`).
-  It imports Alpine.js, calls `registerSearch( Alpine )` from `javascript/search.js` and
-  `registerAccount( Alpine )` from `javascript/account.js` (each file's default export), then
-  `Alpine.start()`.
+- `javascript/script.js` is the main entry (bundled by esbuild into `theme/js/script.min.js`).
+  It imports Alpine.js, calls `registerSearch( Alpine )` from `javascript/search.js`,
+  `registerAccount( Alpine )` from `javascript/account.js` and `registerMedia( Alpine )` from
+  `javascript/media.js` (each file's default export), puts Alpine on `window.Alpine`, and
+  starts it on `DOMContentLoaded` (not at once, so a deferred script printed later can
+  register its part first).
+- `javascript/editor.js` is its own bundle (`theme/js/editor.min.js`): the rich-text editor
+  (Tiptap) as the Alpine part `richText`. It does not import Alpine; it registers on the
+  `alpine:init` event with `window.Alpine`. `functions.php` registers it as
+  `scouting-memories-2026-editor` and loads it only when the action `sm_forms_rich_text_field`
+  fires (Scouting Forms fires it when it prints a rich-text field). Tiptap's own stylesheet is
+  switched off (`injectCSS: false`): the writing area's classes come from the field's markup.
 - No inline `<script>` blocks in templates. Small behaviour is Alpine attributes on the element.
 - Nothing loads from a CDN.
+
+## No jQuery on the front end
+
+- The theme asks for no jQuery, and never calls `wp_enqueue_media()` or `wp_enqueue_editor()`
+  (WordPress's media window and its TinyMCE editor both need jQuery).
+- Media: the theme's own library (`theme/template-parts/media/library.php`, behaviour in
+  `javascript/media.js`, WordPress's REST API `wp/v2/media` with `fetch`). It is printed on the
+  My Account page's Media tab and, in "pick" mode, inside the `<dialog>` of
+  `theme/template-parts/media/picker.php` (footer, only for users who may upload). Open the
+  chooser with `window.dispatchEvent( new CustomEvent( 'sm-media-pick' ) )`; the answer is the
+  window event `sm-media-picked` with `detail { id, url, alt, title, mime }`. Who may use it:
+  the core plugin's `ScoutingMemories\Core\Media\MediaLibrary`.
+- Rich text: `<div x-data="richText" data-rich-text>` with a toolbar (`data-rich-toolbar`,
+  buttons calling `run('bold')` and reading `active('bold')`), `<div x-ref="editor"
+  data-editor-class="..." aria-label="...">` and `<textarea x-ref="field">`. The names `run()`
+  knows are listed at the top of `javascript/editor.js`.
+- `tests/e2e/no-jquery.spec.cjs` checks every public page, every My Account screen and the Add
+  pages for `window.jQuery` and for jQuery-based scripts.
