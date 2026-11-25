@@ -424,6 +424,10 @@ class FieldRenderer {
     }
 
     /**
+     * The second box of a "type it again" field, laid out the way Formidable does it: it sits
+     * beside the first box (so it never starts a new row), its label keeps its space but is not
+     * shown, and the words set for it ("Confirm Email") go underneath as the description.
+     *
      * @param array<string, mixed> $ctx
      */
     private static function confirmation(array $field, array $ctx, string $error): string {
@@ -433,11 +437,13 @@ class FieldRenderer {
         $label = (string) ($opts['conf_desc'] ?? '');
         $type = $field['type'] === 'password' ? 'password' : ($field['type'] === 'email' ? 'email' : 'text');
         return sprintf(
-            '<div id="frm_field_conf_%1$s_container" class="frm_form_field form-field frm_top_container %2$s"%3$s>'
+            '<div id="frm_field_conf_%1$s_container" class="frm_form_field form-field frm_top_container frm_conf_field %2$s"%3$s>'
             . '<label for="field_%4$s" class="frm_primary_label">%5$s%6$s</label>'
-            . '<input type="%7$s" id="field_%4$s" name="%8$s" value="" class="%9$s"%10$s /></div>',
+            . '<input type="%7$s" id="field_%4$s" name="%8$s" value="" class="%9$s" aria-label="%5$s"%10$s />'
+            . '<div class="frm_description">%5$s</div></div>',
             esc_attr((string) $ctx['id']),
-            esc_attr(trim((string) ($opts['classes'] ?? '') . ($field['required'] ? ' frm_required_field' : ''))),
+            // The first box may be marked "first in its row"; the second one never is
+            esc_attr(trim(implode(' ', array_diff(preg_split('/\s+/', (string) ($opts['classes'] ?? '')), ['frm_first'])) . ($field['required'] ? ' frm_required_field' : ''))),
             !empty($ctx['hidden']) ? ' hidden' : '',
             esc_attr($key),
             esc_html($label !== '' ? $label : __('Confirm', 'scouting-forms')),
