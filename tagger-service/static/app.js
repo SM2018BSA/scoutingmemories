@@ -538,6 +538,8 @@ const Pages = {
 const Settings = {
   node(id) { return document.getElementById(id); },
 
+  PROVIDER_NAMES: { claude: 'Anthropic', gemini: 'Google', grok: 'xAI' },
+
   async load() {
     const result = await Session.api('/v1/admin/settings');
     if (result.status !== 200) return;
@@ -548,12 +550,39 @@ const Settings = {
     for (const provider of ['claude', 'gemini', 'grok']) {
       this.node('test-' + provider).addEventListener('click', () => this.test(provider));
     }
+    await this.loadModels(result.answer);
+  },
+
+  // Each provider's dropdown: its own list of models when its key is saved, else the built-in one.
+  async loadModels(settings) {
+    const result = await Session.api('/v1/admin/models');
+    if (result.status !== 200) return;
+    for (const provider of ['claude', 'gemini', 'grok']) {
+      const list = result.answer[provider] || { models: [], source: 'built-in', error: '' };
+      const select = this.node('set-model-' + provider);
+      select.textContent = '';
+      for (const model of list.models) {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = model.label === model.id ? model.id : model.label + ' (' + model.id + ')';
+        select.appendChild(option);
+      }
+      select.value = settings['model_' + provider];
+      const note = this.node('models-note-' + provider);
+      if (list.source === 'live') {
+        note.textContent = 'All ' + list.models.length + ' models ' + this.PROVIDER_NAMES[provider] + ' offers your key.';
+      } else if (list.error) {
+        note.textContent = 'The list could not be fetched from ' + this.PROVIDER_NAMES[provider] +
+          ' (' + list.error + '), so this is the built-in list.';
+      } else {
+        note.textContent = 'Built-in list. Save a key to see every model ' + this.PROVIDER_NAMES[provider] + ' offers.';
+      }
+    }
   },
 
   fill(settings) {
     this.node('set-provider').value = settings.provider;
     for (const provider of ['claude', 'gemini', 'grok']) {
-      this.node('set-model-' + provider).value = settings['model_' + provider];
       const keyBox = this.node('set-key-' + provider);
       keyBox.value = '';
       keyBox.placeholder = settings['key_' + provider] || 'no key saved yet';
@@ -627,6 +656,7 @@ const Settings = {
     const result = await Session.api('/v1/admin/settings', { method: 'POST', json: body });
     if (result.status === 200) {
       this.fill(result.answer);
+      await this.loadModels(result.answer);
       this.node('set-saved').hidden = false;
       setTimeout(() => { this.node('set-saved').hidden = true; }, 3000);
     } else {

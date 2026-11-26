@@ -156,7 +156,7 @@ WAKE = threading.Event()    # set when a job is added, so the worker does not wa
 # Who may use the app at all; "admin" (the settings dashboard) is a separate flag on the login link
 ALLOWED_ROLES = ('administrator', 'manager', 'historian', 'regional', 'index_contributor')
 
-VERSION = '0.6.0'           # the password gate of the development server can sign people in
+VERSION = '0.7.0'           # model dropdowns fed by each provider's own list
 OCR_READY = False           # set in main(); on this PC the OCR tools may be missing
 
 
@@ -1111,7 +1111,42 @@ def parse_upload(content_type, body):
 
 AI_TIMEOUT = 120
 AI_MAX_ANSWER = 1024 * 1024
+# Newer models think before they answer, and that thinking counts against this limit
+AI_MAX_OUTPUT_TOKENS = 16000
 AI_PROVIDERS = ('claude', 'gemini', 'grok')
+
+# What the settings dropdowns offer before a provider's key is saved. Once it is, the
+# provider's own list replaces these (see ModelLists), so new models show up by themselves.
+MODEL_CHOICES = {
+    'claude': [
+        ('claude-opus-5-5', 'Claude Opus 5.5'),
+        ('claude-sonnet-5-5', 'Claude Sonnet 5.5'),
+        ('claude-haiku-5-5', 'Claude Haiku 5.5'),
+        ('claude-fable-5-2', 'Claude Fable 5.2'),
+        ('claude-fable-5-1', 'Claude Fable 5.1'),
+        ('claude-opus-5', 'Claude Opus 5'),
+        ('claude-sonnet-5', 'Claude Sonnet 5'),
+        ('claude-opus-4-8', 'Claude Opus 4.8'),
+        ('claude-opus-4-7', 'Claude Opus 4.7'),
+        ('claude-opus-4-6', 'Claude Opus 4.6'),
+        ('claude-sonnet-4-6', 'Claude Sonnet 4.6'),
+        ('claude-haiku-4-5', 'Claude Haiku 4.5'),
+    ],
+    'gemini': [
+        ('gemini-3-pro-preview', 'Gemini 3 Pro (preview)'),
+        ('gemini-2.5-pro', 'Gemini 2.5 Pro'),
+        ('gemini-2.5-flash', 'Gemini 2.5 Flash'),
+        ('gemini-2.5-flash-lite', 'Gemini 2.5 Flash-Lite'),
+    ],
+    'grok': [
+        ('grok-4', 'Grok 4'),
+        ('grok-4-fast-reasoning', 'Grok 4 Fast (reasoning)'),
+        ('grok-4-fast-non-reasoning', 'Grok 4 Fast (no reasoning)'),
+        ('grok-3', 'Grok 3'),
+        ('grok-3-mini', 'Grok 3 Mini'),
+        ('grok-code-fast-1', 'Grok Code Fast 1'),
+    ],
+}
 
 
 class AiError(Exception):
@@ -1123,13 +1158,15 @@ class AiError(Exception):
         self.detail = str(detail)[:300]
 
 
-def http_json(url, headers, payload):
-    """One POST of JSON to a provider, its JSON answer back"""
-    body = json.dumps(payload).encode()
-    request = urllib.request.Request(url, data=body, method='POST',
-                                     headers=dict(headers, **{'Content-Type': 'application/json'}))
+def http_json(url, headers, payload=None, timeout=AI_TIMEOUT):
+    """One call to a provider (POST of JSON, or GET when there is no payload), its JSON answer back"""
+    if payload is None:
+        request = urllib.request.Request(url, method='GET', headers=headers)
+    else:
+        request = urllib.request.Request(url, data=json.dumps(payload).encode(), method='POST',
+                                         headers=dict(headers, **{'Content-Type': 'application/json'}))
     try:
-        with OPENER.open(request, timeout=AI_TIMEOUT) as response:
+        with OPENER.open(request, timeout=timeout) as response:
             raw = response.read(AI_MAX_ANSWER)
     except urllib.error.HTTPError as problem:
         detail = b''
@@ -1139,7 +1176,7 @@ def http_json(url, headers, payload):
             pass
         raise AiError('ai_failed', '%d %s' % (problem.code, detail.decode('utf-8', 'replace')))
     except TimeoutError:
-        raise AiError('ai_timeout', 'no answer within %d seconds' % AI_TIMEOUT)
+        raise AiError('ai_timeout', 'no answer within %d seconds' % timeout)
     except (urllib.error.URLError, http.client.HTTPException, OSError) as problem:
         raise AiError('ai_unreachable', getattr(problem, 'reason', problem))
     try:
@@ -1153,32 +1190,114 @@ def ai_complete(provider, model, key, system, user_text, want_json):
     if provider == 'claude':
         answer = http_json('https://api.anthropic.com/v1/messages',
                            {'x-api-key': key, 'anthropic-version': '2023-06-01'},
-                           {'model': model, 'max_tokens': 3000, 'system': system,
+                           {'model': model, 'max_tokens': AI_MAX_OUTPUT_TOKENS, 'system': system,
                             'messages': [{'role': 'user', 'content': user_text}]})
-        text = ''.join(piece.get('text', '') for piece in answer.get('content', []) if isinstance(piece, dict))
+        if answer.get('stop_reason') == 'refusal':
+            raise AiError('ai_refused', 'Claude declined to answer this document')
+        if answer.get('stop_reason') == 'max_tokens':
+            raise AiError('ai_failed', 'the answer was cut off before it was finished')
+        text = ''.join(piece.get('text', '') for piece in answer.get('content', [])
+                       if isinstance(piece, dict) and piece.get('type') == 'text')
     elif provider == 'gemini':
         payload = {'system_instruction': {'parts': [{'text': system}]},
                    'contents': [{'role': 'user', 'parts': [{'text': user_text}]}],
-                   'generationConfig': {'maxOutputTokens': 3000}}
+                   'generationConfig': {'maxOutputTokens': AI_MAX_OUTPUT_TOKENS}}
         if want_json:
             payload['generationConfig']['responseMimeType'] = 'application/json'
         answer = http_json('https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent'
                            % urllib.parse.quote(model), {'x-goog-api-key': key}, payload)
         candidates = answer.get('candidates') or [{}]
+        if candidates[0].get('finishReason') == 'MAX_TOKENS':
+            raise AiError('ai_failed', 'the answer was cut off before it was finished')
         parts = (candidates[0].get('content') or {}).get('parts') or []
-        text = ''.join(piece.get('text', '') for piece in parts if isinstance(piece, dict))
+        text = ''.join(piece.get('text', '') for piece in parts
+                       if isinstance(piece, dict) and not piece.get('thought'))
     elif provider == 'grok':
         answer = http_json('https://api.x.ai/v1/chat/completions',
                            {'Authorization': 'Bearer ' + key},
                            {'model': model, 'messages': [{'role': 'system', 'content': system},
                                                          {'role': 'user', 'content': user_text}]})
         choices = answer.get('choices') or [{}]
+        if choices[0].get('finish_reason') == 'length':
+            raise AiError('ai_failed', 'the answer was cut off before it was finished')
         text = ((choices[0].get('message') or {}).get('content')) or ''
     else:
         raise AiError('ai_failed', 'unknown provider')
     if not isinstance(text, str) or not text.strip():
         raise AiError('ai_failed', 'the provider sent an empty answer')
     return text.strip()
+
+
+class ModelLists:
+    """The models each provider offers, for the settings dropdowns: the provider's own list when
+    its key is saved (asked again at most once an hour), the built-in MODEL_CHOICES otherwise.
+    The model already saved is always in its list, so opening the page never changes it."""
+
+    KEEP_SECONDS = 3600
+    LIST_TIMEOUT = 15
+    _cache = {}                 # provider -> (when, key fingerprint, [ids])
+
+    @classmethod
+    def fetch(cls, provider, key):
+        """Model ids from the provider itself, or AiError"""
+        if provider == 'claude':
+            ids, after = [], None
+            for _ in range(10):  # 10 pages of 1000: far more than exist
+                url = 'https://api.anthropic.com/v1/models?limit=1000' + (
+                    '&after_id=' + urllib.parse.quote(after) if after else '')
+                page = http_json(url, {'x-api-key': key, 'anthropic-version': '2023-06-01'}, timeout=cls.LIST_TIMEOUT)
+                ids += [item.get('id') for item in page.get('data', []) if isinstance(item, dict)]
+                if not page.get('has_more') or not page.get('last_id'):
+                    break
+                after = page['last_id']
+            return ids
+        if provider == 'gemini':
+            ids, token = [], ''
+            for _ in range(10):
+                url = 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000' + (
+                    '&pageToken=' + urllib.parse.quote(token) if token else '')
+                page = http_json(url, {'x-goog-api-key': key}, timeout=cls.LIST_TIMEOUT)
+                for item in page.get('models', []):
+                    name = str(item.get('name', '')) if isinstance(item, dict) else ''
+                    if name.startswith('models/gemini') and 'generateContent' in (item.get('supportedGenerationMethods') or []):
+                        ids.append(name[len('models/'):])
+                token = page.get('nextPageToken') or ''
+                if not token:
+                    break
+            return ids
+        if provider == 'grok':
+            page = http_json('https://api.x.ai/v1/models', {'Authorization': 'Bearer ' + key}, timeout=cls.LIST_TIMEOUT)
+            return [item.get('id') for item in page.get('data', []) if isinstance(item, dict)
+                    and not re.search(r'image|imagine|embed', str(item.get('id', '')))]
+        return []
+
+    @classmethod
+    def for_provider(cls, provider, key, saved):
+        built_in = MODEL_CHOICES[provider]
+        names = dict(built_in)
+        answer = {'source': 'built-in', 'error': ''}
+        ids = [model for model, _ in built_in]
+        if key:
+            fingerprint = hashlib.sha256(key.encode()).hexdigest()
+            kept = cls._cache.get(provider)
+            if kept and kept[1] == fingerprint and time.time() - kept[0] < cls.KEEP_SECONDS:
+                ids, answer['source'] = kept[2], 'live'
+            else:
+                try:
+                    live = [model for model in cls.fetch(provider, key)
+                            if isinstance(model, str) and re.fullmatch(r'[A-Za-z0-9._:/-]{1,80}', model)]
+                    if live:
+                        # the built-in order first (newest and best known), then whatever else the provider has
+                        ids = [model for model, _ in built_in if model in live] + sorted(set(live) - set(names))
+                        cls._cache[provider] = (time.time(), fingerprint, ids)
+                        answer['source'] = 'live'
+                except AiError as problem:
+                    refused = re.match(r'(401|403) ', problem.detail or '')
+                    answer['error'] = 'the key was refused' if refused else (problem.detail or problem.code)[:120]
+        if saved and saved not in ids:
+            ids = [saved] + ids
+        answer['models'] = [{'id': model, 'label': names.get(model, model)} for model in ids]
+        return answer
 
 
 def provider_setup(con, merged=None):
@@ -2075,6 +2194,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def admin_routes(self, method, path, body, con, person):
         if method == 'GET' and path == '/v1/admin/settings':
             return self.reply(200, self.settings_answer(con))
+        if method == 'GET' and path == '/v1/admin/models':
+            merged = read_settings(con)
+            return self.reply(200, {provider: ModelLists.for_provider(
+                provider, (merged.get('api_key_' + provider) or '').strip(),
+                (merged.get('model_' + provider) or SETTING_DEFAULTS['model_' + provider]).strip())
+                for provider in AI_PROVIDERS})
         if method in ('POST', 'DELETE') and not self.csrf_ok(person):
             return self.reply(403, {'error': 'bad_csrf'})
 
