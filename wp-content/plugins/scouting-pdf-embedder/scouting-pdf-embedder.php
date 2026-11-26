@@ -3,7 +3,7 @@
  * Plugin Name: Scouting PDF Embedder
  * Plugin URI: https://scoutingmemories.org/
  * Description: PDF viewer for Scouting Memories, built for research: printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, page rotation, two-page view and sharing part of a page as a picture. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
- * Version: 2.4.1
+ * Version: 2.5.0
  * Author: Roger Ellis / Scouting Memories
  * License: GPL-2.0+
  * Text Domain: scouting-pdf-embedder
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.4.1');
+define('SCOUTING_PDF_VERSION', '2.5.0');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -845,6 +845,13 @@ class Scouting_PDF_Embedder {
                         <?php echo $this->button('rotate', 'bi-arrow-clockwise', 'Rotate', 'Rotate this page a quarter turn clockwise (shortcut: R key)'); ?>
                         <?php echo $this->button('cite', 'bi-quote', 'Cite', 'Cite or share this page: copy a citation or a link, or clip part of the page as a picture'); ?>
                         <?php if ($ocr_attr) { echo $this->button('ocr', 'bi-file-text', 'Text', 'Read the text on this page so you can copy it. A computer reads it, so it may contain mistakes.'); } ?>
+                        <?php
+                        // Offered when the post keeps text for this document; the section it opens is under the post
+                        $text_doc = class_exists('Scouting_PDF_Transcript') ? Scouting_PDF_Transcript::doc_key_with_text($url) : '';
+                        if ($text_doc) {
+                            echo $this->button('read-text', 'bi-card-text', 'Read text', 'Show the text of this document under the pages, one page at a time. A computer read it, so it may contain mistakes.', ' aria-pressed="false" data-pdf-text-doc="' . esc_attr($text_doc) . '"');
+                        }
+                        ?>
                     </div>
                     <div class="col d-flex align-items-center justify-content-end gap-2" data-pdf-group="end">
                         <?php echo $this->button('spread', 'bi-book', 'Two-page view', 'Show two pages side by side, like an open book', ' aria-pressed="false"'); ?>

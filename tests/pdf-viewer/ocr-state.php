@@ -50,6 +50,11 @@ switch ($argv[2] ?? '') {
     case 'clear':
         $wpdb->query("DELETE FROM $table WHERE $ours");
         $wpdb->query("DELETE FROM $docs_table WHERE $ours");
+        // The copies of the text that posts keep (and with them the viewer's Read text button)
+        if (class_exists('Scouting_PDF_Document_Text')) {
+            delete_post_meta_by_key(Scouting_PDF_Document_Text::META_KEY);
+            delete_post_meta_by_key(Scouting_PDF_Document_Text::WORDS_KEY);
+        }
         delete_option('scouting_pdf_ocr_last_tick');
         delete_transient('scouting_pdf_ocr_backoff');
         $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s", 'scouting_pdf_ocr_tick_lock'));

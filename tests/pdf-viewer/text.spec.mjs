@@ -40,41 +40,134 @@ test('PHP checks: the text kept with posts, the search words, WordPress function
 });
 
 test.describe('Text of this document', () => {
-    test('the text is in the page itself, before any script runs', async ({ request }) => {
+    const section = (page) => page.locator('[data-pdf-text]');
+    const readText = (page) => page.locator('[data-pdf-viewer]').first().locator('[data-pdf-control="read-text"]');
+    const pageRequests = (page) => {
+        const seen = [];
+        page.on('request', (r) => { if (r.url().includes('action=scouting_pdf_text_page')) seen.push(new URL(r.url()).searchParams.get('page')); });
+        return seen;
+    };
+    async function ready(page, path = DOC) {
+        await page.goto(path);
+        const viewer = page.locator('[data-pdf-viewer]').first();
+        await expect(viewer).toHaveAttribute('data-pdf-state', 'ready', { timeout: 20000 });
+        return viewer;
+    }
+    const docKey = async (request) => /data-pdf-text-doc="([a-f0-9]{32})"/.exec(await (await request.get(DOC)).text())[1];
+
+    test('the first page of text comes with the post, out of sight; the other pages do not come at all', async ({ request }) => {
         const html = await (await request.get(DOC)).text();
-        expect(html).toContain('<h2 class="card-title" id="scouting-pdf-text-heading">Text of this document</h2>');
+        expect(html).toContain('>Text of this document</h2>');
         expect(html).toContain('This text was read by a computer from the scanned pages and may contain mistakes. The scanned pages above are the original.');
         expect(html).toContain('Troop 12 hiked to Zephyrcrest Lookout in 1938.<br />');
         // Markup in the text is shown as text
         expect(html).toContain('the flag &amp; the &lt;b&gt;map&lt;/b&gt;.');
         expect(html).not.toContain('<b>map</b>');
+        expect(html).not.toContain('every Scout swims with a buddy');
+        expect(html).toMatch(/<div id="scouting-pdf-text-[a-f0-9]{32}" data-pdf-text[^>]* hidden>/);
+        expect(html).toContain('assets/vendor/htmx/htmx.min.js?ver=2.0.11');
     });
 
-    test('one fold-out per read page, in page order, closed until opened', async ({ page }) => {
-        await page.goto(DOC);
-        const section = page.locator('[data-pdf-text]');
-        await expect(section.getByRole('heading', { level: 2, name: 'Text of this document' })).toBeVisible();
-        const pages = section.locator('details');
-        // Page 3 has not been read, so it is not listed
-        await expect(pages.locator('summary')).toHaveText(['Page 1', 'Page 2', 'Page 4']);
-        await expect(pages.nth(0).locator('[data-pdf-text-body]')).toBeHidden();
-        await pages.nth(0).locator('summary').click();
-        await expect(pages.nth(0).locator('[data-pdf-text-body]')).toContainText('The Quillfeather patrol carried the flag');
-        await pages.nth(1).locator('summary').click();
-        await expect(pages.nth(1)).toContainText('No text could be read from this page.');
+    test('nothing shows until Read text is pressed; pressing it again puts the text away', async ({ page }) => {
+        await ready(page);
+        await expect(section(page)).toBeHidden();
+        await expect(readText(page)).toHaveText('Read text');
+        await expect(readText(page)).toHaveAttribute('aria-pressed', 'false');
+        await readText(page).click();
+        await expect(section(page).getByRole('heading', { level: 2, name: 'Text of this document' })).toBeVisible();
+        await expect(section(page).getByRole('heading', { level: 3 })).toHaveText('Page 1');
+        await expect(section(page).locator('[data-pdf-text-body]')).toContainText('The Quillfeather patrol carried the flag');
+        await expect(readText(page)).toHaveAttribute('aria-pressed', 'true');
+        await readText(page).click();
+        await expect(section(page)).toBeHidden();
+        await expect(readText(page)).toHaveAttribute('aria-pressed', 'false');
+        expect(problems).toEqual([]);
+    });
+
+    test('one page at a time: Next page and Previous page fetch just that page', async ({ page }) => {
+        const fetched = pageRequests(page);
+        await ready(page);
+        await readText(page).click();
+        const area = section(page).locator('[data-pdf-text-area]');
+        await expect(area).toContainText('Text page 1 of 3');
+        await expect(area.getByRole('link', { name: 'Previous page' })).toHaveCount(0);
+        expect(fetched).toEqual([]); // the first page came with the post
+
+        await area.getByRole('link', { name: 'Next page' }).click();
+        await expect(area.getByRole('heading', { level: 3 })).toHaveText('Page 2');
+        await expect(area).toContainText('No text could be read from this page.');
+        await expect(area).toContainText('Text page 2 of 3');
+
+        // Page 3 has not been read, so the next page of text is page 4
+        await area.getByRole('link', { name: 'Next page' }).click();
+        await expect(area.getByRole('heading', { level: 3 })).toHaveText('Page 4');
+        await expect(area.locator('[data-pdf-text-body]')).toContainText('every Scout swims with a buddy');
+        await expect(area.getByRole('link', { name: 'Next page' })).toHaveCount(0);
+
+        await area.getByRole('link', { name: 'Previous page' }).click();
+        await expect(area.getByRole('heading', { level: 3 })).toHaveText('Page 2');
+        expect(fetched).toEqual(['2', '4', '2']);
+        await expect(page).toHaveURL(/\/ocr-document\/$/); // the address stays the post's
+        expect(problems).toEqual([]);
+    });
+
+    test('Read text opens at the page the reader is on', async ({ page }) => {
+        const fetched = pageRequests(page);
+        const viewer = await ready(page);
+        await viewer.evaluate((el) => el.scoutingPdf.goToPage(4));
+        await expect.poll(() => viewer.evaluate((el) => el.scoutingPdf.currentPage())).toBe(4);
+        await readText(page).click();
+        await expect(section(page).getByRole('heading', { level: 3 })).toHaveText('Page 4');
+        expect(fetched).toEqual(['4']);
+        // On a page that has not been read, the next read page is shown
+        await readText(page).click();
+        await viewer.evaluate((el) => el.scoutingPdf.goToPage(3));
+        await expect.poll(() => viewer.evaluate((el) => el.scoutingPdf.currentPage())).toBe(3);
+        await readText(page).click();
+        await expect(section(page).getByRole('heading', { level: 3 })).toHaveText('Page 4');
         expect(problems).toEqual([]);
     });
 
     test('Show this page in the viewer opens that page', async ({ page }) => {
-        await page.goto(DOC);
-        const viewer = page.locator('[data-pdf-viewer]').first();
-        const fourth = page.locator('[data-pdf-text] details').nth(2);
-        await fourth.locator('summary').click();
-        await fourth.getByRole('link', { name: 'Show this page in the viewer' }).click();
+        const viewer = await ready(page);
+        await readText(page).click();
+        const area = section(page).locator('[data-pdf-text-area]');
+        await area.getByRole('link', { name: 'Next page' }).click();
+        await area.getByRole('link', { name: 'Next page' }).click();
+        await expect(area.getByRole('heading', { level: 3 })).toHaveText('Page 4');
+        await area.getByRole('link', { name: 'Show this page in the viewer' }).click();
         await expect(page).toHaveURL(/#page=4$/);
-        await expect(viewer).toHaveAttribute('data-pdf-state', 'ready', { timeout: 20000 });
         await expect.poll(() => viewer.evaluate((el) => el.scoutingPdf.currentPage())).toBe(4);
         expect(problems).toEqual([]);
+    });
+
+    test('the page links are real links: a page of text opens without scripts too', async ({ request }) => {
+        const key = await docKey(request);
+        const first = await (await request.get(DOC)).text();
+        expect(first).toContain(`href="http://localhost:8888/ocr-document/?pdf_text=${key}-2#scouting-pdf-text-${key}"`);
+        const fourth = await (await request.get(`${DOC}?pdf_text=${key}-4`)).text();
+        expect(fourth).toContain('every Scout swims with a buddy');
+        expect(fourth).toContain('<div data-pdf-text-page="4">');
+        expect(fourth).not.toContain('<div data-pdf-text-page="1">');
+        expect(fourth).not.toMatch(/data-pdf-text[^>]* hidden>/); // opened by its link, so it shows
+    });
+
+    test('the request for a page hands out one page of a published post, and nothing else', async ({ request }) => {
+        const key = await docKey(request);
+        const postId = ocrState('post-id', DOC).trim();
+        const url = (doc, n, post = postId) => `/wp-admin/admin-ajax.php?action=scouting_pdf_text_page&post=${post}&doc=${doc}&page=${n}`;
+        const good = await request.get(url(key, 4));
+        expect(good.status()).toBe(200);
+        const piece = await good.text();
+        expect(piece).toContain('<div data-pdf-text-page="4">');
+        expect(piece).toContain('every Scout swims with a buddy');
+        expect(piece).not.toContain('<html');
+        expect(piece).not.toContain('Troop 12 hiked');
+        expect((await request.get(url('0'.repeat(32), 1))).status()).toBe(404);
+        expect((await request.get(url(key, 1, ocrState('post-id', '/leaders-guide/').trim()))).status()).toBe(404);
+        expect((await request.get(url(key, 1, '999999'))).status()).toBe(404);
+        // A page number past the end gives the last read page, never an error page
+        expect(await (await request.get(url(key, 9999))).text()).toContain('<div data-pdf-text-page="4">');
     });
 
     test('a reviewer\'s correction reaches the page', async ({ request }) => {
@@ -84,13 +177,45 @@ test.describe('Text of this document', () => {
         expect(html).not.toContain('in 1938.');
     });
 
-    test('posts without read documents, drafts and other pages have no section', async ({ page, request }) => {
-        expect(await (await request.get('/leaders-guide/')).text()).not.toContain('data-pdf-text');
+    test('posts without read documents have no section and no Read text button', async ({ page, request }) => {
+        const other = await (await request.get('/leaders-guide/')).text();
+        expect(other).not.toContain('data-pdf-text');
+        expect(other).not.toContain('data-pdf-control="read-text"');
         expect(await (await request.get('/')).text()).not.toContain('Text of this document');
         textState('clear');
-        await page.goto(DOC);
-        await expect(page.locator('[data-pdf-text]')).toHaveCount(0);
+        await ready(page);
+        await expect(section(page)).toHaveCount(0);
+        await expect(readText(page)).toHaveCount(0);
     });
+
+    // The top bar with Read text beside Text: every button whole, inside the bar, on one line
+    for (const [size, width] of [['lg', 1280], ['sm', 768], ['xxs', 360]]) {
+        test(`the top bar with Read text still fits (${size}, ${width}px)`, async ({ page }) => {
+            await page.setViewportSize({ width, height: 900 });
+            const viewer = await ready(page);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+            const layout = await viewer.evaluate((el) => {
+                const bar = el.querySelector('[data-pdf-role="toolbar"]').getBoundingClientRect();
+                return [...el.querySelectorAll('[data-pdf-role="toolbar"] button')].map((b) => {
+                    const r = b.getBoundingClientRect();
+                    return { name: b.getAttribute('data-pdf-control'), left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height, barLeft: bar.left, barRight: bar.right };
+                });
+            });
+            expect(layout.map((b) => b.name)).toEqual(['sidebar', 'adjust', 'rotate', 'cite', 'ocr', 'read-text', 'spread', 'fullscreen']);
+            for (const b of layout) {
+                expect(b.left, b.name).toBeGreaterThanOrEqual(b.barLeft);
+                expect(b.right, b.name).toBeLessThanOrEqual(b.barRight + 0.5);
+                expect(b.height, b.name).toBeLessThan(50);
+            }
+            for (let i = 0; i < layout.length; i++) {
+                for (let j = i + 1; j < layout.length; j++) {
+                    const a = layout[i], b = layout[j];
+                    const overlap = a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+                    expect(overlap, `${a.name} overlaps ${b.name}`).toBe(false);
+                }
+            }
+        });
+    }
 });
 
 test.describe('site search', () => {
@@ -121,10 +246,11 @@ test.describe('site search', () => {
         await expect(hit.locator('a')).toHaveText(['page 1', 'page 4']);
         await hit.getByRole('link', { name: 'page 4' }).click();
         await expect(page).toHaveURL(/\/ocr-document\/#page=4&find=zephyrcrest$/);
-        const fourth = page.locator('[data-pdf-text] details[data-pdf-text-page="4"]');
-        await expect(fourth).toHaveAttribute('open', '');
+        // The text section opens by itself, on that page, with the word marked
+        const fourth = page.locator('[data-pdf-text] [data-pdf-text-page="4"]');
+        await expect(fourth).toBeVisible();
         await expect(fourth.locator('mark')).toHaveText('Zephyrcrest');
-        await expect(page.locator('[data-pdf-text] details[data-pdf-text-page="1"]')).not.toHaveAttribute('open', '');
+        await expect(page.locator('[data-pdf-control="read-text"]')).toHaveAttribute('aria-pressed', 'true');
         const viewer = page.locator('[data-pdf-viewer]').first();
         await expect(viewer).toHaveAttribute('data-pdf-state', 'ready', { timeout: 20000 });
         await expect.poll(() => viewer.evaluate((el) => el.scoutingPdf.currentPage())).toBe(4);

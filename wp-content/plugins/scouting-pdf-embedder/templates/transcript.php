@@ -1,7 +1,9 @@
 <?php
 /**
- * The "Text of this document" section. $args['documents'] is a list of
- * array('viewer' => n, 'pages' => page number => text) from Scouting_PDF_Transcript.
+ * One document's "Text of this document" section. Out of sight until the reader presses
+ * Read text in the viewer (or opens a link to a page of text). $args: post, document
+ * (doc_key, viewer, pages), several (the post has more than one document with text),
+ * open (show it straight away), page (the page of text that comes with the post).
  * Stock Bootstrap classes and the theme's own headings only.
  */
 
@@ -9,32 +11,24 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-$documents = isset($args['documents']) ? (array) $args['documents'] : array();
-$several = count($documents) > 1;
+$document = $args['document'];
+$heading_id = Scouting_PDF_Transcript::section_id($document['doc_key']) . '-heading';
 ?>
-<section class="card mt-4" data-pdf-text aria-labelledby="scouting-pdf-text-heading">
-    <div class="card-header">
-        <h2 class="card-title" id="scouting-pdf-text-heading">Text of this document</h2>
-        <p class="mb-0">This text was read by a computer from the scanned pages and may contain mistakes. The scanned pages above are the original.</p>
-    </div>
-    <div class="card-body">
-        <?php foreach ($documents as $document) : ?>
-            <?php if ($several) : ?>
-                <h3><?php echo esc_html(sprintf('Document %d', $document['viewer'])); ?></h3>
+<?php /* hidden goes on a wrapper, so no display class of the card can undo it */ ?>
+<div id="<?php echo esc_attr(Scouting_PDF_Transcript::section_id($document['doc_key'])); ?>" data-pdf-text
+    data-pdf-text-doc="<?php echo esc_attr($document['doc_key']); ?>"
+    data-pdf-text-viewer="<?php echo esc_attr($document['viewer']); ?>"
+    data-pdf-text-url="<?php echo esc_url(Scouting_PDF_Transcript::fetch_url($args['post'], $document['doc_key'])); ?>"<?php echo empty($args['open']) ? ' hidden' : ''; ?>>
+    <section class="card mt-4" aria-labelledby="<?php echo esc_attr($heading_id); ?>">
+        <div class="card-header">
+            <h2 class="card-title" id="<?php echo esc_attr($heading_id); ?>">Text of this document</h2>
+            <?php if (!empty($args['several'])) : ?>
+                <p class="mb-1"><strong><?php echo esc_html(sprintf('Document %d', $document['viewer'])); ?></strong></p>
             <?php endif; ?>
-            <?php foreach ($document['pages'] as $page => $text) : ?>
-                <details class="border-bottom py-2" data-pdf-text-viewer="<?php echo esc_attr($document['viewer']); ?>" data-pdf-text-page="<?php echo esc_attr($page); ?>">
-                    <summary><?php echo esc_html(sprintf('Page %d', $page)); ?></summary>
-                    <?php if (trim($text) === '') : ?>
-                        <p class="mt-2">No text could be read from this page.</p>
-                    <?php else : ?>
-                        <p class="mt-2" data-pdf-text-body><?php echo nl2br(esc_html($text)); ?></p>
-                    <?php endif; ?>
-                    <p class="mb-2">
-                        <a class="btn btn-outline-secondary px-3 py-2" href="<?php echo esc_attr(Scouting_PDF_Transcript::page_hash($document['viewer'], $page)); ?>">Show this page in the viewer</a>
-                    </p>
-                </details>
-            <?php endforeach; ?>
-        <?php endforeach; ?>
-    </div>
-</section>
+            <p class="mb-0">This text was read by a computer from the scanned pages and may contain mistakes. The scanned pages above are the original.</p>
+        </div>
+        <div class="card-body" data-pdf-text-area aria-live="polite">
+            <?php Scouting_PDF_Transcript::render_page($args['post'], $document, $args['page']); ?>
+        </div>
+    </section>
+</div>
