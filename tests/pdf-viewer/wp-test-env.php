@@ -41,6 +41,10 @@ add_action('wp_enqueue_scripts', function() {
 // The live site's archive taxonomies, so tag suggestions have something to suggest
 add_action('init', function() {
     foreach (array('state', 'council', 'camp', 'lodge', 'start_date', 'end_date') as $taxonomy) {
-        register_taxonomy($taxonomy, 'post', array('public' => true, 'hierarchical' => false, 'show_ui' => true));
+        // As on the live site: capabilities of their own, which no role holds (not even administrators)
+        register_taxonomy($taxonomy, 'post', array('public' => true, 'hierarchical' => false, 'show_ui' => true, 'capabilities' => array(
+            'manage_terms' => 'manage_' . $taxonomy . 's', 'edit_terms' => 'edit_' . $taxonomy . 's',
+            'delete_terms' => 'delete_' . $taxonomy . 's', 'assign_terms' => 'assign_' . $taxonomy . 's',
+        )));
     }
 });

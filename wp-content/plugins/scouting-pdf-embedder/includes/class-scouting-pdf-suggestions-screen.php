@@ -114,11 +114,13 @@ class Scouting_PDF_Suggestions_Screen {
     }
 
     /**
-     * Put the suggested tag on the post, keeping the tags it has
+     * Put the suggested tag on the post, keeping the tags it has. Whoever may review and may
+     * edit this post may do it (checked by the caller). The archive's taxonomies have "assign"
+     * capabilities of their own that no role on the site holds, not even administrators: the
+     * site sets these tags through its forms, so those capabilities are not asked for here.
      */
     private static function add_tag($post_id, $suggestion) {
-        $taxonomy = get_taxonomy($suggestion['field']);
-        if (!$taxonomy || !current_user_can($taxonomy->cap->assign_terms)) {
+        if (!taxonomy_exists($suggestion['field'])) {
             return false;
         }
         // A whole number is a term's ID; a year is a term's name (made if the site has none yet)
@@ -141,7 +143,7 @@ class Scouting_PDF_Suggestions_Screen {
         $messages = array(
             'added'    => array('success', 'The tag was added to the post.'),
             'rejected' => array('success', 'The suggestion was put away. It will not be suggested again.'),
-            'failed'   => array('error', 'The tag could not be added. Your account may not be allowed to set this kind of tag.'),
+            'failed'   => array('error', 'The tag could not be added. It may have been removed from the site since it was suggested.'),
             'gone'     => array('warning', 'Someone has already decided that suggestion.'),
         );
         ?>
