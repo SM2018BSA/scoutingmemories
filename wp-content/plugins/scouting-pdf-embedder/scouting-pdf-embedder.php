@@ -3,7 +3,7 @@
  * Plugin Name: Scouting PDF Embedder
  * Plugin URI: https://scoutingmemories.org/
  * Description: PDF viewer for Scouting Memories, built for research: printed page numbers, page links, citations, thumbnails, image adjustments for faded scans, page rotation, two-page view and sharing part of a page as a picture. Replaces the commercial PDF Embedder and keeps its shortcodes and blocks working.
- * Version: 2.6.1
+ * Version: 2.7.0
  * Author: Roger Ellis / Scouting Memories
  * License: GPL-2.0+
  * Text Domain: scouting-pdf-embedder
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('SCOUTING_PDF_VERSION', '2.6.1');
+define('SCOUTING_PDF_VERSION', '2.7.0');
 define('SCOUTING_PDFJS_VERSION', '6.3.289');
 define('SCOUTING_PDF_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCOUTING_PDF_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -468,7 +468,9 @@ class Scouting_PDF_Embedder {
                 header('Referrer-Policy: no-referrer');
                 // Only whole files go in shared caches (WP Engine's page cache keys on the URL,
                 // not the Range header, so a cached slice could be served as the whole file)
-                header($state['status'] === 206
+                // The viewer marks its piece-by-piece loading with ranges=1: nothing under that
+                // address goes in a shared cache, not even the first answer before the pieces
+                header(($state['status'] === 206 || !empty($_GET['ranges'])) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- only picks a cache header.
                     ? 'Cache-Control: private, max-age=86400'
                     : 'Cache-Control: public, max-age=86400, s-maxage=604800');
                 foreach ($state['headers'] as $name => $value) {

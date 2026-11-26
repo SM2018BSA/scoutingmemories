@@ -6,8 +6,11 @@ leaders-guide.pdf  12 pages: roman-numeral front matter (i-iii) then 1-9, an out
                    document metadata, searchable text, a landscape page (printed p. 5)
                    and an image-only "scanned" page (printed p. 7).
 scan-only.pdf      3 image-only pages with no text layer, like an un-OCR'd scan.
+big-scan.pdf       24 image-only pages of about 300 KB each (7 MB in all), like a long scanned
+                   book: big enough that the viewer loads it in pieces.
 """
 import io
+import random
 import sys
 from pathlib import Path
 
@@ -102,9 +105,28 @@ def scan_only(path):
     c.save()
 
 
+def big_scan(path):
+    # Noise does not compress, so every page really weighs what a detailed scan weighs
+    rng = random.Random(1938)
+    c = canvas.Canvas(str(path), pagesize=letter, pageCompression=0)
+    c.setTitle("A long scanned book")
+    for n in range(24):
+        noise = Image.frombytes("L", (212, 275), bytes(rng.getrandbits(8) for _ in range(212 * 275)))
+        img = noise.resize((850, 1100), Image.NEAREST)
+        ImageDraw.Draw(img).rectangle([60, 60, 400, 140], fill=255)
+        ImageDraw.Draw(img).text((80, 90), "big scan page %d" % (n + 1), fill=0)
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=92)
+        buf.seek(0)
+        c.drawImage(ImageReader(buf), 0, 0, width=612, height=792)
+        c.showPage()
+    c.save()
+
+
 if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "fixtures")
     out.mkdir(parents=True, exist_ok=True)
     leaders_guide(out / "leaders-guide.pdf")
     scan_only(out / "scan-only.pdf")
+    big_scan(out / "big-scan.pdf")
     print("wrote fixtures to", out)

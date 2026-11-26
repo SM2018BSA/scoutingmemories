@@ -57,6 +57,85 @@ function jpegSize(buf) {
     throw new Error('no JPEG frame header');
 }
 
+test.describe('a long document loads in pieces', () => {
+    const BIG = readFileSync(join(WP_DIR, 'wp-content/uploads/fixtures/big-scan.pdf'));
+
+    // The browser cannot reach storage itself (as on a site storage does not know), so the
+    // viewer goes through the site's stream endpoint. This stands in for that endpoint and
+    // answers range requests the way it does, keeping count of what was asked for.
+    async function serveInPieces(page) {
+        const asked = { pieces: [], whole: 0, bytes: 0, urls: [] };
+        await page.route(/^https:\/\/storage\.scoutingmemories\.org\//, (route) => route.abort());
+        await page.route(/\/wp-json\/scouting-pdf\/v1\/stream\?/, (route) => {
+            const request = route.request();
+            asked.urls.push(request.url());
+            const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers().range || '');
+            if (!range) {
+                asked.whole++;
+                return route.fulfill({ status: 200, body: BIG, contentType: 'application/pdf', headers: { 'Accept-Ranges': 'bytes', 'Content-Length': String(BIG.length) } });
+            }
+            const from = Number(range[1]);
+            const to = Math.min(range[2] === '' ? BIG.length - 1 : Number(range[2]), BIG.length - 1);
+            asked.pieces.push([from, to]);
+            asked.bytes += to - from + 1;
+            return route.fulfill({
+                status: 206, body: BIG.subarray(from, to + 1), contentType: 'application/pdf',
+                headers: { 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${from}-${to}/${BIG.length}`, 'Content-Length': String(to - from + 1) },
+            });
+        });
+        return asked;
+    }
+
+    test('the first page shows after a fraction of the file; later pages are fetched when turned to', async ({ page }) => {
+        expect(BIG.length).toBeGreaterThan(5 * 1024 * 1024);
+        const asked = await serveInPieces(page);
+        const viewer = await openViewer(page, '/big-scan/');
+        await expect(viewer.locator('[data-pdf-page]')).toHaveCount(24);
+        await expect(button(viewer, 'total-pages')).toHaveText('24');
+        await expect(viewer.locator('[data-pdf-page="1"] canvas')).toHaveCount(1);
+
+        // Asked for in pieces, under the address that keeps shared caches out
+        expect(asked.urls.every((u) => u.includes('&ranges=1'))).toBe(true);
+        expect(asked.pieces.length).toBeGreaterThan(0);
+        const forFirstPage = asked.bytes;
+        // This test document is the hard kind (a flat page list: PDF.js looks up every
+        // page's small entry before it opens), and still under a third of it is fetched
+        expect(forFirstPage).toBeLessThan(BIG.length * 0.33);
+
+        // The last page: its piece of the file is fetched now, not before
+        await goTo(viewer, 24);
+        await expect(viewer.locator('[data-pdf-page="24"] canvas')).toHaveCount(1, { timeout: 20000 });
+        expect(asked.bytes).toBeGreaterThan(forFirstPage);
+        expect(asked.bytes).toBeLessThan(BIG.length * 0.8);
+        expect(await currentPage(viewer)).toBe(24);
+    });
+
+    test('thumbnails are fetched as they come into view, not all at once', async ({ page }) => {
+        const asked = await serveInPieces(page);
+        const viewer = await openViewer(page, '/big-scan/');
+        const before = asked.bytes;
+        await button(viewer, 'sidebar').click();
+        await expect(viewer.locator('[data-pdf-thumb]')).toHaveCount(24);
+        await expect(viewer.locator('[data-pdf-thumb="1"] canvas')).toHaveCount(1, { timeout: 20000 });
+        await page.waitForTimeout(1500);
+        expect(asked.bytes).toBeLessThan(BIG.length * 0.7);
+        expect(asked.bytes).toBeGreaterThanOrEqual(before);
+    });
+
+    test('when pieces are refused, the whole file is still loaded', async ({ page }) => {
+        await page.route(/^https:\/\/storage\.scoutingmemories\.org\//, (route) => route.abort());
+        let whole = 0;
+        await page.route(/\/wp-json\/scouting-pdf\/v1\/stream\?/, (route) => {
+            if (route.request().url().includes('ranges=1')) return route.fulfill({ status: 502, body: 'no' });
+            whole++;
+            return route.fulfill({ status: 200, body: BIG, contentType: 'application/pdf' });
+        });
+        const viewer = await openViewer(page, '/big-scan/');
+        await expect(viewer.locator('[data-pdf-page="1"] canvas')).toHaveCount(1);
+        expect(whole).toBe(1);
+    });
+});
+
 test.describe('loading', () => {
     test('opens with the bundled PDF.js 6.3 in a worker and renders pages', async ({ page }) => {
         const scripts = [];

@@ -694,9 +694,54 @@
         }
 
         function measurePage(p) {
+            if (!p.page) {
+                // Not fetched yet: take the first page's size until its own is known
+                var first = pages[0];
+                var w = first && first.pageW ? first.pageW : 612;
+                var h = first && first.pageH ? first.pageH : 792;
+                var turned = (p.rotation % 180) !== 0;
+                p.baseW = turned ? h : w;
+                p.baseH = turned ? w : h;
+                return;
+            }
             var vp = getPageViewport(p.page, 1, p.rotation);
             p.baseW = vp.width;
             p.baseH = vp.height;
+            if (p.num === 1) {
+                var flat = getPageViewport(p.page, 1, 0);
+                p.pageW = flat.width;
+                p.pageH = flat.height;
+            }
+        }
+
+        // A page is fetched from the document when it is first needed (to draw it, its
+        // thumbnail or its text), not when the document opens: each page is a piece of the
+        // file, and a long document would otherwise be downloaded whole before page 1 shows.
+        function ensurePage(p) {
+            if (p.page) return Promise.resolve(p);
+            if (!p.loading) {
+                p.loading = pdfDoc.getPage(p.num).then(function(proxy) {
+                    p.loading = null;
+                    p.page = proxy;
+                    var w = p.baseW;
+                    var h = p.baseH;
+                    measurePage(p);
+                    if (Math.abs(p.baseW - w) > 0.5 || Math.abs(p.baseH - h) > 0.5) {
+                        // Its real size differs from the guess: lay out again and keep the
+                        // page being read where it is on the screen
+                        var anchor = pages[currentPage - 1].el;
+                        var before = anchor.offsetTop - viewportEl.scrollTop;
+                        if (spread) arrangePages();
+                        layout();
+                        viewportEl.scrollTop = Math.max(0, anchor.offsetTop - before);
+                    }
+                    return p;
+                }, function(err) {
+                    p.loading = null;
+                    throw err;
+                });
+            }
+            return p.loading;
         }
 
         function measureBase() {
@@ -935,6 +980,20 @@
                 renderNext();
                 return;
             }
+            if (!p.page) {
+                // Fetch the page first, then come back to draw it
+                rendering = true;
+                ensurePage(p).then(function() {
+                    rendering = false;
+                    renderQueue.unshift(p);
+                    renderNext();
+                }, function(err) {
+                    console.error('Scouting PDF: page ' + p.num + ' could not be loaded', err);
+                    rendering = false;
+                    renderNext();
+                });
+                return;
+            }
             rendering = true;
 
             var viewport = getPageViewport(p.page, scale, p.rotation);
@@ -997,7 +1056,9 @@
 
         function getText(p) {
             if (!p.text) {
-                p.text = p.page.getTextContent().then(function(tc) {
+                p.text = ensurePage(p).then(function() {
+                    return p.page.getTextContent();
+                }).then(function(tc) {
                     p.index = buildTextIndex(tc.items);
                     return tc;
                 });
@@ -1368,6 +1429,10 @@
             var p = pages[parseInt(btn.getAttribute('data-pdf-thumb'), 10) - 1];
             var box = btn.firstChild;
             if (box.firstChild) return;
+            if (!p.page) {
+                ensurePage(p).then(function() { drawThumb(btn); }, function() {});
+                return;
+            }
             var dpr = window.devicePixelRatio || 1;
             var rot = p.rotation;
             var vp = getPageViewport(p.page, THUMB_WIDTH / p.baseW, rot);
@@ -1461,13 +1526,15 @@
                     var num = index + 1;
                     var p = pages[num - 1];
                     if (!p) return;
-                    var offset;
-                    if (explicit[1] && explicit[1].name === 'XYZ' && typeof explicit[3] === 'number') {
-                        var vp = getPageViewport(p.page, scale, p.rotation);
-                        var pt = vp.convertToViewportPoint(explicit[2] || 0, explicit[3]);
-                        offset = Math.max(0, pt[1] - 8);
-                    }
-                    goToPage(num, true, offset);
+                    return ensurePage(p).then(function() {
+                        var offset;
+                        if (explicit[1] && explicit[1].name === 'XYZ' && typeof explicit[3] === 'number') {
+                            var vp = getPageViewport(p.page, scale, p.rotation);
+                            var pt = vp.convertToViewportPoint(explicit[2] || 0, explicit[3]);
+                            offset = Math.max(0, pt[1] - 8);
+                        }
+                        goToPage(num, true, offset);
+                    });
                 });
             }).catch(function(err) {
                 console.warn('Scouting PDF: could not follow outline link', err);
@@ -2781,7 +2848,6 @@
         // Detect localhost where Google Cloud Storage rejects direct CORS
         var isLocal = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         var isStorageUrl = (pdfUrl.indexOf('storage.scoutingmemories.org') !== -1);
-        var initialUrl = (isLocal && isStorageUrl && proxyUrl) ? proxyUrl : pdfUrl;
 
         function showProgress(loaded, total) {
             if (!loadingEl) return;
@@ -2809,27 +2875,27 @@
 
         function setupDocument(doc) {
             pdfDoc = doc;
-            var requests = [];
-            for (var i = 1; i <= doc.numPages; i++) requests.push(doc.getPage(i));
-
+            // Only the first page now; every other page is fetched when it is first needed
             return Promise.all([
-                Promise.all(requests),
+                doc.getPage(1),
                 doc.getPageLabels().catch(function() { return null; }),
                 doc.getOutline().catch(function() { return null; })
             ]).then(function(res) {
-                var pageProxies = res[0];
+                var firstPage = res[0];
                 labels = (res[1] && res[1].length === doc.numPages) ? res[1] : null;
                 outline = res[2];
                 pagesEl.innerHTML = '';
                 pagesEl.style.visibility = 'hidden';
-                pages = pageProxies.map(function(pageProxy, idx) {
+                pages = [];
+                for (var idx = 0; idx < doc.numPages; idx++) pages.push(null);
+                pages = pages.map(function(unused, idx) {
                     var num = idx + 1;
                     var pageEl = el('div', 'position-relative flex-shrink-0 bg-white shadow-sm');
                     pageEl.setAttribute('data-pdf-page', String(num));
                     pageEl.setAttribute('data-page-label', 'Page ' + labelFor(num));
                     pageEl.setAttribute('role', 'img');
                     pageEl.setAttribute('aria-label', 'Page ' + num + ' of ' + doc.numPages + (hasDistinctLabel(num) ? ', printed page ' + labelFor(num) : ''));
-                    return { num: num, page: pageProxy, el: pageEl, canvas: null, rotation: 0, baseW: 0, baseH: 0, renderedKey: null };
+                    return { num: num, page: num === 1 ? firstPage : null, loading: null, el: pageEl, canvas: null, rotation: 0, baseW: 0, baseH: 0, renderedKey: null };
                 });
                 if (urlSettings) {
                     applyUrlSettings(urlSettings, startPage);
@@ -2848,8 +2914,66 @@
             });
         }
 
-        // Load document with transparent proxy retry fallback
-        function loadDoc(urlToLoad, isRetry) {
+        // How the document may be fetched, best first. "pieces" lets PDF.js ask for the parts
+        // of the file it needs (HTTP range requests), so the first page shows without the
+        // whole file; "whole" downloads everything first. The site's stream endpoint always
+        // answers range requests; storage only lets PDF.js use them when it tells the browser
+        // so (Accept-Ranges among the headers a page may read), which is asked for first.
+        // Pieces of 64 KB (PDF.js's own size): PDF.js joins neighbouring pieces into one request,
+        // and a document's page entries are small and scattered, so bigger pieces would mostly
+        // fetch bytes nobody asked for.
+        var RANGE_CHUNK = 65536;
+        // Through the site's stream endpoint every piece is a request to WordPress. A document
+        // the browser can fetch from storage in one go is quicker whole up to about this size;
+        // above it, waiting for the whole file is what readers notice.
+        var WHOLE_IS_FINE_UP_TO = 15 * 1048576;
+        var crossOrigin = false;
+        try {
+            crossOrigin = new URL(pdfUrl, window.location.href).origin !== window.location.origin;
+        } catch (e) { /* an odd address is loaded as it is */ }
+
+        // What the browser may do with the document where it is stored: reach it at all, ask
+        // for pieces (storage must list Accept-Ranges among the headers a page may read), and
+        // its size
+        function askStorage() {
+            if (!window.fetch) return Promise.resolve({ reachable: false, pieces: false, size: 0 });
+            var stop = window.AbortController ? new AbortController() : null;
+            var timer = setTimeout(function() { if (stop) stop.abort(); }, 4000);
+            return fetch(pdfUrl, { method: 'HEAD', mode: 'cors', credentials: 'omit', signal: stop ? stop.signal : undefined }).then(function(r) {
+                clearTimeout(timer);
+                return {
+                    reachable: r.ok,
+                    pieces: r.ok && /bytes/i.test(r.headers.get('accept-ranges') || ''),
+                    size: parseInt(r.headers.get('content-length') || '0', 10) || 0
+                };
+            }, function() {
+                clearTimeout(timer);
+                return { reachable: false, pieces: false, size: 0 };
+            });
+        }
+
+        function loadPlan() {
+            var direct = { url: pdfUrl, pieces: true };
+            var directWhole = { url: pdfUrl, pieces: false };
+            var streamed = proxyUrl ? { url: proxyUrl + '&ranges=1', pieces: true } : null;
+            var streamedWhole = proxyUrl ? { url: proxyUrl, pieces: false } : null;
+            if (!streamed || !crossOrigin) {
+                return Promise.resolve([direct, streamedWhole].filter(Boolean));
+            }
+            if (isLocal && isStorageUrl) {
+                return Promise.resolve([streamed, streamedWhole]);
+            }
+            return askStorage().then(function(storage) {
+                if (storage.pieces) return [direct, streamed, streamedWhole];
+                if (!storage.reachable) return [streamed, streamedWhole];
+                if (storage.size > 0 && storage.size <= WHOLE_IS_FINE_UP_TO) return [directWhole, streamed, streamedWhole];
+                return [streamed, directWhole, streamedWhole];
+            });
+        }
+
+        // Try each way in turn until one opens the document
+        function loadDoc(plan) {
+            var attempt = plan[0];
             setState('loading');
             firstRenderDone = false;
             if (loadingEl) {
@@ -2858,31 +2982,30 @@
             }
 
             var loadingTask = pdfLib.getDocument({
-                url: urlToLoad,
+                url: attempt.url,
                 cMapUrl: config.cMapUrl || undefined,
                 cMapPacked: true,
                 standardFontDataUrl: config.standardFontDataUrl || undefined,
                 wasmUrl: config.wasmUrl || undefined,
                 iccUrl: config.iccUrl || undefined,
-                disableRange: isRetry,
+                disableRange: !attempt.pieces,
+                // In pieces: only what is asked for, never the rest of the file in the background
+                disableStream: attempt.pieces,
+                disableAutoFetch: attempt.pieces,
+                rangeChunkSize: RANGE_CHUNK,
                 // Belt and braces: never compile fonts with eval, never run PDF scripts
                 isEvalSupported: false,
                 enableXfa: false
             });
             loadingTask.onProgress = function(progress) {
-                if (progress) showProgress(progress.loaded || 0, progress.total || 0);
+                // In pieces the numbers are of the piece in hand, not of the document
+                if (progress && !attempt.pieces) showProgress(progress.loaded || 0, progress.total || 0);
             };
 
             loadingTask.promise.then(setupDocument).catch(function(error) {
-                console.warn('Scouting PDF: Failed to load ' + urlToLoad + ':', error);
-                if (!isRetry && proxyUrl && urlToLoad !== proxyUrl) {
-                    console.info('Scouting PDF: Retrying through stream proxy...');
-                    loadDoc(proxyUrl, true);
-                    return;
-                }
-                if (!isRetry && urlToLoad === proxyUrl) {
-                    console.info('Scouting PDF: Retrying with disableRange: true...');
-                    loadDoc(proxyUrl, true);
+                console.warn('Scouting PDF: Failed to load ' + attempt.url + (attempt.pieces ? ' in pieces' : ' whole') + ':', error);
+                if (plan.length > 1) {
+                    loadDoc(plan.slice(1));
                     return;
                 }
                 showError();
@@ -2891,9 +3014,9 @@
 
         function start() {
             setState('loading');
-            loadLib().then(function(lib) {
-                pdfLib = lib;
-                loadDoc(initialUrl, false);
+            Promise.all([loadLib(), loadPlan()]).then(function(got) {
+                pdfLib = got[0];
+                loadDoc(got[1]);
             }).catch(function(err) {
                 console.error('Scouting PDF: PDF.js could not be loaded', err);
                 showError();

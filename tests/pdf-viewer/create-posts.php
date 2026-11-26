@@ -100,6 +100,10 @@ sm_test_post('proxied', 'Proxied document', '[pdf-embedder url="https://pdf-prox
 // wp-test-env.php stops the site itself from ever downloading from the real storage.
 sm_test_post('ocr-document', 'Camp Tahquitz Leaders Guide (OCR)', '[pdf-embedder url="https://storage.scoutingmemories.org/sm-tests/leaders-guide.pdf" title="OCR guide"]');
 
+// A long scanned book on the archive storage: big enough to be loaded in pieces. The browser
+// tests answer its requests themselves, piece by piece, from the local test file.
+sm_test_post('big-scan', 'A long scanned book', '[pdf-embedder url="https://storage.scoutingmemories.org/sm-tests/big-scan.pdf" title="Long book"]');
+
 // OCR switched on, pointing at the stand-in service from fake-ocr.mjs (the tests start it)
 update_option('scouting_pdf_ocr', array(
     'enabled'    => 1,
