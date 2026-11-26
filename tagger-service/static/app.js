@@ -46,11 +46,15 @@ const Session = {
         this.csrf = started.answer.csrf;
       }
     }
-    if (this.value) {
-      const me = await this.api('/v1/me');
-      if (me.status === 200) { this.csrf = me.answer.csrf; return me.answer; }
-      this.value = '';
+    // Without a stored session the server may still know who this is: the session cookie,
+    // or the development server's password gate, which hands out a session here.
+    const me = await this.api('/v1/me');
+    if (me.status === 200) {
+      if (me.answer.sid) this.value = me.answer.sid;
+      this.csrf = me.answer.csrf;
+      return me.answer;
     }
+    this.value = '';
     return null;
   },
 };
@@ -477,6 +481,7 @@ const Pages = {
     this.show('app-body', true);
     this.show('who', true);
     document.getElementById('who-name').textContent = me.user;
+    this.show('settings-link', me.admin);
     document.getElementById('who-role').textContent = me.role.replace(/_/g, ' ');
     Doc.init(me);
     Suggest.init();

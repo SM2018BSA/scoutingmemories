@@ -17,6 +17,8 @@ WordPress side is the `scouting-ai-tagger` plugin.
 |---|---|---|
 | `TAGGER_SECRET` | *(required)* | At least 32 characters. Signs WordPress's calls and the one-time login links. The same value goes in the WordPress plugin settings. |
 | `TAGGER_ADMIN_KEY` | *(off)* | The owner's passphrase for `/login` (standalone use without WordPress). At least 12 characters; leave unset to turn `/login` off. |
+| `TAGGER_GATE_KEY` | *(off)* | A long random value the web server in front adds to every request it passes on (`X-Tagger-Gate-Key`), together with the password-gate login (`X-Tagger-Gate-User`). With it, anyone who got past the development server's gate is signed in. Without it, those headers are ignored. |
+| `TAGGER_GATE_ADMINS` | *(none)* | Gate logins, comma-separated, that get the settings dashboard. Everyone else who comes through the gate is a historian. |
 | `TAGGER_LISTEN_HOST` | `127.0.0.1` | Never expose the app directly. |
 | `TAGGER_PORT` | `8001` | |
 | `TAGGER_FRAME_ANCESTORS` | *(empty)* | Which sites may embed the app in a frame, e.g. `https://wp.68-183-140-47.sslip.io`. Empty = no site may. |
@@ -37,6 +39,9 @@ dashboard, and they live in the app's database.
 
 ## Who may call what
 
+- **People on the development server** come through its password gate (the same logins as
+  the other dev websites, managed in the control panel's **Who can log in**). Apache passes
+  the login name and `TAGGER_GATE_KEY` on, and the app gives that person a session.
 - **People** come in with a one-time signed link from the WordPress page (or `/login`
   with the admin passphrase) and get a session: a cookie plus the same value in
   `X-Tagger-Session`. State-changing calls also need the session's `X-Tagger-CSRF`.

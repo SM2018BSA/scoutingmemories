@@ -93,6 +93,9 @@ def first_dir(*names):
 # Taken out of the environment so the programs this service starts do not inherit them
 SECRET = os.environ.pop('TAGGER_SECRET', '').encode()
 ADMIN_KEY = os.environ.pop('TAGGER_ADMIN_KEY', '').encode()
+# The web server in front puts this key and the name of the password-gate login on every
+# request it passes on. Without the key, the gate-login header is ignored.
+GATE_KEY = os.environ.pop('TAGGER_GATE_KEY', '').encode()
 try:
     # ...and they cannot read them back from this process either (PR_SET_DUMPABLE off closes
     # /proc/<this process>/environ to other processes of the same user)
@@ -116,6 +119,7 @@ CACHE_MB = env_int('TAGGER_CACHE_MB', 1024, 50, 100000)
 KEEP_DAYS = env_int('TAGGER_KEEP_DAYS', 7, 1, 365)
 SESSION_HOURS = env_int('TAGGER_SESSION_HOURS', 12, 1, 168)
 INSECURE_COOKIE = env_switch('TAGGER_INSECURE_COOKIE')  # local testing over plain http only
+GATE_ADMINS = {name.strip() for name in os.environ.get('TAGGER_GATE_ADMINS', '').split(',') if name.strip()}
 
 MAX_PIXELS = env_int('TAGGER_MAX_PIXELS', 40000000, 1000000, 200000000)
 
@@ -152,7 +156,7 @@ WAKE = threading.Event()    # set when a job is added, so the worker does not wa
 # Who may use the app at all; "admin" (the settings dashboard) is a separate flag on the login link
 ALLOWED_ROLES = ('administrator', 'manager', 'historian', 'regional', 'index_contributor')
 
-VERSION = '0.5.0'           # step 5: the AI suggests the tags; the settings dashboard works
+VERSION = '0.6.0'           # the password gate of the development server can sign people in
 OCR_READY = False           # set in main(); on this PC the OCR tools may be missing
 
 
@@ -1748,6 +1752,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """The sessions row of whoever is asking, or None"""
         return Sessions.find(con, self.session_value())
 
+    def gate_login(self):
+        """(login, is_admin) when the web server in front vouches for a password-gate login, else None"""
+        if not GATE_KEY:
+            return None
+        given = self.headers.get('X-Tagger-Gate-Key', '').encode()
+        user = self.headers.get('X-Tagger-Gate-User', '')
+        if not given or not hmac.compare_digest(GATE_KEY, given) or not USER_RE.fullmatch(user):
+            return None
+        return user, user in GATE_ADMINS
+
     def csrf_ok(self, row):
         given = self.headers.get('X-Tagger-CSRF', '')
         return isinstance(given, str) and hmac.compare_digest(row['csrf'], given) if given else False
@@ -1859,10 +1873,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.reply(200, Sessions.answer(row, value), cookie=Sessions.cookie(value))
 
         person = self.person(con)
+        fresh = None
+        if person is None and method == 'GET' and path == '/v1/me':
+            gate = self.gate_login()
+            if gate is not None:
+                user, admin = gate
+                fresh = Sessions.create(con, user, 'administrator' if admin else 'historian', int(admin),
+                                        'gate-' + secrets.token_hex(12))
+                person = Sessions.find(con, fresh)
+                log('signed in through the password gate: %s%s' % (user, ' (admin)' if admin else ''))
         if person is not None:
             if method == 'GET' and path == '/v1/me':
                 merged = read_settings(con)
-                return self.reply(200, {
+                answer = {
                     'user': person['user'], 'role': person['role'], 'admin': bool(person['is_admin']),
                     'csrf': person['csrf'],
                     'index': index_summary(con),
@@ -1872,7 +1895,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                'max_pdf_mb': MAX_PDF_MB},
                     'ocr_ready': OCR_READY,
                     'version': VERSION,
-                })
+                }
+                if fresh is None:
+                    return self.reply(200, answer)
+                answer['sid'] = fresh
+                return self.reply(200, answer, cookie=Sessions.cookie(fresh))
             if method == 'POST' and path == '/v1/logout':
                 if not self.csrf_ok(person):
                     return self.reply(403, {'error': 'bad_csrf'})
