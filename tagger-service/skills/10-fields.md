@@ -31,8 +31,10 @@ META fields (Dublin-Core-style description of the digital copy; all plain string
   unless it clearly says so.
 - identifier: a catalog or collection number printed on the document, copied exactly,
   e.g. "CRBS 02-001". Null when none is printed.
-- meta_subject: what the document is about, in a few words a researcher would search
-  for, e.g. "Camp Russell waterfront staff, summer 1952".
+- meta_subject: subject headings joined with "; ", the way the site writes them, e.g.
+  "Camping; Youth organizations; Leadership". Use headings the site already uses (listed
+  under "Subject headings already used on the site") wherever they fit, in their exact
+  spelling.
 - meta_location: the place the document concerns, e.g. "Woodgate, NY". Null when
   unclear.
 - meta_physical_description: what the original physically is, in the archive's usual

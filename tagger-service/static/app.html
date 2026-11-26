@@ -120,9 +120,43 @@
               <tbody id="suggest-rows"></tbody>
             </table>
           </div>
+          <div id="ideas" class="border-top pt-3 mb-3" hidden>
+            <h3 class="h6">Taxonomy ideas for this document</h3>
+            <p class="text-body-secondary small">Ideas for filing and finding it. Nothing is saved from them.</p>
+            <div id="ideas-body"></div>
+          </div>
           <div class="d-flex gap-2 align-items-center">
             <button type="button" class="btn btn-outline-secondary" id="suggest-download">Download as JSON</button>
             <span class="text-body-secondary small" id="suggest-provider"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header"><h2 class="h5 card-title mb-0">Ideas for the whole archive</h2></div>
+      <div class="card-body">
+        <p class="text-body-secondary">The assistant looks at how the archive's tagged documents use their subjects and
+          fields today, and suggests a tidy list of subject headings, which fields to keep, change or add, and the steps to
+          get there. It's one AI call.</p>
+        <label class="form-label" for="advise-focus">Anything to focus on (optional)</label>
+        <div class="input-group">
+          <input class="form-control" id="advise-focus"
+            placeholder="For example: photographs, or how to tag Order of the Arrow material">
+          <button type="button" class="btn btn-primary" id="advise-go">Get ideas</button>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0" id="advise-error" hidden></div>
+        <div class="mt-3" id="advise-wait" hidden>
+          <div class="d-flex align-items-center gap-2">
+            <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+            <span>Asking the assistant about the whole archive…</span>
+          </div>
+        </div>
+        <div class="mt-3" id="advise-result" hidden>
+          <div id="advise-body"></div>
+          <div class="d-flex gap-2 align-items-center">
+            <button type="button" class="btn btn-outline-secondary" id="advise-download">Download as JSON</button>
+            <span class="text-body-secondary small" id="advise-provider"></span>
           </div>
         </div>
       </div>

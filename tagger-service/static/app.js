@@ -253,6 +253,115 @@ const Doc = {
   },
 };
 
+// Makes an element with Bootstrap classes and plain text inside.
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+function saveJson(data, name) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function copyButton(text, label) {
+  const button = el('button', 'btn btn-outline-secondary btn-sm', label || 'Copy');
+  button.type = 'button';
+  button.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(text); button.textContent = 'Copied'; } catch (e) {}
+    setTimeout(() => { button.textContent = label || 'Copy'; }, 1500);
+  });
+  return button;
+}
+
+// The document's taxonomy ideas, under the field suggestions.
+const Ideas = {
+  section(body, title) {
+    body.appendChild(el('h4', 'h6 mt-3 mb-2', title));
+  },
+
+  list(body, title, items) {
+    if (!items || !items.length) return;
+    this.section(body, title);
+    const list = el('ul', 'mb-2');
+    for (const item of items) list.appendChild(el('li', '', item));
+    body.appendChild(list);
+  },
+
+  render(ideas) {
+    const body = document.getElementById('ideas-body');
+    body.textContent = '';
+    ideas = ideas || {};
+    const empty = !(ideas.subject_tags || []).length && !(ideas.people || []).length && !(ideas.events || []).length
+      && !(ideas.not_in_index || []).length && !(ideas.extra_tags || []).length && !ideas.filing_notes;
+    document.getElementById('ideas').hidden = empty;
+    if (empty) return;
+
+    if (ideas.filing_notes) {
+      this.section(body, 'How to file it');
+      body.appendChild(el('p', 'mb-2', ideas.filing_notes));
+    }
+    if ((ideas.subject_tags || []).length) {
+      this.section(body, 'Subject headings');
+      const row = el('div', 'd-flex flex-wrap gap-2 align-items-center mb-2');
+      for (const tag of ideas.subject_tags) row.appendChild(el('span', 'badge text-bg-light border fs-6 fw-normal', tag));
+      row.appendChild(copyButton(ideas.subject_tags.join('; '), 'Copy as Subject'));
+      body.appendChild(row);
+    }
+    this.list(body, 'People named', ideas.people);
+    this.list(body, 'Events', ideas.events);
+    if ((ideas.not_in_index || []).length) {
+      this.section(body, 'Named in the text but not in the index');
+      const list = el('ul', 'mb-2');
+      for (const item of ideas.not_in_index) {
+        const line = el('li');
+        line.appendChild(el('span', 'badge text-bg-secondary me-1', item.type));
+        line.appendChild(document.createTextNode(item.name));
+        if (item.in_index && item.in_index.count > 1) {
+          line.appendChild(el('span', 'text-warning-emphasis small ms-2',
+            '(the index has ' + item.in_index.count + ' ' + item.type + 's with this name: check which one is meant)'));
+        } else if (item.in_index) {
+          line.appendChild(el('span', 'text-success small ms-2',
+            '(it is in the index after all: ' + item.in_index.name + (item.in_index.number ? ' #' + item.in_index.number : '') + ')'));
+        }
+        if (item.evidence) line.appendChild(el('div', 'small text-body-secondary', '“' + item.evidence + '”'));
+        list.appendChild(line);
+      }
+      body.appendChild(list);
+    }
+    if ((ideas.extra_tags || []).length) {
+      this.section(body, 'Other details worth recording');
+      const table = el('table', 'table table-sm align-middle mb-2');
+      const head = el('thead');
+      const headRow = el('tr');
+      for (const title of ['Detail', 'Value', 'Why', '']) headRow.appendChild(el('th', '', title));
+      head.appendChild(headRow);
+      table.appendChild(head);
+      const rows = el('tbody');
+      for (const item of ideas.extra_tags) {
+        const row = el('tr');
+        row.appendChild(el('th', '', item.name));
+        row.appendChild(el('td', '', item.value));
+        row.appendChild(el('td', 'small text-body-secondary', item.why));
+        const copy = el('td');
+        copy.appendChild(copyButton(item.value));
+        row.appendChild(copy);
+        rows.appendChild(row);
+      }
+      table.appendChild(rows);
+      const wrap = el('div', 'table-responsive');
+      wrap.appendChild(table);
+      body.appendChild(wrap);
+    }
+  },
+};
+
 // Asking the assistant for tags, and showing what it answered field by field.
 const Suggest = {
   node(id) { return document.getElementById(id); },
@@ -271,6 +380,7 @@ const Suggest = {
     daily_limit: 'Today’s AI calls are used up. The counter resets at midnight.',
     no_text: 'There is no document text yet — read a PDF or paste text first.',
     no_question: 'Type a question first.',
+    no_index: 'The index has not been received from WordPress yet.',
     queue_full: 'Too many requests are waiting. Try again in a few minutes.',
     paused: 'The app is paused.',
   },
@@ -407,18 +517,13 @@ const Suggest = {
       row.append(labelCell, valueCell, sureCell, evidenceCell, copyCell);
       rows.appendChild(row);
     }
+    Ideas.render(result.taxonomy_ideas);
     this.node('suggest-provider').textContent = 'Answered by ' + result.provider + ' (' + result.model + ').';
     this.node('suggest-result').hidden = false;
   },
 
   download() {
-    if (!this.lastResult) return;
-    const blob = new Blob([JSON.stringify(this.lastResult, null, 2)], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'tag-suggestions.json';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    if (this.lastResult) saveJson(this.lastResult, 'tag-suggestions.json');
   },
 
   async ask() {
@@ -446,6 +551,106 @@ const Suggest = {
       this.node('ask-error').textContent = this.reason(outcome, started.status);
       this.node('ask-error').hidden = false;
     }
+  },
+};
+
+// Ideas for the whole archive: one AI call over how the tagged documents look today.
+const Advise = {
+  node(id) { return document.getElementById(id); },
+  lastResult: null,
+  ADVICE_NAMES: { keep: 'Keep', change: 'Change', add: 'Add', drop: 'Drop' },
+  ADVICE_COLORS: { keep: 'text-bg-success', change: 'text-bg-warning', add: 'text-bg-primary', drop: 'text-bg-danger' },
+
+  init() {
+    this.node('advise-go').addEventListener('click', () => this.go());
+    this.node('advise-download').addEventListener('click', () => {
+      if (this.lastResult) saveJson(this.lastResult, 'archive-taxonomy-ideas.json');
+    });
+  },
+
+  async go() {
+    this.node('advise-error').hidden = true;
+    this.node('advise-result').hidden = true;
+    this.node('advise-go').disabled = true;
+    this.node('advise-wait').hidden = false;
+    const started = await Session.api('/v1/advise', { method: 'POST', json: { focus: this.node('advise-focus').value.trim() } });
+    let outcome;
+    if (started.status !== 202) outcome = { error: (started.answer && started.answer.error) || started.status };
+    else outcome = await Suggest.waitFor(started.answer.id);
+    this.node('advise-wait').hidden = true;
+    this.node('advise-go').disabled = false;
+    if (outcome && outcome.recommendations) this.render(outcome);
+    else {
+      this.node('advise-error').textContent = Suggest.reason(outcome, started.status);
+      this.node('advise-error').hidden = false;
+    }
+  },
+
+  table(body, titles, rows) {
+    const table = el('table', 'table table-sm align-middle');
+    const head = el('thead');
+    const headRow = el('tr');
+    for (const title of titles) headRow.appendChild(el('th', '', title));
+    head.appendChild(headRow);
+    table.appendChild(head);
+    const tbody = el('tbody');
+    for (const row of rows) tbody.appendChild(row);
+    table.appendChild(tbody);
+    const wrap = el('div', 'table-responsive');
+    wrap.appendChild(table);
+    body.appendChild(wrap);
+  },
+
+  render(result) {
+    this.lastResult = result;
+    const body = this.node('advise-body');
+    body.textContent = '';
+    if (result.summary) body.appendChild(el('p', 'fw-bold', result.summary));
+
+    if (result.recommendations.length) {
+      body.appendChild(el('h3', 'h6 mt-3', 'Recommendations'));
+      for (const item of result.recommendations) {
+        const card = el('div', 'border rounded p-3 mb-2 bg-white');
+        const title = el('div', 'fw-bold', item.title);
+        if (item.needs_decision) title.appendChild(el('span', 'badge text-bg-warning ms-2', 'needs the historians’ decision'));
+        card.appendChild(title);
+        if (item.why) card.appendChild(el('div', 'small text-body-secondary mb-2', item.why));
+        if (item.steps.length) {
+          const steps = el('ol', 'mb-0');
+          for (const step of item.steps) steps.appendChild(el('li', '', step));
+          card.appendChild(steps);
+        }
+        body.appendChild(card);
+      }
+    }
+
+    if (result.subject_vocabulary.length) {
+      body.appendChild(el('h3', 'h6 mt-3', 'Suggested subject headings'));
+      this.table(body, ['Heading', 'What goes under it', 'Replaces these spellings'], result.subject_vocabulary.map((item) => {
+        const row = el('tr');
+        row.appendChild(el('th', '', item.term));
+        row.appendChild(el('td', 'small', item.covers));
+        row.appendChild(el('td', 'small text-body-secondary', item.replaces.join('; ')));
+        return row;
+      }));
+    }
+
+    if (result.fields.length) {
+      body.appendChild(el('h3', 'h6 mt-3', 'Fields'));
+      this.table(body, ['Field', 'Advice', 'Why', 'How'], result.fields.map((item) => {
+        const row = el('tr');
+        row.appendChild(el('th', 'font-monospace small', item.field));
+        const advice = el('td');
+        advice.appendChild(el('span', 'badge ' + this.ADVICE_COLORS[item.advice], this.ADVICE_NAMES[item.advice]));
+        row.appendChild(advice);
+        row.appendChild(el('td', 'small', item.why));
+        row.appendChild(el('td', 'small text-body-secondary', item.how));
+        return row;
+      }));
+    }
+
+    this.node('advise-provider').textContent = 'Answered by ' + result.provider + ' (' + result.model + ').';
+    this.node('advise-result').hidden = false;
   },
 };
 
@@ -485,6 +690,7 @@ const Pages = {
     document.getElementById('who-role').textContent = me.role.replace(/_/g, ' ');
     Doc.init(me);
     Suggest.init();
+    Advise.init();
     const line = this.indexLine(me);
     if (line) {
       document.getElementById('index-note').textContent = line;

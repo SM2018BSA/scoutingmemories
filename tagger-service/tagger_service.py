@@ -156,7 +156,7 @@ WAKE = threading.Event()    # set when a job is added, so the worker does not wa
 # Who may use the app at all; "admin" (the settings dashboard) is a separate flag on the login link
 ALLOWED_ROLES = ('administrator', 'manager', 'historian', 'regional', 'index_contributor')
 
-VERSION = '0.7.0'           # model dropdowns fed by each provider's own list
+VERSION = '0.8.0'           # taxonomy ideas for each document and for the whole archive
 OCR_READY = False           # set in main(); on this PC the OCR tools may be missing
 
 
@@ -1499,8 +1499,21 @@ OUTPUT_SHAPE = '''{"fields": {
   "author":       {"value": null, "confidence": 0, "evidence": ""},
   "photographer": {"value": null, "confidence": 0, "evidence": ""},
   "contributors": {"value": [], "confidence": 0, "evidence": ""}},
+ "taxonomy_ideas": {
+  "subject_tags": ["Summer Camp", "Waterfront"],
+  "people": ["Name (role)"],
+  "events": ["1952 summer camp season"],
+  "not_in_index": [{"type": "camp", "name": "a camp the text names that is not a candidate", "evidence": "a short quote"}],
+  "extra_tags": [{"name": "Volume and issue", "value": "Vol. 12, No. 3", "why": "printed on the masthead"}],
+  "filing_notes": "one to three sentences on how to file it"},
  "summary": "one sentence saying what the document is",
  "notes_for_reviewer": "anything ambiguous, in plain sentences"}'''
+
+ADVICE_SHAPE = '''{"summary": "two or three sentences on how the archive is tagged today",
+ "subject_vocabulary": [{"term": "Summer Camp", "covers": "what belongs under it", "replaces": ["summer camp", "Camp life"]}],
+ "fields": [{"field": "meta_subject", "advice": "keep", "why": "...", "how": "..."}],
+ "recommendations": [{"title": "...", "why": "which numbers above led to it", "steps": ["...", "..."], "needs_decision": true}]}
+(advice is one of keep, change, add, drop)'''
 
 SKILLS_TEXT = ''            # the skills/*.md files, read once at start
 
@@ -1540,6 +1553,28 @@ def entity_line(kind, entity, lineages):
     return '- slug %s = %s%s%s%s' % (entity['slug'], entity['name'], number, years, extra)
 
 
+def site_subjects(con, most=40):
+    """The whole Subject values the archive's tagged documents use most, with how often"""
+    rows = con.execute("SELECT MIN(subject) AS subject, COUNT(*) AS used FROM posts WHERE subject <> '' "
+                       "GROUP BY lower(trim(subject)) ORDER BY used DESC, subject LIMIT ?", (most,))
+    return [(row['subject'][:120], row['used']) for row in rows]
+
+
+def subject_headings(con, most=40):
+    """The single headings inside the Subject values ("Camping; Youth organizations" holds two),
+    most used first, and how many different ones there are"""
+    used, spelled = {}, {}
+    for row in con.execute("SELECT subject FROM posts WHERE subject <> ''"):
+        for part in row['subject'].split(';'):
+            heading = part.strip().rstrip('.').strip()
+            if heading:
+                key = heading.lower()
+                used[key] = used.get(key, 0) + 1
+                spelled.setdefault(key, heading)
+    ordered = sorted(used, key=lambda key: (-used[key], key))[:most]
+    return [(spelled[key][:80], used[key]) for key in ordered], len(used)
+
+
 def build_user(con, text, candidates, hints):
     lineages = lineage_lines(con, [entity['id'] for entity in candidates['council']])
     blocks = []
@@ -1561,6 +1596,8 @@ def build_user(con, text, candidates, hints):
         '## Similar already-tagged documents\n' + example_text,
         '## Reference notes\n' + notes_text,
         '## Historian hints\n' + hint_text,
+        '## Subject headings already used on the site (most used first)\n' + (
+            '\n'.join('- %s (%d)' % (heading, used) for heading, used in subject_headings(con)[0]) or '(none yet)'),
         '## Years seen in the text\n' + (', '.join(years) or '(none)'),
         '## Document text (OCR, may hold misreadings)\n' + text[:PROMPT_TEXT_CHARS],
         'Fill the archive fields for THIS document. Answer with ONE JSON object of exactly this shape, nothing else:\n'
@@ -1568,8 +1605,9 @@ def build_user(con, text, candidates, hints):
     ])
 
 
-def parse_model_json(text):
-    """The JSON object in the model's answer, fences and chatter stripped"""
+def parse_model_json(text, need='fields'):
+    """The JSON object in the model's answer, fences and chatter stripped. need: the part
+    the answer must have ('fields' for a document, 'recommendations' for the archive)"""
     start, end = text.find('{'), text.rfind('}')
     if start < 0 or end <= start:
         raise AiError('bad_answer', 'the model sent no JSON object')
@@ -1577,8 +1615,8 @@ def parse_model_json(text):
         parsed = json.loads(text[start:end + 1])
     except ValueError:
         raise AiError('bad_answer', 'the model sent JSON that does not parse')
-    if not isinstance(parsed, dict) or not isinstance(parsed.get('fields'), dict):
-        raise AiError('bad_answer', 'the model left out the fields object')
+    if not isinstance(parsed, dict) or not isinstance(parsed.get(need), (dict, list)):
+        raise AiError('bad_answer', 'the model left out the %s part' % need)
     return parsed
 
 
@@ -1646,8 +1684,131 @@ def validate_result(con, parsed, candidates):
             field['value'] = clean_str(value, 300) or None
         fields[name] = field
     return {'fields': fields,
+            'taxonomy_ideas': validate_ideas(con, parsed.get('taxonomy_ideas')),
             'summary': clean_str(parsed.get('summary'), 300),
             'notes_for_reviewer': clean_str(parsed.get('notes_for_reviewer'), 1000)}
+
+
+def text_items(value, most_each, how_many):
+    """A list of short strings from the model, cleaned and capped"""
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value:
+        cleaned = clean_str(item, most_each)
+        if cleaned and cleaned.lower() not in (seen.lower() for seen in out):
+            out.append(cleaned)
+        if len(out) >= how_many:
+            break
+    return out
+
+
+def validate_ideas(con, given):
+    """The document's taxonomy ideas, cleaned. A name the model calls new is looked up in the
+    index once more: when it is there after all, the answer says so."""
+    given = given if isinstance(given, dict) else {}
+    missing = []
+    for item in given.get('not_in_index') if isinstance(given.get('not_in_index'), list) else []:
+        if not isinstance(item, dict) or item.get('type') not in ('council', 'camp', 'lodge'):
+            continue
+        name = clean_str(item.get('name'), 160)
+        if not name:
+            continue
+        entry = {'type': item['type'], 'name': name, 'evidence': clean_str(item.get('evidence'), 300)}
+        known = con.execute('SELECT name, number, slug FROM entities WHERE type = ? AND lower(name) = lower(?) ORDER BY id',
+                            (item['type'], name)).fetchall()
+        if known:
+            # Names repeat across states (several "Camp Waters"), so the count is part of the answer
+            entry['in_index'] = {'name': known[0]['name'], 'number': known[0]['number'], 'slug': known[0]['slug'],
+                                 'count': len(known)}
+        missing.append(entry)
+        if len(missing) >= 10:
+            break
+    extra = []
+    for item in given.get('extra_tags') if isinstance(given.get('extra_tags'), list) else []:
+        if isinstance(item, dict) and clean_str(item.get('name'), 60) and clean_str(item.get('value'), 200):
+            extra.append({'name': clean_str(item['name'], 60), 'value': clean_str(item['value'], 200),
+                          'why': clean_str(item.get('why'), 300)})
+        if len(extra) >= 6:
+            break
+    return {'subject_tags': text_items(given.get('subject_tags'), 60, 8),
+            'people': text_items(given.get('people'), 120, 10),
+            'events': text_items(given.get('events'), 120, 6),
+            'not_in_index': missing,
+            'extra_tags': extra,
+            'filing_notes': clean_str(given.get('filing_notes'), 800)}
+
+
+ADVICE_KINDS = ('keep', 'change', 'add', 'drop')
+
+
+def validate_advice(parsed):
+    """The archive ideas, cleaned and capped"""
+    vocabulary = []
+    for item in parsed.get('subject_vocabulary') if isinstance(parsed.get('subject_vocabulary'), list) else []:
+        if isinstance(item, dict) and clean_str(item.get('term'), 60):
+            vocabulary.append({'term': clean_str(item['term'], 60), 'covers': clean_str(item.get('covers'), 300),
+                               'replaces': text_items(item.get('replaces'), 80, 12)})
+        if len(vocabulary) >= 40:
+            break
+    fields = []
+    for item in parsed.get('fields') if isinstance(parsed.get('fields'), list) else []:
+        if isinstance(item, dict) and clean_str(item.get('field'), 60) and item.get('advice') in ADVICE_KINDS:
+            fields.append({'field': clean_str(item['field'], 60), 'advice': item['advice'],
+                           'why': clean_str(item.get('why'), 400), 'how': clean_str(item.get('how'), 400)})
+        if len(fields) >= 25:
+            break
+    recommendations = []
+    for item in parsed.get('recommendations') if isinstance(parsed.get('recommendations'), list) else []:
+        if isinstance(item, dict) and clean_str(item.get('title'), 120):
+            recommendations.append({'title': clean_str(item['title'], 120), 'why': clean_str(item.get('why'), 600),
+                                    'steps': text_items(item.get('steps'), 300, 8),
+                                    'needs_decision': item.get('needs_decision') is True})
+        if len(recommendations) >= 12:
+            break
+    return {'summary': clean_str(parsed.get('summary'), 800), 'subject_vocabulary': vocabulary,
+            'fields': fields, 'recommendations': recommendations}
+
+
+def archive_overview(con):
+    """How the archive is tagged today, in numbers, for the whole-archive ideas"""
+    total = con.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
+    if not total:
+        raise Refused(409, 'no_index')
+    lines = ['Tagged documents: %d' % total]
+    counts = index_summary(con)['counts']
+    lines.append('Index: %s councils, %s camps, %s lodges, %s states and territories' % (
+        counts.get('councils', '?'), counts.get('camps', '?'), counts.get('lodges', '?'), counts.get('states', '?')))
+    lines.append('\nDocuments per category:')
+    for row in con.execute("SELECT category, COUNT(*) AS used FROM posts GROUP BY category ORDER BY used DESC"):
+        lines.append('- %s: %d' % (row['category'] or '(no category)', row['used']))
+    lines.append('\nHow many documents have each field filled in:')
+    for column, label in (('states', 'State'), ('council', 'Council'), ('camp', 'Camp'), ('lodge', 'Lodge'),
+                          ('start_date', 'Start Date'), ('end_date', 'End Date'),
+                          ('publisher', 'Publisher of Digital (publisher_of_digital)'),
+                          ('subject', 'Subject (meta_subject)'), ('identifier', 'Identifier (identifier)')):
+        empty = "'[]'" if column == 'states' else "''"
+        filled = con.execute('SELECT COUNT(*) FROM posts WHERE %s <> %s' % (column, empty)).fetchone()[0]
+        lines.append('- %s: %d of %d (%d%%)' % (label, filled, total, round(100 * filled / total)))
+    distinct = con.execute("SELECT COUNT(DISTINCT lower(trim(subject))) FROM posts WHERE subject <> ''").fetchone()[0]
+    headings, different = subject_headings(con, 80)
+    lines.append('\nThe Subject field holds headings joined with "; ". Different single headings in use: %d. '
+                 'The 80 most used:' % different)
+    lines += ['- %s (%d)' % (heading, used) for heading, used in headings]
+    lines.append('\nDifferent whole Subject values in use: %d. The 20 most used:' % distinct)
+    lines += ['- %s (%d)' % (subject, used) for subject, used in site_subjects(con, 20)]
+    lines.append('\nMost used Publisher of Digital values:')
+    for row in con.execute("SELECT MIN(publisher) AS publisher, COUNT(*) AS used FROM posts WHERE publisher <> '' "
+                           "GROUP BY lower(trim(publisher)) ORDER BY used DESC LIMIT 12"):
+        lines.append('- %s (%d)' % (row['publisher'][:100], row['used']))
+    lines.append('\nA sample of document titles:')
+    step = max(1, total // 40)
+    titles = [row['title'] for row in con.execute('SELECT title FROM posts ORDER BY post_id')][::step][:40]
+    lines += ['- ' + title[:120] for title in titles if title]
+    notes = [row['title'] for row in con.execute('SELECT title FROM notes ORDER BY id LIMIT 20')]
+    if notes:
+        lines.append('\nReference material the historians added: ' + '; '.join(note[:80] for note in notes))
+    return '\n'.join(lines)
 
 
 def xml_named(node, name):
@@ -1709,7 +1870,7 @@ def file_to_note_text(name, data):
 
 
 def do_ai_job(con, row):
-    """A suggest or ask job: retrieval, one model call, and the checked answer"""
+    """A suggest, ask or advise job: retrieval, one model call, and the checked answer"""
     values = json.loads(row['input'] or '{}')
     text = values.get('text') or ''
     if values.get('source_job'):
@@ -1722,8 +1883,19 @@ def do_ai_job(con, row):
     provider, model, key = provider_setup(con, merged)
     candidates = find_candidates(con, text)
     system = build_system(merged)
+    wants_json = row['kind'] in ('suggest', 'advise')
+    need = 'recommendations' if row['kind'] == 'advise' else 'fields'
     if row['kind'] == 'suggest':
         user_text = build_user(con, text, candidates, values.get('hints') or {})
+    elif row['kind'] == 'advise':
+        focus = values.get('focus') or ''
+        user_text = '\n\n'.join([
+            '## The archive today\n' + archive_overview(con),
+            '## What the historian wants to focus on\n' + (focus or '(nothing in particular)'),
+            'Suggest how this archive should organize its subjects and META fields: a controlled subject '
+            'vocabulary, which fields to keep, change, add or drop, and the steps to get there. '
+            'Answer with ONE JSON object of exactly this shape, nothing else:\n' + ADVICE_SHAPE,
+        ])
     else:
         user_text = '\n\n'.join([
             '## Candidate index entries\n' + ('\n'.join(
@@ -1739,14 +1911,14 @@ def do_ai_job(con, row):
         ])
     began = time.monotonic()
     try:
-        answer_text = ai_complete(provider, model, key, system, user_text, row['kind'] == 'suggest')
-        if row['kind'] == 'suggest':
+        answer_text = ai_complete(provider, model, key, system, user_text, wants_json)
+        if wants_json:
             try:
-                parsed = parse_model_json(answer_text)
+                parsed = parse_model_json(answer_text, need)
             except AiError:
                 answer_text = ai_complete(provider, model, key, system,
                                           user_text + '\n\nReturn ONLY the JSON object, with no other text.', True)
-                parsed = parse_model_json(answer_text)
+                parsed = parse_model_json(answer_text, need)
         ok = 1
     except AiError as problem:
         con.execute('INSERT INTO ai_calls (at, user, provider, model, ok, seconds) VALUES (?, ?, ?, ?, 0, ?)',
@@ -1759,6 +1931,9 @@ def do_ai_job(con, row):
                  round(time.monotonic() - began, 1), len(system) + len(user_text), len(answer_text)))
     if row['kind'] == 'ask':
         result = {'answer': answer_text[:4000], 'provider': provider, 'model': model}
+    elif row['kind'] == 'advise':
+        result = validate_advice(parsed)
+        result.update({'provider': provider, 'model': model})
     else:
         result = validate_result(con, parsed, candidates)
         result.update({'provider': provider, 'model': model,
@@ -1814,6 +1989,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         log(format % args)
 
     def reply(self, status, answer, cookie=None):
+        """Sends the answer; True, so a route can tell the caller it answered"""
         body = json.dumps(answer, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -1824,6 +2000,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Set-Cookie', cookie)
         self.end_headers()
         self.wfile.write(body)
+        return True
 
     def send_file(self, name):
         body = STATIC_FILES[name]
@@ -2059,6 +2236,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if row is None or (row['session'] != person['sid'] and not person['is_admin']):
                     return self.reply(404, {'error': 'not_found'})
                 return self.reply(200, job_answer(con, row))
+
+            if method == 'POST' and path == '/v1/advise':
+                if not self.csrf_ok(person):
+                    return self.reply(403, {'error': 'bad_csrf'})
+                merged = read_settings(con)
+                if calls_today(con) >= daily_cap(merged):
+                    return self.reply(429, {'error': 'daily_limit'})
+                provider_setup(con, merged)
+                if not con.execute('SELECT 1 FROM posts LIMIT 1').fetchone():
+                    return self.reply(409, {'error': 'no_index'})
+                job = queue_job(con, person, 'advise', '', 0, {'focus': clean_str(self.body_json(body).get('focus'), 500)})
+                row = con.execute('SELECT * FROM jobs WHERE id = ?', (job,)).fetchone()
+                return self.reply(202, job_answer(con, row))
 
             if method == 'POST' and path in ('/v1/suggest', '/v1/ask'):
                 if not self.csrf_ok(person):
@@ -2347,7 +2537,7 @@ def main():
         pass
 
     threading.Thread(target=worker, args=(('ocr',), do_ocr_job), name='ocr-worker', daemon=True).start()
-    threading.Thread(target=worker, args=(('suggest', 'ask'), do_ai_job), name='ai-worker', daemon=True).start()
+    threading.Thread(target=worker, args=(('suggest', 'ask', 'advise'), do_ai_job), name='ai-worker', daemon=True).start()
     server = Server((LISTEN_HOST, PORT), Handler)
     log('scouting-tagger %s listening on %s:%d (%s; frame ancestors %s)' % (
         VERSION, LISTEN_HOST, PORT,
