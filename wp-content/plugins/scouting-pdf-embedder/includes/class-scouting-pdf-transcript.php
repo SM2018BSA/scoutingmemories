@@ -46,7 +46,8 @@ class Scouting_PDF_Transcript {
      * May this post's document text be shown to whoever is asking?
      */
     private static function readable_post($post_id) {
-        $post = get_post((int) $post_id);
+        // Nothing asked for is nothing: get_post() would answer with "the current post"
+        $post = $post_id ? get_post($post_id) : null;
         return ($post && $post->post_status === 'publish' && !post_password_required($post)) ? $post : null;
     }
 
@@ -67,27 +68,40 @@ class Scouting_PDF_Transcript {
             plugins_url('assets/js/scouting-pdf-transcript.js', SCOUTING_PDF_PLUGIN_DIR . 'scouting-pdf-embedder.php'),
             array('htmx'), SCOUTING_PDF_VERSION, true);
 
-        // A link to one page of text (the Previous/Next links without scripts, or a shared link)
-        $asked_doc = '';
-        $asked_page = 0;
-        if (isset($_GET[self::QUERY_VAR]) && preg_match('/^([a-f0-9]{32})-([0-9]{1,4})$/', (string) wp_unslash($_GET[self::QUERY_VAR]), $found)) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- public text, read only.
-            $asked_doc = $found[1];
-            $asked_page = (int) $found[2];
-        }
+        $asked = self::asked_page($post);
         $html = '';
         foreach ($documents as $document) {
-            $asked = $document['doc_key'] === $asked_doc;
+            $opened = $asked && $document['doc_key'] === $asked['document']['doc_key'];
             ob_start();
             load_template(SCOUTING_PDF_PLUGIN_DIR . 'templates/transcript.php', false, array(
                 'post'     => $post,
                 'document' => $document,
                 'several'  => count($documents) > 1,
-                'open'     => $asked,
-                'page'     => self::nearest_page($document['pages'], $asked ? $asked_page : 1),
+                'open'     => $opened,
+                'page'     => $opened ? $asked['page'] : self::nearest_page($document['pages'], 1),
             ));
             $html .= ob_get_clean();
         }
         return $html;
+    }
+
+    /**
+     * The page of text a link asks for (?pdf_text=<document key>-<page>): array('document' =>
+     * …, 'page' => the read page shown for it, 'first' => it is the document's first page of
+     * text), or null when the address asks for none or for one this post does not have.
+     */
+    public static function asked_page($post) {
+        if (!isset($_GET[self::QUERY_VAR]) || !preg_match('/^([a-f0-9]{32})-([0-9]{1,4})$/', (string) wp_unslash($_GET[self::QUERY_VAR]), $found)) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- public text, read only.
+            return null;
+        }
+        $post = self::readable_post($post);
+        foreach ($post ? self::documents_in_viewer_order($post) : array() as $document) {
+            if ($document['doc_key'] === $found[1]) {
+                $page = self::nearest_page($document['pages'], (int) $found[2]);
+                return array('document' => $document, 'page' => $page, 'first' => $page === self::nearest_page($document['pages'], 1));
+            }
+        }
+        return null;
     }
 
     /**
@@ -155,7 +169,14 @@ class Scouting_PDF_Transcript {
      * The ordinary link to one page of text, for readers and crawlers without scripts
      */
     public static function page_link($post, $doc_key, $page) {
-        return add_query_arg(self::QUERY_VAR, $doc_key . '-' . (int) $page, get_permalink($post)) . '#' . self::section_id($doc_key);
+        return self::page_address($post, $doc_key, $page) . '#' . self::section_id($doc_key);
+    }
+
+    /**
+     * The address of one page of text as search engines know it (no #part)
+     */
+    public static function page_address($post, $doc_key, $page) {
+        return add_query_arg(self::QUERY_VAR, $doc_key . '-' . (int) $page, get_permalink($post));
     }
 
     public static function section_id($doc_key) {

@@ -300,6 +300,23 @@ test.describe('search engines', () => {
         expect(found(html, '</script>')).toBe(found(html, '<script'));
     });
 
+    test('a page of text is a page of its own for search engines: its own address, title and description', async ({ request }) => {
+        const key = /data-pdf-text-doc="([a-f0-9]{32})"/.exec(await (await request.get(DOC)).text())[1];
+        const fourth = await (await request.get(`${DOC}?pdf_text=${key}-4`)).text();
+        expect(fourth).toContain(`<link rel="canonical" href="http://localhost:8888/ocr-document/?pdf_text=${key}-4" />`);
+        expect(fourth).toMatch(/<title>Camp Tahquitz Leaders Guide \(OCR\) \(text of page 4\)/);
+        expect(fourth).toContain('<meta name="description" content="Waterfront rules at Zephyrcrest: every Scout swims with a buddy. The relay was won by the Otter patrol.">');
+        // The post itself, and a link to its first page of text, are one page: the post
+        for (const path of [DOC, `${DOC}?pdf_text=${key}-1`]) {
+            const html = await (await request.get(path)).text();
+            expect(html).toContain('<link rel="canonical" href="http://localhost:8888/ocr-document/" />');
+            expect(html).not.toContain('(text of page');
+        }
+        // An address for a document this post does not have changes nothing
+        const other = await (await request.get(`${DOC}?pdf_text=${'0'.repeat(32)}-4`)).text();
+        expect(other).toContain('<link rel="canonical" href="http://localhost:8888/ocr-document/" />');
+    });
+
     test('pages without a document get neither', async ({ request }) => {
         const html = await (await request.get('/')).text();
         expect(html).not.toContain('application/ld+json');

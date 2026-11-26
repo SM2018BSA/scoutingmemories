@@ -190,6 +190,44 @@ switch ($argv[2] ?? '') {
         wp_update_post(array('ID' => $post_id, 'post_content' => wp_slash($content)));
         $check('document back in the post: copy back', array_keys($T::documents($post_id)), array($doc_key));
 
+        // ---- Hosts that cap the length of database reads (WP Engine drops reads over 16,384 characters) ----
+        $long_reads = array();
+        $watch = function ($query) use (&$long_reads) {
+            if (strlen($query) > 16384 && preg_match('#^\s*select#i', $query)) {
+                $long_reads[] = substr($query, 0, 80);
+            }
+            return $query;
+        };
+        add_filter('query', $watch);
+        $long = str_repeat('Troop 12 hiked to the lookout and back again. ', 600); // about 27,000 characters
+        sm_text_forget($doc_key);
+        sm_text_save_page($doc_key, 1, 'done', $long);
+        $T::refresh_post($post_id);
+        $check('a long document is stored whole', strlen($T::documents($post_id)[$doc_key][1]), strlen(trim($long)));
+        sm_text_save_page($doc_key, 2, 'done', $long . ' Second page.');
+        $T::refresh_post($post_id);
+        $check('a long document is replaced when it changes', array_keys($T::documents($post_id)[$doc_key]), array(1, 2));
+        $check('still one value', count(get_post_meta($post_id, $meta_key, false)), 1);
+        sm_text_forget($doc_key);
+        $T::refresh_post($post_id);
+        $check('a long document is removed when its text goes', get_post_meta($post_id, $meta_key, false), array());
+        remove_filter('query', $watch);
+        $check('no database read ever carried the document', $long_reads, array());
+
+        // ---- Every page of text has an address search engines are told about ----
+        sm_text_save_page($doc_key, 1, 'done', $page_1);
+        sm_text_save_page($doc_key, 2, 'empty', '');
+        sm_text_save_page($doc_key, 4, 'done', $page_4);
+        $T::refresh_post($post_id);
+        $sitemap = new Scouting_PDF_Text_Sitemap();
+        $check('the sitemap lists the pages of text after the first, without the page that has no words', $sitemap->get_url_list(1), array(
+            array('loc' => home_url('/ocr-document/') . '?pdf_text=' . $doc_key . '-4'),
+        ));
+        $check('one sitemap file is enough here', $sitemap->get_max_num_pages(), 1);
+        $check('the sitemap is registered with WordPress', isset(wp_get_sitemap_providers()['pdftext']), true);
+        sm_text_forget($doc_key);
+        $T::refresh_post($post_id);
+
         // ---- The search words ----
         $S = 'Scouting_PDF_Search';
         $check('words: lower case, each once', $S::words('Camp  CAMP Tahosa'), array('camp', 'tahosa'));
@@ -257,7 +295,7 @@ switch ($argv[2] ?? '') {
         $check('an unknown field is refused', $G::add($post_id, array(array('field' => 'post_tag', 'value' => 1, 'label' => 'x', 'viewer' => 1, 'page' => 1, 'evidence' => '', 'phrase' => '', 'source' => 'match'))), 0);
         sm_text_forget_suggestions();
 
-        foreach (array('document-text', 'text-sync', 'batch-button', 'transcript', 'search', 'seo', 'term-names', 'tag-suggestions', 'name-matcher', 'suggestions-screen') as $name) {
+        foreach (array('document-text', 'text-sync', 'batch-button', 'transcript', 'search', 'seo', 'text-sitemap', 'term-names', 'tag-suggestions', 'name-matcher', 'suggestions-screen') as $name) {
             $source = file_get_contents($includes . 'class-scouting-pdf-' . $name . '.php');
             $check("$name: no \$wpdb", strpos($source, '$wpdb'), false);
             $check("$name: no SQL", preg_match('/\b(SELECT|INSERT INTO|UPDATE|DELETE FROM)\b\s/', $source), 0);

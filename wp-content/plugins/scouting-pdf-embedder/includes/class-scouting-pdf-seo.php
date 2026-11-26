@@ -23,6 +23,10 @@ class Scouting_PDF_Seo {
 
     private function __construct() {
         add_action('wp_head', array($this, 'print_head_tags'), 5);
+        // A link to one page of a document's text is a page of its own for search engines
+        add_filter('get_canonical_url', array($this, 'text_page_canonical'), 10, 2);
+        add_filter('document_title_parts', array($this, 'text_page_title'));
+        add_action('init', array($this, 'register_sitemap'));
     }
 
     public function print_head_tags() {
@@ -44,6 +48,44 @@ class Scouting_PDF_Seo {
     }
 
     /**
+     * The page of text this request shows by its own address, when it is not simply the
+     * post's first page of text (that one is the post itself)
+     */
+    private static function text_page() {
+        if (!is_singular()) {
+            return null;
+        }
+        $asked = Scouting_PDF_Transcript::asked_page(get_queried_object_id());
+        return ($asked && !$asked['first']) ? $asked : null;
+    }
+
+    /**
+     * WordPress names the post as the one true address of every ?… variant of it, which
+     * tells search engines to skip the variant. A page of text names itself instead.
+     */
+    public function text_page_canonical($canonical, $post) {
+        $asked = self::text_page();
+        if (!$asked || (int) $post->ID !== (int) get_queried_object_id()) {
+            return $canonical;
+        }
+        return Scouting_PDF_Transcript::page_address($post, $asked['document']['doc_key'], $asked['page']);
+    }
+
+    public function text_page_title($parts) {
+        $asked = self::text_page();
+        if ($asked && isset($parts['title'])) {
+            $parts['title'] .= sprintf(' (text of page %d)', $asked['page']);
+        }
+        return $parts;
+    }
+
+    public function register_sitemap() {
+        if (function_exists('wp_register_sitemap_provider') && class_exists('Scouting_PDF_Text_Sitemap')) {
+            wp_register_sitemap_provider('pdftext', new Scouting_PDF_Text_Sitemap());
+        }
+    }
+
+    /**
      * SEO plugins print their own description; two would confuse search engines
      */
     private static function another_plugin_describes() {
@@ -55,7 +97,13 @@ class Scouting_PDF_Seo {
      * The post's own summary, or the beginning of its document's text
      */
     private static function description($post) {
-        $text = has_excerpt($post) ? get_the_excerpt($post) : '';
+        $asked = self::text_page();
+        if ($asked) {
+            // A page of text is described by its own words
+            $text = $asked['document']['pages'][$asked['page']];
+        } else {
+            $text = has_excerpt($post) ? get_the_excerpt($post) : '';
+        }
         if (trim($text) === '') {
             foreach (Scouting_PDF_Document_Text::documents($post->ID) as $pages) {
                 foreach ($pages as $page_text) {

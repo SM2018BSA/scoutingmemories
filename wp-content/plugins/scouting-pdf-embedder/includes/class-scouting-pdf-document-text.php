@@ -128,21 +128,15 @@ class Scouting_PDF_Document_Text {
                 $wanted[$doc_key] = self::encode($doc_key, $pages);
             }
         }
-        $stored = array();
-        foreach ((array) get_post_meta($post->ID, self::META_KEY, false) as $value) {
-            list($doc_key) = self::decode($value);
-            if (!isset($wanted[$doc_key]) || isset($stored[$doc_key])) {
-                // The document left the post, lost its text, or is stored twice
-                delete_post_meta($post->ID, self::META_KEY, wp_slash($value));
-                continue;
-            }
-            $stored[$doc_key] = $value;
-        }
-        foreach ($wanted as $doc_key => $value) {
-            if (!isset($stored[$doc_key])) {
+        // Compare here, in PHP, and when anything differs put the whole set back: removing or
+        // replacing ONE value by naming it would send the document's text to the database
+        // inside a read, and hosts that cap the length of reads (WP Engine drops any longer
+        // than 16,384 characters) would silently refuse it.
+        $stored = array_values((array) get_post_meta($post->ID, self::META_KEY, false));
+        if ($stored !== array_values($wanted)) {
+            delete_post_meta($post->ID, self::META_KEY);
+            foreach ($wanted as $value) {
                 add_post_meta($post->ID, self::META_KEY, wp_slash($value));
-            } elseif ($stored[$doc_key] !== $value) {
-                update_post_meta($post->ID, self::META_KEY, wp_slash($value), $stored[$doc_key]);
             }
         }
         self::save_words($post->ID, $wanted);

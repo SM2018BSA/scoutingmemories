@@ -20,6 +20,11 @@ class Scouting_PDF_Search {
     const CACHE_GROUP = 'scouting_pdf_search';
     /** With several words, the posts holding the longest one are looked through for the others */
     const CANDIDATES = 300;
+    /**
+     * The most posts one search hands to WordPress by ID. The IDs travel inside a database
+     * read, and WP Engine drops reads longer than 16,384 characters; 2,000 IDs stay under it.
+     */
+    const MAX_RESULTS = 2000;
 
     private static $instance = null;
 
@@ -130,6 +135,7 @@ class Scouting_PDF_Search {
             return; // nothing in any document: the search stays exactly WordPress's own
         }
         $ids = array_values(array_unique(array_map('intval', array_merge((array) $found['core'], (array) $found['pdf']))));
+        $ids = array_slice($ids, 0, self::MAX_RESULTS);
         $this->query = $query;
         $this->words = $words;
         $this->pdf_ids = array_map('intval', (array) $found['pdf']);
