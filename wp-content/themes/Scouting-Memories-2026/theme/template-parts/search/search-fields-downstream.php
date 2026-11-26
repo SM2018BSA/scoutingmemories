@@ -26,6 +26,11 @@ $smem_label   = Scouting_Memories_2026_UI::LABEL;
 $smem_spinner = 'inline-block size-8 animate-spin rounded-full border-4 border-brand border-r-transparent align-[-0.125em]';
 ?>
 
+<div id="select_council_loading" class="hidden <?php echo esc_attr( $smem_width_field ); ?>" :class="{ hidden: ! loading.council }">
+	<div class="flex justify-center">
+		<span class="<?php echo esc_attr( $smem_spinner ); ?>" role="status"><span class="sr-only"><?php esc_html_e( 'Loading...', 'scouting-memories-2026' ); ?></span></span>
+	</div>
+</div>
 <div class="mb-2 hidden <?php echo esc_attr( $smem_width_field ); ?>" :class="{ hidden: ! shown.council }">
 	<label class="<?php echo esc_attr( $smem_label ); ?>" for="select_council"><?php esc_html_e( 'Select Council', 'scouting-memories-2026' ); ?></label>
 	<select name="select_council[]" id="select_council" multiple="multiple"></select>

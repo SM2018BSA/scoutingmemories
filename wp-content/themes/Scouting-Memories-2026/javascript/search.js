@@ -72,6 +72,9 @@ function makeList(select, maxItems) {
 	const list = new TomSelect(select, {
 		mode: 'multi',
 		maxItems,
+		// The list closes after each pick, as the old select2 boxes did; an open list would also
+		// cover the spinner that shows under it while the next list loads.
+		closeAfterSelect: true,
 		maxOptions: null,
 		hideSelected: true,
 		highlight: false,
@@ -181,7 +184,7 @@ export default function registerSearch(Alpine) {
 			showMerged: false,
 			// Which of the lower fields are showing, and which are waiting for their list.
 			shown: { council: false, merged: false, lodge: false, camp: false },
-			loading: { merged: false, lodge: false, camp: false },
+			loading: { council: false, merged: false, lodge: false, camp: false },
 
 			init() {
 				const form = this.$el;
@@ -228,7 +231,11 @@ export default function registerSearch(Alpine) {
 				}
 			},
 
-			/* A state was picked or removed: load the councils of the picked states. */
+			/*
+			 * A state was picked or removed: load the councils of the picked states. The spinner
+			 * shows in the council field's place while they load, so the wait never looks like
+			 * nothing happened.
+			 */
 			async loadCouncils() {
 				const states = [...lists.state.getValue()];
 				const mine = ++turn.council;
@@ -238,6 +245,7 @@ export default function registerSearch(Alpine) {
 				this.shown.camp = false;
 				this.loading.lodge = false;
 				this.loading.camp = false;
+				this.loading.council = states.length > 0;
 
 				let options = [];
 				if (states.length) {
@@ -251,6 +259,7 @@ export default function registerSearch(Alpine) {
 					return;
 				}
 
+				this.loading.council = false;
 				fill(lists.council, options);
 				if (options.length) {
 					lists.council.setValue(preset.council, true);
